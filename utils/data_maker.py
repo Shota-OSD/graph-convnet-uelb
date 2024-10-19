@@ -41,14 +41,3 @@ class DataMaker:
     def generate_commodity(self):
         commodity_list = generate_commodity(self.G, self.demand_l, self.demand_h, self.commodity)
         return commodity_list
-
-    def solve_exact_solution(self):
-        exact_file_name = './data/exactsolution_training.csv'
-        while True:
-            E = SolveExactSolution(self.solver_type, self.)
-            objective_value, objective_time = E.solve_exact_solution_to_env()
-            if objective_value > 1.0:
-                self.generate_and_save_commodity()
-            else:
-                break
-        

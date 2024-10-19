@@ -4,48 +4,70 @@ import torch.nn.functional as F
 import matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 
 from utils.graph_utils import *
 
 
-def plot_tsp(p, x_coord, W, W_val, W_target, title="default"):
+def plot_uelb(p, edges, edges_targets, title="default"):
     """
-    Helper function to plot TSP tours.
+    Helper function to plot the UELB graph with different colors for each commodity.
     
     Args:
         p: Matplotlib figure/subplot
-        x_coord: Coordinates of nodes
-        W: Edge adjacency matrix
-        W_val: Edge values (distance) matrix
-        W_target: One-hot matrix with 1s on groundtruth/predicted edges
+        edges: Edge adjacency matrix (num_nodes * num_nodes)
+        edges_targets: Edge matrices for each commodity (num_nodes * num_nodes * num_commodities)
         title: Title of figure/subplot
     
     Returns:
         p: Updated figure/subplot
-    
     """
 
     def _edges_to_node_pairs(W):
-        """Helper function to convert edge matrix into pairs of adjacent nodes.
-        """
+        """Helper function to convert edge matrix into pairs of adjacent nodes."""
         pairs = []
         for r in range(len(W)):
             for c in range(len(W)):
                 if W[r][c] == 1:
                     pairs.append((r, c))
         return pairs
-    
-    G = nx.from_numpy_array(W_val)
 
-    pos = dict(zip(range(len(x_coord)), x_coord.tolist()))
-    adj_pairs = _edges_to_node_pairs(W)
-    target_pairs = _edges_to_node_pairs(W_target)
-    colors = ['g'] + ['b'] * (len(x_coord) - 1)  # Green for 0th node, blue for others
-    nx.draw_networkx_nodes(G, pos, node_color=colors, node_size=50)
-    nx.draw_networkx_edges(G, pos, edgelist=adj_pairs, alpha=0.3, width=0.5)
-    nx.draw_networkx_edges(G, pos, edgelist=target_pairs, alpha=1, width=1, edge_color='r')
+    # ノード座標をランダムに配置（実際のデータがあればそれを使う）
+    num_nodes = edges.shape[0]
+    pos = {i: (np.random.rand(), np.random.rand()) for i in range(num_nodes)}
+    
+    # グラフオブジェクトの作成
+    G = nx.from_numpy_array(edges)
+
+    # ノードの描画
+    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=100)
+
+    # 品種ごとのエッジを描画（色を変える）
+    num_commodities = edges_targets.shape[2]
+    colors = plt.cm.rainbow(np.linspace(0, 1, num_commodities))  # 品種ごとに色を設定
+
+    # 品種が流れているエッジの描画
+    for commodity_index in range(num_commodities):
+        # 各品種の隣接行列を取得
+        W_target = edges_targets[:, :, commodity_index]
+        # 隣接行列からエッジのペアを取得
+        target_pairs = _edges_to_node_pairs(W_target)
+        # エッジを描画
+        nx.draw_networkx_edges(G, pos, edgelist=target_pairs, edge_color=[colors[commodity_index]], width=2, alpha=0.7)
+
+    # 流れていないエッジの描画
+    all_edges = _edges_to_node_pairs(edges)  # すべてのエッジを取得
+    flowing_edges = set(tuple(pair) for commodity_index in range(num_commodities)
+                         for pair in _edges_to_node_pairs(edges_targets[:, :, commodity_index]))
+    
+    # 流れていないエッジを取得
+    non_flowing_edges = [edge for edge in all_edges if edge not in flowing_edges]
+    nx.draw_networkx_edges(G, pos, edgelist=non_flowing_edges, edge_color='black', width=0.5, alpha=0.5)
+
+    # タイトルを設定
     p.set_title(title)
     return p
+
 
 
 def plot_tsp_heatmap(p, x_coord, W_val, W_pred, title="default"):

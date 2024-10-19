@@ -59,211 +59,211 @@ graph [
   edge [
     source 0
     target 1
-    capacity 960
+    capacity 682
   ]
   edge [
     source 0
     target 2
-    capacity 964
+    capacity 572
   ]
   edge [
     source 0
     target 7
-    capacity 680
+    capacity 966
   ]
   edge [
     source 1
     target 2
-    capacity 776
+    capacity 584
   ]
   edge [
     source 1
     target 3
-    capacity 890
+    capacity 833
   ]
   edge [
     source 1
     target 0
-    capacity 960
+    capacity 682
   ]
   edge [
     source 2
     target 5
-    capacity 903
+    capacity 550
   ]
   edge [
     source 2
     target 0
+    capacity 572
+  ]
+  edge [
+    source 2
+    target 1
+    capacity 584
+  ]
+  edge [
+    source 3
+    target 4
+    capacity 655
+  ]
+  edge [
+    source 3
+    target 10
+    capacity 734
+  ]
+  edge [
+    source 3
+    target 1
+    capacity 833
+  ]
+  edge [
+    source 4
+    target 5
+    capacity 689
+  ]
+  edge [
+    source 4
+    target 6
+    capacity 813
+  ]
+  edge [
+    source 4
+    target 3
+    capacity 655
+  ]
+  edge [
+    source 5
+    target 9
+    capacity 872
+  ]
+  edge [
+    source 5
+    target 12
+    capacity 759
+  ]
+  edge [
+    source 5
+    target 2
+    capacity 550
+  ]
+  edge [
+    source 5
+    target 4
+    capacity 689
+  ]
+  edge [
+    source 6
+    target 7
+    capacity 957
+  ]
+  edge [
+    source 6
+    target 4
+    capacity 813
+  ]
+  edge [
+    source 7
+    target 8
+    capacity 547
+  ]
+  edge [
+    source 7
+    target 0
+    capacity 966
+  ]
+  edge [
+    source 7
+    target 6
+    capacity 957
+  ]
+  edge [
+    source 8
+    target 9
+    capacity 630
+  ]
+  edge [
+    source 8
+    target 11
     capacity 964
   ]
   edge [
-    source 2
-    target 1
-    capacity 776
-  ]
-  edge [
-    source 3
-    target 4
-    capacity 820
-  ]
-  edge [
-    source 3
-    target 10
-    capacity 779
-  ]
-  edge [
-    source 3
-    target 1
-    capacity 890
-  ]
-  edge [
-    source 4
-    target 5
-    capacity 836
-  ]
-  edge [
-    source 4
-    target 6
-    capacity 514
-  ]
-  edge [
-    source 4
-    target 3
-    capacity 820
-  ]
-  edge [
-    source 5
-    target 9
-    capacity 778
-  ]
-  edge [
-    source 5
-    target 12
-    capacity 831
-  ]
-  edge [
-    source 5
-    target 2
-    capacity 903
-  ]
-  edge [
-    source 5
-    target 4
-    capacity 836
-  ]
-  edge [
-    source 6
-    target 7
-    capacity 744
-  ]
-  edge [
-    source 6
-    target 4
-    capacity 514
-  ]
-  edge [
-    source 7
-    target 8
-    capacity 576
-  ]
-  edge [
-    source 7
-    target 0
-    capacity 680
-  ]
-  edge [
-    source 7
-    target 6
-    capacity 744
-  ]
-  edge [
-    source 8
-    target 9
-    capacity 594
-  ]
-  edge [
-    source 8
-    target 11
-    capacity 996
-  ]
-  edge [
     source 8
     target 13
-    capacity 702
+    capacity 802
   ]
   edge [
     source 8
     target 7
-    capacity 576
+    capacity 547
   ]
   edge [
     source 9
     target 5
-    capacity 778
+    capacity 872
   ]
   edge [
     source 9
     target 8
-    capacity 594
+    capacity 630
   ]
   edge [
     source 10
     target 11
-    capacity 500
+    capacity 670
   ]
   edge [
     source 10
     target 13
-    capacity 714
+    capacity 540
   ]
   edge [
     source 10
     target 3
-    capacity 779
+    capacity 734
   ]
   edge [
     source 11
     target 12
-    capacity 542
+    capacity 652
   ]
   edge [
     source 11
     target 8
-    capacity 996
+    capacity 964
   ]
   edge [
     source 11
     target 10
-    capacity 500
+    capacity 670
   ]
   edge [
     source 12
     target 13
-    capacity 898
+    capacity 626
   ]
   edge [
     source 12
     target 5
-    capacity 831
+    capacity 759
   ]
   edge [
     source 12
     target 11
-    capacity 542
+    capacity 652
   ]
   edge [
     source 13
     target 8
-    capacity 702
+    capacity 802
   ]
   edge [
     source 13
     target 10
-    capacity 714
+    capacity 540
   ]
   edge [
     source 13
     target 12
-    capacity 898
+    capacity 626
   ]
 ]
