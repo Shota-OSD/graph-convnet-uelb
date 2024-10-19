@@ -1,0 +1,10 @@
+numpy>=1.21,<1.24
+torch>=1.9,<3.0
+tensorboard==2.11.0
+matplotlib>=3.4,<3.6
+networkx>=2.6,<2.8
+scikit-learn>=0.24,<1.2
+fastprogress==1.0.0
+scipy>=1.6,<1.11
+mip==1.15.0
+pulp>=2.6,<2.8

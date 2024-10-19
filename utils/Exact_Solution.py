@@ -4,12 +4,12 @@ import time
 import csv
 import networkx as nx
 import matplotlib.pyplot as plt
-from flow import Flow
+from utils.flow import Flow
 import pulp
 # from pyscipopt import Model as SCIPModel, quicksum
 
-class Solve_exact_solution():
-    def __init__(self, episode, solver_type, exact_file_name):
+class SolveExactSolution():
+    def __init__(self, solver_type, comodity_file_name, graph_file_name):
         """
         ・graph.gml内
             node [
@@ -23,10 +23,9 @@ class Solve_exact_solution():
             ] (max=9538, min=1624)
         """
 
-        self.episode = episode
         self.solver_type = solver_type
-        self.exact_file_name = exact_file_name
-        self.G = nx.read_gml("/Users/osadashouta/Desktop/Research/RL-KSPs/value/graph.gml",destringizer=int) # グラフの定義
+        self.comodity_file_name = comodity_file_name
+        self.G = nx.read_gml(graph_file_name,destringizer=int)
         self.G.all_flows = list()
 
         """   
@@ -42,7 +41,7 @@ class Solve_exact_solution():
         ]
         """
 
-        with open('/Users/osadashouta/Desktop/Research/RL-KSPs/value/commodity_data.csv',newline='') as f: # 品種の読み込み
+        with open(self.comodity_file_name,newline='') as f: # 品種の読み込み
             self.commodity=csv.reader(f)
             self.commodity=[row for row in self.commodity]
             self.commodity=[[int(item) for item in row]for row in self.commodity]
@@ -67,18 +66,6 @@ class Solve_exact_solution():
         self.commodity_count = 0
         self.tuples = []
         self.capacity = nx.get_edge_attributes(self.G, 'capacity')
-
-        # 出力するファイルのパス
-        edge_numbering_file = "edge_numbering_file.csv"
-
-        # CSVファイルに書き込み
-        with open(edge_numbering_file, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            # 各タプルをCSVフォーマットに変換して書き込み
-            for item in self.r_kakai:
-                writer.writerow([item[0], item[1][0], item[1][1]])
-
-        print(f"データが {edge_numbering_file} に保存されました。")
 
         while(len(self.tuples)<len(self.commodity)): 
             s = self.commodity[self.commodity_count][0] # source
@@ -120,7 +107,6 @@ class Solve_exact_solution():
                         UELB_kakai += xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][0] == v])\
                         ==xsum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][1] == v])
 
-            print("start optimize")
             #線形計画問題を解く
             start = time.time()
             UELB_kakai.optimize()
@@ -128,7 +114,7 @@ class Solve_exact_solution():
 
             with open(self.exact_file_name, 'a', newline='') as f:
                 out = csv.writer(f)
-                out.writerow([self.episode, UELB_kakai.objective_value, elapsed_time]) 
+                out.writerow([UELB_kakai.objective_value, elapsed_time]) 
             return UELB_kakai.objective_value,elapsed_time
         
         if (self.solver_type == 'pulp'): # pulp+CBC
@@ -140,14 +126,14 @@ class Solve_exact_solution():
 
             ・self.r_kakai = [(0, ('A', 'B')), (1, ('B', 'C')), (2, ('C', 'D'))]
 
-            ・フロー1（l=0）:
-                x0_0: エッジ A-B を通るかどうか（0 または 1）
-                x0_1: エッジ B-C を通るかどうか（0 または 1）
-                x0_2: エッジ C-D を通るかどうか（0 または 1）
-            ・フロー2（l=1）:
-                x1_0: エッジ A-B を通るかどうか（0 または 1）
-                x1_1: エッジ B-C を通るかどうか（0 または 1）
-                x1_2: エッジ C-D を通るかどうか（0 または 1）
+            ・フロー1(l=0):
+                x0_0: エッジ A-B を通るかどうか(0 または 1)
+                x0_1: エッジ B-C を通るかどうか(0 または 1)
+                x0_2: エッジ C-D を通るかどうか(0 または 1)
+            ・フロー2(l=1):
+                x1_0: エッジ A-B を通るかどうか(0 または 1)
+                x1_1: エッジ B-C を通るかどうか(0 または 1)
+                x1_2: エッジ C-D を通るかどうか(0 または 1)
 
             上記の変数を格納 # 0/1のバイナリ変数は本問題の条件で決定
             flow_var_kakai = [
@@ -183,30 +169,14 @@ class Solve_exact_solution():
                         UELB_problem += sum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][0] == v])\
                         ==sum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][1] == v])
 
-            print("start optimize")
             start = time.time()
             status = UELB_problem.solve(pulp.PULP_CBC_CMD(msg=False)) # 線形計画問題を解く
             elapsed_time = time.time()-start
 
             # print(status)
-            # print(UELB_problem) # 制約式を全て出してくれる 
-
-            # flow_var_kakai のバイナリ変数の値を CSV ファイルに保存する
-            with open('exact_solution_flow.csv', mode='w', newline='') as file:
-                writer = csv.writer(file)
-                
-                # 各フローに対してループ
-                for l in range(len(flow_var_kakai)):  # フローのループ
-                    row = []
-                    for e in range(len(flow_var_kakai[l])):  # 各フローに対するエッジのループ
-                        var_value = pulp.value(flow_var_kakai[l][e])  # 変数の値を取得
-                        row.append(var_value)  # 値を行に追加
-                    writer.writerow(row)  # 行を CSV ファイルに書き込む
+            # print(UELB_problem) # 制約式を全て出してくれる    
             
-            with open(self.exact_file_name, 'a', newline='') as f:
-                out = csv.writer(f)
-                out.writerow([self.episode, L.value(),elapsed_time]) 
-            return L.value(),elapsed_time
+            return flow_var_kakai, self.r_kakai, L.value(), elapsed_time
 
         if (self.solver_type == 'SCIP'): # PySCIPOpt+SCIP
 
@@ -247,7 +217,82 @@ class Solve_exact_solution():
             
             with open(self.exact_file_name, 'a', newline='') as f:
                 out = csv.writer(f)
-                out.writerow([self.episode, model.getObjVal(),elapsed_time]) 
+                out.writerow([model.getObjVal(),elapsed_time]) 
             # nx.draw(self.G, with_labels=True)
             # plt.show()
             return model.getObjVal(),elapsed_time
+        
+    def generate_flow_matrices(self, flow_var_kakai):
+        """
+        この関数を使うときはsolve_exact_solution_to_envと併用すること
+        フローがどのノードやエッジをどの順序で通過するかを計算し、
+        node_flow_matrix および edge_flow_matrix にその順序を記録する関数。
+
+        Args:
+            flow_var_kakai: 各フローがエッジを通過するかどうかを示すバイナリ変数のリスト
+            num_flows: フローの数
+            num_edges: エッジの数
+            r_kakai: エッジ情報 (ノードペアを含む)
+            all_flows: 全フローの情報 (始点・終点など)
+            node_flow_matrix: ノードの通過順序を格納する行列
+            edge_flow_matrix: エッジの通過順序を格納する行列
+
+        Returns:
+            node_flow_matrix: 各フローのノード通過順序を示す行列
+            edge_flow_matrix: 各フローのエッジ通過順序を示す行列
+            infinit_loop: 探索が正常に終了したかどうかを示すフラグ
+        """
+        # 必要なデータを準備
+        num_flows = len(self.G.all_flows)
+        num_nodes = len(self.G.nodes())
+        num_edges = len(self.G.edges())
+        node_flow_matrix = np.zeros((num_flows, num_nodes), dtype=int)
+        edge_flow_matrix = np.zeros((num_flows, num_edges), dtype=int)
+        infinit_loop = False
+
+        # フローの順番を行列に反映
+        for l in range(num_flows):
+            current_node_order = 1  # フローのノード通過順序 (1から始める)
+            current_edge_order = 1  # フローのエッジ通過順序 (1から始める)
+
+            # 始点ノードを取得
+            current_node = self.G.all_flows[l].get_s()
+
+            # 始点ノードの順番を記録
+            node_flow_matrix[l][current_node] = current_node_order
+            current_node_order += 1
+
+            # 最大探索回数（エッジ数の3倍）
+            max_steps = num_edges * 3
+            steps = 0
+
+            # フローを追跡
+            while current_node != self.G.all_flows[l].get_t():  # 終点に達するまでループ
+                steps += 1
+                if steps > max_steps:
+                    # 探索回数がエッジ数の3倍を超えたら無限ループと見なす
+                    infinit_loop = True
+                    return node_flow_matrix, edge_flow_matrix, infinit_loop
+
+                # 現在のノードから出るエッジを探索
+                for e in range(num_edges):
+                    node_from = self.r_kakai[e][1][0]
+                    node_to = self.r_kakai[e][1][1]
+
+                    if node_from == current_node and pulp.value(flow_var_kakai[l][e]) == 1:  # 次に進むエッジを発見
+                        # エッジの順序を記録
+                        edge_flow_matrix[l][e] = current_edge_order
+                        current_edge_order += 1
+
+                        # 次のノードがまだ通過していなければ、その順番を記録
+                        if node_flow_matrix[l][node_to] == 0:
+                            node_flow_matrix[l][node_to] = current_node_order
+                            current_node_order += 1
+
+                        # 次のノードに移動
+                        current_node = node_to
+                        break
+
+        # 探索が正常に完了した場合はinfinit_loopをFalseに設定
+        infinit_loop = False
+        return node_flow_matrix, edge_flow_matrix, infinit_loop

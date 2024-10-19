@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 
 import numpy as np
+import random
 
 
 def tour_nodes_to_W(nodes):
@@ -114,3 +115,28 @@ def get_max_k(dataset, max_iter=1000):
     # print("Ks array counts: ", np.unique(ks, return_counts=True))
     # print(f"Mean: {np.mean(ks)}, StdDev: {np.std(ks)}")
     return int(np.max(ks))
+
+def generate_commodity(G, demand_l, demand_h, commodity): # 品種の定義(numpy使用)
+    determin_st = []
+    commodity_list = []
+    for i in range(commodity): # commodity generate
+        commodity_dict = {}
+        s , t = tuple(random.sample(G.nodes, 2)) # source，sink定義
+        demand = random.randint(demand_l, demand_h) # demand設定
+        tentative_st = [s,t]
+        while True:
+            if tentative_st in determin_st:
+                s , t = tuple(random.sample(G.nodes, 2)) # source，sink再定義
+                tentative_st = [s,t]
+            else:
+                break
+        determin_st.append(tentative_st) # commodity決定
+        commodity_dict["id"] = i
+        commodity_dict["source"] = s
+        commodity_dict["sink"] = t
+        commodity_dict["demand"] = demand
+
+        commodity_list.append([s,t,demand])
+    commodity_list.sort(key=lambda x: -x[2]) # demand大きいものから降順
+
+    return commodity_list
