@@ -9,18 +9,17 @@ class Beamsearch(object):
         For TSP: https://github.com/alexnowakvila/QAP_pt/blob/master/src/tsp/beam_search.py
     """
 
-    def __init__(self, beam_size, batch_size, num_nodes,
+    def __init__(self, beam_size, batch_size,
                  dtypeFloat=torch.float32, dtypeLong=torch.long, 
-                 probs_type='raw', random_start=False):
+                 probs_type='raw'):
         """
         Args:
             beam_size: Beam size
             batch_size: Batch size
-            num_nodes: Number of nodes in TSP tours
             dtypeFloat: Float data type (for GPU/CPU compatibility)
             dtypeLong: Long data type (for GPU/CPU compatibility)
             probs_type: Type of probability values being handled by beamsearch (either 'raw'/'logits'/'argmax'(TODO))
-            random_start: Flag for using fixed (at node 0) vs. random starting points for beamsearch
+            commodity_list: commotities list (batch_size, num_commotities, 3)
         """
         super(Beamsearch, self).__init__()
 
@@ -28,19 +27,25 @@ class Beamsearch(object):
         self.batch_size = batch_size
         self.beam_size = beam_size
         self.num_nodes = num_nodes
-        self.num_commotities = num_commotities
+        self.commodity_list = commodity_list
+        self.num_commotities = commodity_list.shape[1]
         self.probs_type = probs_type
+        
         # Set data types
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
+        
         # Set beamsearch starting nodes
+        self.start_nodes_list = commodity_list[:, :, 0] # (batch_size, num_commotities)
         self.start_nodes = torch.zeros(batch_size, beam_size, num_commotities, dtype=self.dtypeLong)
+        self.start_nodes[:, 0, :] = start_nodes_list
         
         # Mask for constructing valid hypothesis
-        self.mask = torch.ones(batch_size, beam_size, num_nodes, dtype=self.dtypeFloat)
+        self.mask = torch.ones(batch_size, beam_size, num_commotities, num_nodes, dtype=self.dtypeFloat)
         self.update_mask(self.start_nodes)  # Mask the starting node of the beam search
+        
         # Score for each translation on the beam
-        self.scores = torch.zeros(batch_size, beam_size, dtype=self.dtypeFloat)
+        self.scores = torch.zeros(batch_size, beam_size, num_commotities, dtype=self.dtypeFloat)
         self.all_scores = []
         # Backpointers at each time-step
         self.prev_Ks = []
@@ -50,8 +55,8 @@ class Beamsearch(object):
     def get_current_state(self):
         """Get the output of the beam at the current timestep.
         """
-        current_state = (self.next_nodes[-1].unsqueeze(2)
-                     .expand(self.batch_size, self.beam_size, self.num_nodes)).to(torch.long)
+        current_state = (self.next_nodes[-1].unsqueeze(3)
+                     .expand(self.batch_size, self.beam_size, self.num_commotities, self.num_nodes)).to(torch.long)
         return current_state
     def get_current_origin(self):
         """Get the backpointers for the current timestep.
