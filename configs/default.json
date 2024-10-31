@@ -11,7 +11,9 @@
     "solver_type": "pulp",
     "graph_model": "nsfnet",
 
-    "num_data": 50,
+    "num_train_data": 160,
+    "num_test_data": 20,
+    "num_val_data": 20,
     "num_nodes": 14,
     "num_neighbors": 5,
     "num_commodities": 10,
@@ -25,7 +27,7 @@
     "voc_nodes_in": 2,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
-    "voc_edges_out": 2,
+    "voc_edges_out": 10,
   
     "beam_size": 10,
   

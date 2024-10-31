@@ -24,7 +24,7 @@ class DatasetReader(object):
     """Iterator that reads UELB dataset files and yields mini-batches.
     """
 
-    def __init__(self, num_data, batch_size):
+    def __init__(self, num_data, batch_size, mode):
         """
         Args:
             num_nodes: Number of nodes
@@ -33,6 +33,7 @@ class DatasetReader(object):
         """
         self.num_data = num_data
         self.batch_size = batch_size
+        self.mode = mode
         self.max_iter = (self.num_data // self.batch_size)
 
     def __iter__(self):
@@ -59,17 +60,18 @@ class DatasetReader(object):
         batch_edges_target = []     # Binary classification targets (0/1)
         batch_nodes = []            # Node feature (Source or target of comodities?)
         batch_nodes_target = []     # Multi-class classification targets (`num_nodes` classes)
+        batch_commodities = []
         batch_load_factor = []
 
-        exact_solution_file = f'./data/exact_solution.csv'
+        exact_solution_file = f'./data/{self.mode}_data/exact_solution.csv'
 
         for i in range(start_idx, end_idx):
             # define file path
-            graph_file = f'./data/graph_file/{i-(i%10)}/graph_{i}.gml'
-            commodity_file = f'./data/commodity_file/{i-(i%10)}/commodity_data_{i}.csv'
-            edge_file = f'./data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
-            node_flow_file = f'./data/node_flow_file/{i-(i%10)}/node_flow_{i}.csv'
-            edge_flow_file = f'./data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
+            graph_file = f'./data/{self.mode}_data/graph_file/{i-(i%10)}/graph_{i}.gml'
+            commodity_file = f'./data/{self.mode}_data/commodity_file/{i-(i%10)}/commodity_data_{i}.csv'
+            edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
+            node_flow_file = f'./data/{self.mode}_data/node_flow_file/{i-(i%10)}/node_flow_{i}.csv'
+            edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
             
             """ Make a graph """
             G = nx.read_gml(graph_file,destringizer=int)
@@ -147,6 +149,7 @@ class DatasetReader(object):
             batch_edges_target.append(edges_target)
             batch_nodes.append(nodes)
             batch_nodes_target.append(nodes_target)
+            batch_commodities.append(commodity_list)
         
         # From list to tensors as a DotDict
         batch_load_factor = []
@@ -160,8 +163,9 @@ class DatasetReader(object):
         batch.edges = np.stack(batch_edges, axis=0)                 # 隣接行列 (batch_size, num_nodes, num_nodes)
         batch.edges_capacity = np.stack(batch_edges_capacity, axis=0) # 容量の行列 (batch_size, num_nodes, num_nodes)　
         batch.edges_target = np.stack(batch_edges_target, axis=0)   # 各品種が何番目にエッジを通るか(batch_size, num_nodes, num_nodes, num_commodities)
-        batch.nodes = np.stack(batch_nodes, axis=0)                 # 各品種のs,t (batch_size, num_nodes, num_commodities)
+        batch.nodes = np.stack(batch_nodes, axis=0)                 # ノード情報(各品種のs,t, demandが含まれている) (batch_size, num_nodes, num_commodities)
         batch.nodes_target = np.stack(batch_nodes_target, axis=0)   # 各品種が何番目にノードを通るか(batch_size, num_commodities, num_nodes)
+        batch.commodities = np.stack(batch_commodities, axis=0)    # 各品種のdemand (batch_size, num_commodities, 3)
         batch.load_factor = np.stack(batch_load_factor, axis=0)    # 最大負荷率 (batch_size)
         # 厳密解の最大負荷率と計算時間を保存
         return batch

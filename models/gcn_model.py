@@ -30,8 +30,7 @@ class ResidualGatedGCNModel(nn.Module):
         self.aggregation = config['aggregation']
         # Node and edge embedding layers/lookups
         self.nodes_commodity_embedding = nn.Linear(self.num_commodities, self.hidden_dim, bias=False)
-        self.edges_values_embedding = nn.Linear(1, self.hidden_dim // 2, bias=False)
-        self.edges_embedding = nn.Embedding(self.voc_edges_in, self.hidden_dim // 2)
+        self.edges_values_embedding = nn.Linear(1, self.hidden_dim, bias=False)
         # Define GCN Layers
         gcn_layers = []
         for layer in range(self.num_layers):
@@ -41,27 +40,24 @@ class ResidualGatedGCNModel(nn.Module):
         self.mlp_edges = MLP(self.hidden_dim, self.voc_edges_out, self.mlp_layers)
         # self.mlp_nodes = MLP(self.hidden_dim, self.voc_nodes_out, self.mlp_layers)
 
-    def forward(self, x_edges, x_edges_values, x_nodes, x_commodity, y_edges, edge_cw):
+    def forward(self, x_edges, x_edges_capacity, x_nodes, y_edges, edge_cw):
         """
         Args:
             x_edges: Input edge adjacency matrix (batch_size, num_nodes, num_nodes)
-            x_edges_values: Input edge distance matrix (batch_size, num_nodes, num_nodes)
-            x_nodes: Input nodes (batch_size, num_nodes)
-            x_commodity: Input node commodity information (batch_size, num_nodes, num_commodities)
-            y_edges: Targets for edges (batch_size, num_nodes, num_nodes)
+            x_edges_capacity: Input edge capacity matrix (batch_size, num_nodes, num_nodes)
+            x_nodes: Input node with commodity information (batch_size, num_nodes, num_commodities)
+            y_edges: Targets for edges (batch_size, num_edges, num_commodities)
             edge_cw: Class weights for edges loss
 
         Returns:
-            y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes)
+            y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
             # y_pred_nodes: Predictions for nodes (batch_size, num_nodes)
             loss: Value of loss function
         """
         # Node and edge embedding
-        x = self.nodes_commodity_embedding(x_commodity)
-        e_vals = self.edges_values_embedding(x_edges_values.unsqueeze(3))
-        e_tags = self.edges_embedding(x_edges)
-        e = torch.cat((e_vals, e_tags), dim=3)
-        
+        x = self.nodes_commodity_embedding(x_nodes)
+        e = self.edges_values_embedding(x_edges_capacity.unsqueeze(3))
+
         # GCN layers
         for layer in range(self.num_layers):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x H, B x V x V x H

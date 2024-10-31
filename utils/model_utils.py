@@ -4,6 +4,23 @@ import torch.nn as nn
 
 from utils.beamsearch import *
 from utils.graph_utils import *
+from sklearn.utils.class_weight import compute_class_weight
+
+def create_edge_class_weights(y_edges):
+    # 1. Flatten the y_edges tensor to get edge labels
+    edge_labels = y_edges.cpu().numpy().flatten()
+
+    # 2. Compute class weights
+    # Ensure unique classes are determined from edge_labels
+    classes = np.unique(edge_labels)
+
+    # Calculate class weights using compute_class_weight
+    edge_cw = compute_class_weight("balanced", classes=classes, y=edge_labels)
+
+    # Convert edge_cw to a PyTorch tensor if needed
+    edge_cw_tensor = torch.tensor(edge_cw, dtype=torch.float32)
+
+    return edge_cw_tensor
 
 
 def loss_nodes(y_pred_nodes, y_nodes, node_cw):
@@ -36,8 +53,8 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     Loss function for edge predictions.
 
     Args:
-        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes)
-        y_edges: Targets for edges (batch_size, num_nodes, num_nodes)
+        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
+        y_edges: Targets for edges (batch_size, num_nodes, num_nodes, num_commodities)
         edge_cw: Class weights for edges loss
 
     Returns:
@@ -46,14 +63,15 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     """
     # Ensure tensors are contiguous
     y_pred_edges = y_pred_edges.contiguous()
-    y_edges = y_edges.contiguous()
+    y_edges = y_edges.contiguous().float()  # BCEWithLogitsLoss expects float type for targets
 
-    # Edge loss
-    y = F.log_softmax(y_pred_edges, dim=3)  # B x V x V x voc_edges
-    y = y.permute(0, 3, 1, 2).contiguous()  # B x voc_edges x V x V
-    criterion = nn.NLLLoss(weight=edge_cw)
-    loss_edges = criterion(y, y_edges)
+    # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
+    # class weights are ignored for now
+    criterion = nn.BCEWithLogitsLoss()
+
     
+    loss_edges = criterion(y_pred_edges, y_edges)
+
     return loss_edges
 
 
@@ -63,7 +81,7 @@ def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, dtypeF
     Performs beamsearch procedure on edge prediction matrices and returns possible TSP tours.
 
     Args:
-        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes)
+        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
         beam_size: Beam size
         batch_size: Batch size
         num_nodes: Number of nodes in TSP tours
@@ -71,7 +89,7 @@ def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, dtypeF
         dtypeLong: Long data type (for GPU/CPU compatibility)
         random_start: Flag for using fixed (at node 0) vs. random starting points for beamsearch
 
-    Returns: TSP tours in terms of node ordering (batch_size, num_nodes)
+    Returns: UELB flows in terms of node ordering (batch_size, num_nodes, num_commodities)
 
     """
     
@@ -106,7 +124,7 @@ def beamsearch_tour_nodes_shortest(y_pred_edges, x_edges_values, beam_size, batc
     (Standard beamsearch returns the one with the highest probability and does not take length into account.)
 
     Args:
-        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes)
+        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
         x_edges_values: Input edge distance matrix (batch_size, num_nodes, num_nodes)
         beam_size: Beam size
         batch_size: Batch size
@@ -185,31 +203,30 @@ def edge_error(y_pred, y_target, x_edges):
     Computes edge error metrics for given batch prediction and targets.
 
     Args:
-        y_pred: Edge predictions (batch_size, num_nodes, num_nodes, voc_edges)
-        y_target: Edge targets (batch_size, num_nodes, num_nodes)
+        y_pred: Edge predictions (batch_size, num_nodes, num_nodes, num_commodities)
+        y_target: Edge targets (batch_size, num_nodes, num_nodes, num_commodities)
         x_edges: Adjacency matrix (batch_size, num_nodes, num_nodes)
 
     Returns:
-        err_edges, err_tour, err_tsp, edge_err_idx, err_idx_tour, err_idx_tsp
+        err_edges, err_flow, err_tsp, edge_err_idx, err_idx_flow, err_idx_uelb
     
     """
-    y = F.softmax(y_pred, dim=3)  # B x V x V x voc_edges
-    y = y.argmax(dim=3)  # B x V x V
+    # Make Binery output from y_pred
+    y = (y_pred > 0.5).float()  # B x V x V x F
 
     # Edge error: Mask out edges which are not connected
-    mask_no_edges = x_edges.long()
+    mask_no_edges = x_edges.unsqueeze(-1).long()
     err_edges, _ = _edge_error(y, y_target, mask_no_edges)
 
-    # TSP tour edges error: Mask out edges which are not on true TSP tours
-    mask_no_tour = y_target
-    err_tour, err_idx_tour = _edge_error(y, y_target, mask_no_tour)
-
+    # UELB flow edges error: Mask out edges which are not on true UELB flow
+    mask_no_flow = y_target
+    err_flow, err_idx_flow = _edge_error(y, y_target, mask_no_flow)
     # TSP tour edges + positively predicted edges error:
     # Mask out edges which are not on true TSP tours or are not predicted positively by model
-    mask_no_tsp = ((y_target + y) > 0).long()
-    err_tsp, err_idx_tsp = _edge_error(y, y_target, mask_no_tsp)
+    mask_no_uelb = ((y_target + y) > 0).long()
+    err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)
 
-    return 100 * err_edges, 100 * err_tour, 100 * err_tsp, err_idx_tour, err_idx_tsp
+    return 100 * err_edges, 100 * err_flow, 100 * err_uelb, err_idx_flow, err_idx_uelb
 
 
 def _edge_error(y, y_target, mask):

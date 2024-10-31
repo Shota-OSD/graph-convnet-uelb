@@ -28,15 +28,14 @@ class Beamsearch(object):
         self.batch_size = batch_size
         self.beam_size = beam_size
         self.num_nodes = num_nodes
+        self.num_commotities = num_commotities
         self.probs_type = probs_type
         # Set data types
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
         # Set beamsearch starting nodes
-        self.start_nodes = torch.zeros(batch_size, beam_size, dtype=self.dtypeLong)
-        if random_start:
-            # Random starting nodes
-            self.start_nodes = torch.randint(0, num_nodes, (batch_size, beam_size), dtype=self.dtypeLong)
+        self.start_nodes = torch.zeros(batch_size, beam_size, num_commotities, dtype=self.dtypeLong)
+        
         # Mask for constructing valid hypothesis
         self.mask = torch.ones(batch_size, beam_size, num_nodes, dtype=self.dtypeFloat)
         self.update_mask(self.start_nodes)  # Mask the starting node of the beam search

@@ -51,23 +51,39 @@ def is_valid_tour(nodes, num_nodes):
     return sorted(nodes) == [i for i in range(num_nodes)]
 
 
-def mean_tour_len_edges(x_edges_values, y_pred_edges):
+def mean_load_factor(x_edges_capacity, y_pred_edges, x_edges, batch_commodities):
     """
-    Computes mean tour length for given batch prediction as edge adjacency matrices (for PyTorch tensors).
+    Computes mean load factor for given batch prediction as edge adjacency matrices (for PyTorch tensors).
 
     Args:
-        x_edges_values: Edge values (distance) matrix (batch_size, num_nodes, num_nodes)
-        y_pred_edges: Edge predictions (batch_size, num_nodes, num_nodes, voc_edges)
+        x_edges_capacity: Edge capacity matrix (batch_size, num_nodes, num_nodes)
+        y_pred_edges: Edge predictions (batch_size, num_nodes, num_nodes, num_comodities)
+        x_edges: Adjacency matrix (batch_size, num_nodes, num_nodes)
+        batch_commodities: Commodity information (batch_size, num_commodities, info(3))
 
     Returns:
         mean_tour_len: Mean tour length over batch
     """
-    y = F.softmax(y_pred_edges, dim=3)  # B x V x V x voc_edges
-    y = y.argmax(dim=3)  # B x V x V
-    # Divide by 2 because edges_values is symmetric
-    tour_lens = (y.float() * x_edges_values.float()).sum(dim=1).sum(dim=1) / 2
-    mean_tour_len = tour_lens.sum().to(dtype=torch.float).item() / tour_lens.numel()
-    return mean_tour_len
+    # Make Binery output from y_pred
+    y = (y_pred_edges > 0.5).float()  # B x V x V x C
+
+    # Compute load factor
+    capacity_matrix = x_edges_capacity.unsqueeze(-1).long() # B x V x V x 1
+    exact_edged_pred_matrix = (y * x_edges.unsqueeze(-1)) # B x V x V x C (binary)
+    # Get demand and reshape for broadcasting
+    batch_demand = batch_commodities[:, :, 2] # B x C
+    batch_demand = batch_demand.unsqueeze(1).unsqueeze(2)  # (B x 1 x 1 x C)
+    
+    # Compute load factor per batch
+    load_matrix = exact_edged_pred_matrix * batch_demand  # (B x V x V x C)
+    load_factor_matrix = load_matrix / (capacity_matrix.float() + 1e-10)  # 微小値を追加してゼロ除算を防ぐ
+  # (B x V x V x C)
+    load_factor_matrix = load_factor_matrix.sum(dim=3) # (B x V x V)
+    max_load_factor_per_batch = load_factor_matrix.max(dim=1)[0].max(dim=1)[0]  # (B)
+    # Compute mean load factor over batch
+    mean_maximum_load_factor = max_load_factor_per_batch.mean()  # scalar
+    
+    return mean_maximum_load_factor
 
 
 def mean_tour_len_nodes(x_edges_values, bs_nodes):
