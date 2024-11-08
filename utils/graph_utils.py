@@ -86,6 +86,46 @@ def mean_load_factor(x_edges_capacity, y_pred_edges, x_edges, batch_commodities)
     return mean_maximum_load_factor
 
 
+def mean_feasible_load_factor(bs_nodes, edges_capacity, commodities):
+    """
+    Computes mean load factor for given batch prediction as edge adjacency matrices (for PyTorch tensors).
+
+    Args:
+        bs_nodes: Node orderings (batch_size, num_flow, num_nodes)
+        x_edges_capacity: Edge capacity matrix (batch_size, num_nodes, num_nodes)
+        batch_commodities: Commodity information (batch_size, num_commodities, info(3))
+
+    Returns:
+        mean_tour_len: Mean tour length over batch
+    """
+    num_batch, num_flow, num_node = bs_nodes.shape
+    
+    bs_edges = torch.zeros((num_batch, num_node, num_node, num_flow), dtype=torch.int32)
+
+    # comvert node order to edge
+    for batch in range(num_batch):
+        for flow in range(num_flow):
+            # obtain the path from the node order
+            path = bs_nodes[batch, flow]
+            # get edges from the path
+            visited_nodes = torch.where(path > 0)[0]
+            for i in range(len(visited_nodes) - 1):
+                start = visited_nodes[i]
+                end = visited_nodes[i + 1]
+                bs_edges[batch, start, end, flow] = 1
+    
+    # multiple edge capacity by demand
+    demands = commodities[:, :, 2].view(num_batch, 1, 1, num_flow)
+    bs_edges_demand = bs_edges * demands
+    
+    bs_edges_summed = bs_edges_demand.sum(dim=-1)
+    
+    return bs_edges_weighted
+
+
+
+
+
 def mean_tour_len_nodes(x_edges_values, bs_nodes):
     """
     Computes mean tour length for given batch prediction as node ordering after beamsearch (for Pytorch tensors).

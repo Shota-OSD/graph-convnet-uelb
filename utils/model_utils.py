@@ -117,7 +117,7 @@ def beamsearch_uelb_flows_nodes(y_pred_edges, commodities, edges_capacity, beam_
     return beamsearch.get_hypothesis(ends)
 
 
-def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, dtypeFloat, dtypeLong, probs_type='raw', commotities_list):
+def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, commodities_list, dtypeFloat, dtypeLong, probs_type='raw'):
     """
     Performs beamsearch procedure on edge prediction matrices and returns possible TSP tours.
 
@@ -125,15 +125,13 @@ def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, dtypeF
         y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
         beam_size: Beam size
         batch_size: Batch size
-        num_nodes: Number of nodes in TSP tours
+        num_nodes: Number of nodes in UELB flow network
         dtypeFloat: Float data type (for GPU/CPU compatibility)
         dtypeLong: Long data type (for GPU/CPU compatibility)
-        random_start: Flag for using fixed (at node 0) vs. random starting points for beamsearch
-
     Returns: UELB flows in terms of node ordering (batch_size, num_nodes, num_commodities)
 
     """
-    target_state = commotities_list[:, :, 1] # (batch_size, num_commotities)
+    target_state = commodities_list[:, :, 1] # (batch_size, num_commodities)
     
     if probs_type == 'raw':
         # Compute softmax over edge prediction matrix
@@ -143,17 +141,16 @@ def beamsearch_tour_nodes(y_pred_edges, beam_size, batch_size, num_nodes, dtypeF
         y = F.log_softmax(y_pred_edges, dim=3)  # B x V x V x num_commodities
         y[y == 0] = -1e-20  # Set 0s (i.e. log(1)s) to very small negative number
     # Perform beamsearch
-    beamsearch = Beamsearch(beam_size, batch_size, dtypeFloat, dtypeLong, probs_type)
+    beamsearch = Beamsearch(beam_size, batch_size, num_nodes, commodities_list, dtypeFloat, dtypeLong, probs_type)
     trans_probs = y.gather(1, beamsearch.get_current_state())
     for step in range(num_nodes - 1):
         beamsearch.advance(trans_probs)
         current_state = beamsearch.get_current_state()
-        if current_state[:, 0, :] == target_state:
+        if current_state[:, 0, :, :] == target_state:
             break
         trans_probs = y.gather(1, current_state)
     # Find TSP tour with highest probability among beam_size candidates
-    ends = torch.zeros(batch_size, 1).type(dtypeLong)
-    return beamsearch.get_hypothesis(ends)
+    return beamsearch.get_hypothesis()
 
 
 def beamsearch_tour_nodes_shortest(y_pred_edges, x_edges_values, beam_size, batch_size, num_nodes,
