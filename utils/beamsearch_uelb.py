@@ -1,7 +1,7 @@
 import torch
 
 class BeamsearchUELB:
-    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, dtypeFloat, dtypeLong):
+    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, dtypeFloat, dtypeLong, strict=False):
         self.y_pred_edges = y_pred_edges  # (batch_size, num_nodes, num_nodes, num_commodities)
         self.beam_size = beam_size
         self.batch_size = batch_size
@@ -9,6 +9,7 @@ class BeamsearchUELB:
         self.commodities = commodities  # (batch_size, num_commodities, 3) -> (source_node, target_node, demand)
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
+        self.strict = strict
 
     def search(self):
         # batchサイズでの結果を格納するリスト
@@ -38,9 +39,11 @@ class BeamsearchUELB:
             target_node = commodity[1].item()
             demand = commodity[2].item()
             # ビームサーチで最適なパスを探索
-            node_order, remaining_edges_capacity, best_path = self._beam_search_for_commodity(batch_edges_capacity, batch_y_pred_edges[:, :, index], source_node, target_node, demand)           
+            node_order, remaining_edges_capacity, best_path = self._beam_search_for_commodity(batch_edges_capacity, batch_y_pred_edges[:, :, index], source_node, target_node, demand) 
+            print(f"{index}品種目")     
             node_orders.append(node_order)
-            batch_edges_capacity = remaining_edges_capacity
+            if self.strict:
+                batch_edges_capacity = remaining_edges_capacity
             commodity_paths.append(best_path)
         
         return node_orders, commodity_paths
@@ -58,11 +61,12 @@ class BeamsearchUELB:
 
             next_beam_queue = []
             for current_node, path, current_score, remaining_edges_capacity in beam_queue:
+                # 各ビームの探索
                 if current_node == target:
                     best_paths.append((path, current_score, remaining_edges_capacity))
                     continue
-
-                # 隣接ノードへの探索
+                # 隣接ノードへの候補を出す
+                next_node_candidate = []
                 for next_node in range(edges_capacity.shape[0]):
                     # next_nodeがすでにパスに含まれている場合
                     if next_node in path:
@@ -70,18 +74,24 @@ class BeamsearchUELB:
                     if (edges_capacity[current_node, next_node].item() == 0):
                         continue  # 容量が0、つまりエッジが存在しない場合
 
-                    # 次ノードへの移動でのフローの確率スコア
-                    flow_probability = y_pred_edges[current_node, next_node]
-                    new_score = current_score + flow_probability
-
                     # 容量制約の確認
                     if demand <= remaining_edges_capacity[current_node, next_node]:
-                        # 新しい remaining_edges_capacity を作成して更新
-                        updated_capacity = remaining_edges_capacity.clone()
-                        updated_capacity[current_node, next_node] -= demand
-                        # 新しいパスを作成
-                        new_path = path + [next_node]
-                        next_beam_queue.append((next_node, new_path, new_score, updated_capacity))
+                        # 新しいノードの候補を作成
+                        next_node_candidate.append((next_node, y_pred_edges[current_node, next_node]))
+                    else:
+                        print("エッジのキャパを超えました")
+                # 最もスコアの高いノードに遷移
+                next_node_candidate = sorted(next_node_candidate, key=lambda x: x[1], reverse=True)
+                print(next_node_candidate)
+                best_next_node = next_node_candidate[0][0]
+                flow_probability = next_node_candidate[0][1]
+                new_score = current_score + flow_probability
+
+                updated_capacity = remaining_edges_capacity.clone()
+                updated_capacity[current_node, best_next_node] -= demand
+                # 新しいパスを作成
+                new_path = path + [best_next_node]
+                next_beam_queue.append((best_next_node, new_path, new_score, updated_capacity))
                         
             beam_queue = next_beam_queue
 
@@ -90,6 +100,5 @@ class BeamsearchUELB:
         # パスをノードのリストに変換
         node_order = [0] * edges_capacity.shape[0]
         for idx, node in enumerate(best_paths[0][0]):
-            node_order[node] = idx + 1  # 通った順番（1から始まる
-            print(best_paths[0][0])
+            node_order[node] = idx + 1  # 通った順番（1から始まる) 
         return node_order, best_paths[0][2], best_paths[0][0]  # ノードのリスト、残りの容量, パスのリスト

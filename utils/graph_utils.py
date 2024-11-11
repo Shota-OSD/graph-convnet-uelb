@@ -86,11 +86,12 @@ def mean_load_factor(x_edges_capacity, y_pred_edges, x_edges, batch_commodities)
     return mean_maximum_load_factor
 
 
-def mean_feasible_load_factor(bs_nodes, edges_capacity, commodities):
+def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_capacity, commodities):
     """
     Computes mean load factor for given batch prediction as edge adjacency matrices (for PyTorch tensors).
 
     Args:
+        pred_paths: Nodes that are orderd by path (batch_size, num_flow, num_node_in_each_path)
         bs_nodes: Node orderings (batch_size, num_flow, num_nodes)
         x_edges_capacity: Edge capacity matrix (batch_size, num_nodes, num_nodes)
         batch_commodities: Commodity information (batch_size, num_commodities, info(3))
@@ -98,21 +99,18 @@ def mean_feasible_load_factor(bs_nodes, edges_capacity, commodities):
     Returns:
         mean_tour_len: Mean tour length over batch
     """
-    num_batch, num_flow, num_node = bs_nodes.shape
     
     bs_edges = torch.zeros((num_batch, num_node, num_node, num_flow), dtype=torch.int32)
 
+    # 改行なしでテンソル全体を出力するオプション
+    torch.set_printoptions(linewidth=200)
+
     # comvert node order to edge
-    for batch in range(num_batch):
-        for flow in range(num_flow):
+    for batch_idx, batch in enumerate(pred_paths):
+        for path_idx, path in enumerate(batch):
             # obtain the path from the node order
-            path = bs_nodes[batch, flow]
-            # get edges from the path
-            visited_nodes = torch.where(path > 0)[0]
-            for i in range(len(visited_nodes) - 1):
-                start = visited_nodes[i]
-                end = visited_nodes[i + 1]
-                bs_edges[batch, start, end, flow] = 1
+            for node_idx in range(len(path) - 1):
+                bs_edges[batch_idx, path[node_idx], path[node_idx + 1], path_idx] = 1
     
     # multiple edge capacity by demand
     demands = commodities[:, :, 2].view(num_batch, 1, 1, num_flow)
@@ -120,7 +118,7 @@ def mean_feasible_load_factor(bs_nodes, edges_capacity, commodities):
     
     # sum the demand on the edges
     bs_edges_summed = bs_edges_demand.sum(dim=-1)
-    print(bs_edges_summed)
+    # print("bs_edges_summed: ", bs_edges_summed)
     
     # compute the load factor
     load_factors = torch.where(
@@ -128,7 +126,6 @@ def mean_feasible_load_factor(bs_nodes, edges_capacity, commodities):
         torch.tensor(0.0),                 # true の場合の値: 0 を設定
         bs_edges_summed.float() / edges_capacity.float()  # false の場合の値: 通常の割り算
     )
-
     
     # compute the maximum load factor
     max_values_per_batch = load_factors.max(dim=1).values.max(dim=1).values
