@@ -69,9 +69,9 @@ class DatasetReader(object):
             # define file path
             graph_file = f'./data/{self.mode}_data/graph_file/{i-(i%10)}/graph_{i}.gml'
             commodity_file = f'./data/{self.mode}_data/commodity_file/{i-(i%10)}/commodity_data_{i}.csv'
-            edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
             node_flow_file = f'./data/{self.mode}_data/node_flow_file/{i-(i%10)}/node_flow_{i}.csv'
-            edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
+            #edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
+            #edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
             
             """ Make a graph """
             G = nx.read_gml(graph_file,destringizer=int)

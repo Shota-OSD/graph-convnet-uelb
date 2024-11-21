@@ -121,7 +121,7 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     torch.set_printoptions(linewidth=200)
 
     bs_edges_summed = bs_edges_demand.sum(dim=-1)
-    print("bs_edges_summed: ", bs_edges_summed[0])
+    #print("bs_edges_summed: \n", bs_edges_summed[0])
     
     # compute the load factor
     load_factors = torch.where(
@@ -132,7 +132,7 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     
     # compute the maximum load factor
     max_values_per_batch = load_factors.max(dim=1).values.max(dim=1).values
-    print("max_values_per_batch: ", max_values_per_batch)
+    #print("max_values_per_batch: ", max_values_per_batch)
     
     # compute the mean maximum load factor
     result = max_values_per_batch.float().mean()

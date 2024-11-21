@@ -37,12 +37,15 @@ class BeamsearchUELB:
         while count < self.max_iter:
 
             batch_edges_capacity = self.edges_capacity[batch]
-            if count == 0:
-                print("元々のエッジ容量：", batch_edges_capacity)
+            #if count == 0:
+                #print("元々のエッジ容量：", batch_edges_capacity)
             random_indices = torch.randperm(commodities.size(0))
             #  探索する品種の順番をシャッフル
             shaffled_commodities = commodities[random_indices]
             shaffled_pred_edges = batch_y_pred_edges[:, :, random_indices]
+            #shaffled_commodities = commodities
+            #shaffled_pred_edges = batch_y_pred_edges
+            _, original_indices = torch.sort(random_indices)
 
             node_orders = []
             commodity_paths = []
@@ -64,13 +67,13 @@ class BeamsearchUELB:
                 # 最後まで行くと終了
             if len(commodity_paths) == commodities.shape[0]:
                 count = self.max_iter
-                print("各エッジで流れた容量: ", self.edges_capacity[batch] - batch_edges_capacity)
+                unshaffled_commodity_paths = [commodity_paths[i] for i in original_indices]
                 #print("無事探索終了")
             else:
                 #print("探索失敗のため、繰り返しを行いました", count)
                 count += 1
         
-        return node_orders, commodity_paths
+        return node_orders, unshaffled_commodity_paths
 
     def _beam_search_for_commodity(self, edges_capacity, y_pred_edges, source, target, demand):
         # 初期状態のキュー
