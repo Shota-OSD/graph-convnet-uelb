@@ -1,6 +1,9 @@
 import os
 import csv
 import networkx as nx
+from utils.data_maker import DataMaker
+from utils.exact_solution import SolveExactSolution
+import torch
 
 def create_data_files(config, data_mode="test"):
     """
@@ -58,6 +61,7 @@ def create_data_files(config, data_mode="test"):
             E = SolveExactSolution(solver_type, commodity_file_name, graph_file_name)
             flow_var_kakai, edge_list, objective_value, elapsed_time = E.solve_exact_solution_to_env()
             node_flow_matrix, edge_flow_matrix, infinit_loop = E.generate_flow_matrices(flow_var_kakai)
+            #exact_edges_matrix = E.generate_edges_target()
             
             # 厳密解が1以上、または厳密解のフローが正しく導けなかった場合のやり直し
             if infinit_loop:
@@ -94,3 +98,6 @@ def create_data_files(config, data_mode="test"):
     
     print(f"Data generation completed: {num_data} data created.")
     print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}")
+
+    #exact_edges_matrix = exact_edges_matrix.unsqueeze(0) 
+    #return exact_edges_matrix

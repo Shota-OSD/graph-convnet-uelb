@@ -14,7 +14,7 @@ class ResidualGatedGCNModel(nn.Module):
     """
 
     def __init__(self, config, dtypeFloat, dtypeLong):
-        super(ResidualGatedGCNModel, self).__init__()
+        super().__init__()
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
         # Define net parameters
@@ -29,7 +29,7 @@ class ResidualGatedGCNModel(nn.Module):
         self.mlp_layers = config['mlp_layers']
         self.aggregation = config['aggregation']
         # Node and edge embedding layers/lookups
-        self.nodes_commodity_embedding = nn.Linear(self.num_commodities, self.hidden_dim, bias=False)
+        self.nodes_commodity_embedding = nn.Linear(1, self.hidden_dim, bias=False)
         self.edges_values_embedding = nn.Linear(1, self.hidden_dim, bias=False)
         # Define GCN Layers
         gcn_layers = []
@@ -55,9 +55,11 @@ class ResidualGatedGCNModel(nn.Module):
             loss: Value of loss function
         """
         # Node and edge embedding
-        x = self.nodes_commodity_embedding(x_nodes)
-        e = self.edges_values_embedding(x_edges_capacity.unsqueeze(3))
-
+        x_edges_capacity = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, 10)
+        
+        #　なぜかnodes_commodity_embeddingが使えないので、一旦nodes_commodity_embedding
+        x = self.nodes_commodity_embedding(x_nodes.unsqueeze(-1))
+        e = self.edges_values_embedding(x_edges_capacity.unsqueeze(4))
         # GCN layers
         for layer in range(self.num_layers):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x H, B x V x V x H

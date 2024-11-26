@@ -53,7 +53,7 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     Loss function for edge predictions.
 
     Args:
-        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
+        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities, 2)
         y_edges: Targets for edges (batch_size, num_nodes, num_nodes, num_commodities)
         edge_cw: Class weights for edges loss
 
@@ -64,13 +64,16 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     # Ensure tensors are contiguous
     y_pred_edges = y_pred_edges.contiguous()
     y_edges = y_edges.contiguous().float()  # BCEWithLogitsLoss expects float type for targets
-
+    
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
     # class weights are ignored for now
-    criterion = nn.BCEWithLogitsLoss()
-
+    y = F.log_softmax(y_pred_edges, dim=3)  # B x V x V x F x voc_edges
+    y = y.permute(0, 4, 1, 2, 3).contiguous()  # B x voc_edges x V x V x F
     
-    loss_edges = criterion(y_pred_edges, y_edges)
+    y_edges = y_edges.long()
+    
+    criterion = nn.NLLLoss(weight=edge_cw)
+    loss_edges = criterion(y, y_edges) # ここでエラーが発生している
 
     return loss_edges
 
@@ -252,19 +255,11 @@ def edge_error(y_pred, y_target, x_edges):
     # Make Binery output from y_pred
     y = (y_pred > 0.5).float()  # B x V x V x F
 
-    # Edge error: Mask out edges which are not connected
-    mask_no_edges = x_edges.unsqueeze(-1).long()
-    err_edges, _ = _edge_error(y, y_target, mask_no_edges)
-
-    # UELB flow edges error: Mask out edges which are not on true UELB flow
-    mask_no_flow = y_target
-    err_flow, err_idx_flow = _edge_error(y, y_target, mask_no_flow)
-    # TSP tour edges + positively predicted edges error:
     # Mask out edges which are not on true TSP tours or are not predicted positively by model
     mask_no_uelb = ((y_target + y) > 0).long()
     err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)
 
-    return 100 * err_edges, 100 * err_flow, 100 * err_uelb, err_idx_flow, err_idx_uelb
+    return 100 * err_uelb
 
 
 def _edge_error(y, y_target, mask):

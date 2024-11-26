@@ -19,14 +19,14 @@ class BeamsearchUELB:
 
         for batch in range(self.batch_size):
             # バッチごとにフローを計算
-            batch_node_orders, commodity_paths = self._beam_search_single_batch(batch)
+            batch_node_orders, commodity_paths, is_feasible = self._beam_search_single_batch(batch)
             node_orders.append(batch_node_orders)
             all_commodity_paths.append(commodity_paths)
             #tensor_node_orders = torch.tensor(node_orders, dtype=self.dtypeLong)
 
 
         #return tensor_node_orders, all_commodity_paths
-        return all_commodity_paths
+        return all_commodity_paths, is_feasible
 
     def _beam_search_single_batch(self, batch):
         # バッチ内の各コモディティに対してルートを探索
@@ -49,6 +49,7 @@ class BeamsearchUELB:
 
             node_orders = []
             commodity_paths = []
+            is_feasible = True
 
             for index, commodity in enumerate(shaffled_commodities):
                 source_node = commodity[0].item()
@@ -71,9 +72,12 @@ class BeamsearchUELB:
                 #print("無事探索終了")
             else:
                 #print("探索失敗のため、繰り返しを行いました", count)
+                is_feasible = False
+                #unshaffled_commodity_paths = [[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]]
+                unshaffled_commodity_paths = [[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9]]
                 count += 1
         
-        return node_orders, unshaffled_commodity_paths
+        return node_orders, unshaffled_commodity_paths, is_feasible
 
     def _beam_search_for_commodity(self, edges_capacity, y_pred_edges, source, target, demand):
         # 初期状態のキュー

@@ -139,7 +139,31 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     
     return result
 
-
+def compute_load_factor(edges_target, edges_capacity, commodities):
+    """
+    Compute the load factor for a given solution.
+    edges_target: (batch_size, num_nodes, num_nodes, num_commodities)
+    edges_capacity: (batch_size, num_nodes, num_nodes)
+    commodities: (batch_size, num_commodities, 3)
+    """
+    # Compute the demand on each edge
+    demands = commodities[:, :, 2].view(-1, 1, 1, commodities.size(1))
+    print("demands: ", demands)
+    edges_demand = edges_target * demands
+    
+    # Sum the demand on the edges
+    edges_summed = edges_demand.sum(dim=-1)
+    
+    # Compute the load factor
+    load_factor = torch.where(
+        edges_capacity == 0,               # 条件: edges_capacity が 0 の場合
+        torch.tensor(0.0),                 # true の場合の値: 0 を設定
+        edges_summed.float() / edges_capacity.float()  # false の場合の値: 通常の割り算
+    )
+    max_values_per_batch = load_factor.max(dim=1).values.max(dim=1).values
+    #print("max_values_per_batch: ", max_values_per_batch)
+    
+    return max_values_per_batch
 
 
 

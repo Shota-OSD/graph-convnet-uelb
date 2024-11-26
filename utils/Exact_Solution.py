@@ -6,6 +6,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from utils.flow import Flow
 import pulp
+import torch
 # from pyscipopt import Model as SCIPModel, quicksum
 
 class SolveExactSolution():
@@ -175,7 +176,7 @@ class SolveExactSolution():
 
             # print(status)
             # print(UELB_problem) # 制約式を全て出してくれる    
-            
+            self.flow_var_kakai = flow_var_kakai
             return flow_var_kakai, self.r_kakai, L.value(), elapsed_time
 
         if (self.solver_type == 'SCIP'): # PySCIPOpt+SCIP
@@ -221,6 +222,22 @@ class SolveExactSolution():
             # nx.draw(self.G, with_labels=True)
             # plt.show()
             return model.getObjVal(),elapsed_time
+        
+    def generate_edges_target(self):
+        num_flows = len(self.G.all_flows)
+        num_nodes = len(self.G.nodes())
+        num_edges = len(self.G.edges())
+        exact_edges_matrix = torch.zeros((num_nodes, num_nodes, num_flows), dtype=int)
+        
+        for l in range(num_flows):
+            for e in range(num_edges):
+                if pulp.value(self.flow_var_kakai[l][e]) == 1:
+                    node_from = self.r_kakai[e][1][0]
+                    node_to = self.r_kakai[e][1][1]
+                    exact_edges_matrix[node_from][node_to][l] = 1
+        
+        return exact_edges_matrix
+            
         
     def generate_flow_matrices(self, flow_var_kakai):
         """

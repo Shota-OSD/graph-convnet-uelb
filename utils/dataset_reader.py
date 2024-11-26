@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.utils import shuffle
 import networkx as nx
 import csv
+import torch
 
 class DotDict(dict):
     """Wrapper around in-built dict class to access members through the dot operation.
@@ -70,8 +71,8 @@ class DatasetReader(object):
             graph_file = f'./data/{self.mode}_data/graph_file/{i-(i%10)}/graph_{i}.gml'
             commodity_file = f'./data/{self.mode}_data/commodity_file/{i-(i%10)}/commodity_data_{i}.csv'
             node_flow_file = f'./data/{self.mode}_data/node_flow_file/{i-(i%10)}/node_flow_{i}.csv'
-            #edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
-            #edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
+            edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
+            edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
             
             """ Make a graph """
             G = nx.read_gml(graph_file,destringizer=int)
@@ -115,32 +116,17 @@ class DatasetReader(object):
                     nodes_target.append([int(element) for element in row])
                     
             """ Read edge target """
-            edges = []
-            with open(edge_file, 'r') as edge_data:
-                reader = csv.reader(edge_data)
-                for row in reader:
-                    edges.append([int(row[0]), int(row[1]), int(row[2])])  # (id, source, target)として保存
-            edges = np.array(edges)  # NumPy配列に変換
-            
-            edge_flow_matrix = []
-            with open(edge_flow_file, 'r') as edge_flow_data:
-                reader = csv.reader(edge_flow_data)
-                for row in reader:
-                    edge_flow_matrix.append([int(value) for value in row])  # 各行を整数として保存
-            edge_flow_matrix = np.array(edge_flow_matrix)  # NumPy配列に変換
-            
-            flow = edge_flow_matrix.shape[0]  # 流量数
-
-            edges_target = np.zeros((num_nodes, num_nodes, flow), dtype=int)
-            
-            # edgesとflow_matrixを元にedges_targetを更新
-            for flow_index in range(flow):
-                for edge_index, edge in enumerate(edges):
-                    if edge_flow_matrix[flow_index, edge_index] > 0:  # flow_matrixの値が1以上
-                        source = edge[1]  # source
-                        target = edge[2]  # target
-                        edges_target[source, target, flow_index] = 1  # エッジの存在を1に設定
-                        edges_target[target, source, flow_index] = 1  # 無向グラフの場合は対称性を保つ
+            edges_target = np.zeros((num_nodes, num_nodes, num_commodities), dtype=int)
+                        
+            for flow_idx in range(num_commodities):
+                # node_orderをテンソルに変換
+                node_order = torch.tensor(nodes_target[flow_idx], dtype=torch.int)
+                valid_nodes = (node_order > 0).nonzero(as_tuple=True)[0]
+                sorted_nodes = valid_nodes[node_order[valid_nodes].argsort()]
+                for i in range(len(sorted_nodes) - 1):
+                    src = sorted_nodes[i].item()  # 出発ノード
+                    tgt = sorted_nodes[i + 1].item()  # 到着ノード
+                    edges_target[src, tgt, flow_idx] = 1  # エッジを通過しているとマーク
 
             
             # Concatenate the data
