@@ -73,7 +73,7 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     y_edges = y_edges.long()
     
     criterion = nn.NLLLoss(weight=edge_cw)
-    loss_edges = criterion(y, y_edges) # ここでエラーが発生している
+    loss_edges = criterion(y, y_edges)
 
     return loss_edges
 
