@@ -56,7 +56,6 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
         y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities, 2)
         y_edges: Targets for edges (batch_size, num_nodes, num_nodes, num_commodities)
         edge_cw: Class weights for edges loss
-
     Returns:
         loss_edges: Value of loss function
     
@@ -71,8 +70,9 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     y = y.permute(0, 4, 1, 2, 3).contiguous()  # B x voc_edges x V x V x F
     
     y_edges = y_edges.long()
+    y_edges = y_edges * edge_cw
     
-    criterion = nn.NLLLoss(weight=edge_cw)
+    criterion = nn.NLLLoss()
     loss_edges = criterion(y, y_edges)
 
     return loss_edges
@@ -238,6 +238,19 @@ def update_learning_rate(optimizer, lr):
         param_group['lr'] = lr
     return optimizer
 
+def show_nomalized_edge(y_pred):
+    # Make Binery output from y_pred
+    batch_size, num_nodes, _, num_commodities = y_pred.size()
+    min_values, _ = y_pred.view(batch_size, -1, num_commodities).min(dim=1)  # V x V を結合して最小値
+    max_values, _ = y_pred.view(batch_size, -1, num_commodities).max(dim=1)  # V x V を結合して最大値
+
+    # ブロードキャストして正規化
+    epsilon = 1e-8  # ゼロ除算防止
+    normalized_y = (y_pred - min_values[:, None, None, :]) / (
+        max_values[:, None, None, :] - min_values[:, None, None, :] + epsilon
+    )
+    
+    return normalized_y
 
 def edge_error(y_pred, y_target, x_edges):
     """

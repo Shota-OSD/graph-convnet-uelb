@@ -117,7 +117,7 @@ class ResidualGatedGCNLayer(nn.Module):
         e_in = e
         x_in = x
         e_tmp = self.edge_feat(x_in, e_in)
-        edge_gate = torch.sigmoid(e_tmp)
+        edge_gate = self.relu(e_tmp)
         x_tmp = self.node_feat(x_in, edge_gate)
         e_tmp = self.bn_edge(e_tmp) #ここでエラー
         x_tmp = self.bn_node(x_tmp)
