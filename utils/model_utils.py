@@ -53,7 +53,7 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     Loss function for edge predictions.
 
     Args:
-        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities, 2)
+        y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
         y_edges: Targets for edges (batch_size, num_nodes, num_nodes, num_commodities)
         edge_cw: Class weights for edges loss
 
@@ -64,16 +64,13 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     # Ensure tensors are contiguous
     y_pred_edges = y_pred_edges.contiguous()
     y_edges = y_edges.contiguous().float()  # BCEWithLogitsLoss expects float type for targets
-    
+
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
     # class weights are ignored for now
-    y = F.log_softmax(y_pred_edges, dim=3)  # B x V x V x F x voc_edges
-    y = y.permute(0, 4, 1, 2, 3).contiguous()  # B x voc_edges x V x V x F
+    #pos_weight = torch.tensor([2.0])  # ポジティブクラスに2倍の重み
+    criterion = nn.BCEWithLogitsLoss(weight=edge_cw)
+    loss_edges = criterion(y_pred_edges, y_edges)
     
-    y_edges = y_edges.long()
-    
-    criterion = nn.NLLLoss(weight=edge_cw)
-    loss_edges = criterion(y, y_edges)
 
     return loss_edges
 
@@ -238,6 +235,19 @@ def update_learning_rate(optimizer, lr):
         param_group['lr'] = lr
     return optimizer
 
+def show_nomalized_edge(y_pred):
+    # Make Binery output from y_pred
+    batch_size, num_nodes, _, num_commodities = y_pred.size()
+    min_values, _ = y_pred.view(batch_size, -1, num_commodities).min(dim=1)  # V x V を結合して最小値
+    max_values, _ = y_pred.view(batch_size, -1, num_commodities).max(dim=1)  # V x V を結合して最大値
+
+    # ブロードキャストして正規化
+    epsilon = 1e-8  # ゼロ除算防止
+    normalized_y = (y_pred - min_values[:, None, None, :]) / (
+        max_values[:, None, None, :] - min_values[:, None, None, :] + epsilon
+    )
+    
+    return normalized_y
 
 def edge_error(y_pred, y_target, x_edges):
     """
@@ -253,13 +263,24 @@ def edge_error(y_pred, y_target, x_edges):
     
     """
     # Make Binery output from y_pred
-    y = (y_pred > 0.5).float()  # B x V x V x F
+    batch_size, num_nodes, _, num_commodities = y_pred.size()
+    min_values, _ = y_pred.view(batch_size, -1, num_commodities).min(dim=1)  # V x V を結合して最小値
+    max_values, _ = y_pred.view(batch_size, -1, num_commodities).max(dim=1)  # V x V を結合して最大値
 
-    # Mask out edges which are not on true TSP tours or are not predicted positively by model
-    mask_no_uelb = ((y_target + y) > 0).long()
+    # ブロードキャストして正規化
+    epsilon = 1e-8  # ゼロ除算防止
+    normalized_y = (y_pred - min_values[:, None, None, :]) / (
+        max_values[:, None, None, :] - min_values[:, None, None, :] + epsilon
+    )
+    
+    y = (normalized_y > 0.5).float()  # B x V x V x F
+
+    # エッジがある中で調べる
+    acc_edges = x_edges.unsqueeze(3).expand_as(y_target).float()  # B x V x V x F
+    mask_no_uelb = ((acc_edges) > 0).long()
     err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)
 
-    return 100 * err_uelb
+    return 100 * err_uelb, err_idx_uelb
 
 
 def _edge_error(y, y_target, mask):

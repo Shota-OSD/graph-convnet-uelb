@@ -29,7 +29,7 @@ class ResidualGatedGCNModel(nn.Module):
         self.mlp_layers = config['mlp_layers']
         self.aggregation = config['aggregation']
         # Node and edge embedding layers/lookups
-        self.nodes_commodity_embedding = nn.Linear(1, self.hidden_dim, bias=False)
+        self.nodes_commodity_embedding = nn.Linear(self.num_commodities, self.hidden_dim, bias=False)
         self.edges_values_embedding = nn.Linear(1, self.hidden_dim, bias=False)
         # Define GCN Layers
         gcn_layers = []
@@ -54,28 +54,24 @@ class ResidualGatedGCNModel(nn.Module):
             # y_pred_nodes: Predictions for nodes (batch_size, num_nodes)
             loss: Value of loss function
         """
-        # Nomalize node and edge capacity
-        x_nodes_min = x_nodes.min()
-        x_nodes_max = x_nodes.max()
-        normalized_x_nodes = (x_nodes - x_nodes_min) / (x_nodes_max - x_nodes_min)
-        
-        x_edges_capacity_min = x_edges_capacity.min()
-        x_edges_capacity_max = x_edges_capacity.max()
-        normalized_x_edges_capacity = (x_edges_capacity - x_edges_capacity_min) / (x_edges_capacity_max - x_edges_capacity_min)
         # Node and edge embedding
-        normalized_x_edges_capacity = normalized_x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, 10)
-        
-        #　なぜかnodes_commodity_embeddingが使えないので、一旦nodes_commodity_embedding
-        x = self.nodes_commodity_embedding(normalized_x_nodes.unsqueeze(-1))
-        e = self.edges_values_embedding(normalized_x_edges_capacity.unsqueeze(4))
+        #x_edges_capacity = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
+        x = self.nodes_commodity_embedding(x_nodes)
+        e = self.edges_values_embedding(x_edges_capacity.unsqueeze(3))
+        #e = self.edges_values_embedding(x_edges_capacity)
         # GCN layers
         for layer in range(self.num_layers):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x H, B x V x V x H
+
         # MLP classifier
         y_pred_edges = self.mlp_edges(e)
-        
+
         # Compute loss
-        edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
-        loss = loss_edges(y_pred_edges, y_edges, edge_cw)
+        #edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
         
+        x_edges_expand = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
+        ones_tensor = torch.ones_like(x_edges_expand)
+        edge_cw = x_edges_expand + ones_tensor
+        loss = loss_edges(y_pred_edges, y_edges, x_edges_expand)
+
         return y_pred_edges, loss

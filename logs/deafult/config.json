@@ -23,18 +23,18 @@
     "voc_nodes_in": 2,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
-    "voc_edges_out": 2,
+    "voc_edges_out": 10,
     "beam_size": 10,
     "hidden_dim": 50,
     "num_layers": 3,
-    "mlp_layers": 2,
+    "mlp_layers": 4,
     "aggregation": "mean",
-    "max_epochs": 30,
+    "max_epochs": 20,
     "val_every": 5,
     "test_every": 10,
     "batch_size": 40,
     "batches_per_epoch": 500,
     "accumulation_steps": 1,
-    "learning_rate": 0.0015,
-    "decay_rate": 1.01
+    "learning_rate": 0.002,
+    "decay_rate": 2.0
 }
