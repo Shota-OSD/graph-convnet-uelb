@@ -44,7 +44,7 @@
     "batches_per_epoch": 500,
     "accumulation_steps": 1,
   
-    "learning_rate": 0.0015,
+    "learning_rate": 0.003,
     "decay_rate": 1.01
   }
   
