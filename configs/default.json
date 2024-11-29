@@ -12,8 +12,8 @@
     "graph_model": "nsfnet",
 
     "num_train_data": 1600,
-    "num_test_data": 40,
-    "num_val_data": 40,
+    "num_test_data": 320,
+    "num_val_data": 320,
     "num_nodes": 14,
     "num_neighbors": 5,
     "num_commodities": 10,
@@ -36,7 +36,7 @@
     "mlp_layers": 2,
     "aggregation": "mean",
   
-    "max_epochs": 20,
+    "max_epochs": 10,
     "val_every": 5,
     "test_every": 10,
   
@@ -45,6 +45,6 @@
     "accumulation_steps": 1,
   
     "learning_rate": 0.01,
-    "decay_rate": 1.1
+    "decay_rate": 1.5
   }
   

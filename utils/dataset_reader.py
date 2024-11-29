@@ -65,7 +65,6 @@ class DatasetReader(object):
         batch_load_factor = []
 
         exact_solution_file = f'./data/{self.mode}_data/exact_solution.csv'
-
         for i in range(start_idx, end_idx):
             # define file path
             graph_file = f'./data/{self.mode}_data/graph_file/{i-(i%10)}/graph_{i}.gml'

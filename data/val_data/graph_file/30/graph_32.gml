@@ -59,211 +59,211 @@ graph [
   edge [
     source 0
     target 1
-    capacity 893
+    capacity 779
   ]
   edge [
     source 0
     target 2
-    capacity 765
+    capacity 651
   ]
   edge [
     source 0
     target 7
-    capacity 587
+    capacity 882
   ]
   edge [
     source 1
     target 2
-    capacity 671
+    capacity 589
   ]
   edge [
     source 1
     target 3
-    capacity 839
+    capacity 759
   ]
   edge [
     source 1
     target 0
-    capacity 893
+    capacity 779
   ]
   edge [
     source 2
     target 5
-    capacity 854
+    capacity 619
   ]
   edge [
     source 2
     target 0
-    capacity 765
+    capacity 651
   ]
   edge [
     source 2
     target 1
-    capacity 671
+    capacity 589
   ]
   edge [
     source 3
     target 4
-    capacity 911
+    capacity 844
   ]
   edge [
     source 3
     target 10
-    capacity 934
+    capacity 900
   ]
   edge [
     source 3
     target 1
-    capacity 839
+    capacity 759
   ]
   edge [
     source 4
     target 5
-    capacity 710
+    capacity 956
   ]
   edge [
     source 4
     target 6
-    capacity 579
+    capacity 990
   ]
   edge [
     source 4
     target 3
-    capacity 911
+    capacity 844
   ]
   edge [
     source 5
     target 9
-    capacity 505
+    capacity 848
   ]
   edge [
     source 5
     target 12
-    capacity 775
+    capacity 886
   ]
   edge [
     source 5
     target 2
-    capacity 854
+    capacity 619
   ]
   edge [
     source 5
     target 4
-    capacity 710
+    capacity 956
   ]
   edge [
     source 6
     target 7
-    capacity 686
+    capacity 592
   ]
   edge [
     source 6
     target 4
-    capacity 579
+    capacity 990
   ]
   edge [
     source 7
     target 8
-    capacity 588
+    capacity 601
   ]
   edge [
     source 7
     target 0
-    capacity 587
+    capacity 882
   ]
   edge [
     source 7
     target 6
-    capacity 686
+    capacity 592
   ]
   edge [
     source 8
     target 9
-    capacity 873
+    capacity 803
   ]
   edge [
     source 8
     target 11
-    capacity 861
+    capacity 535
   ]
   edge [
     source 8
     target 13
-    capacity 523
+    capacity 668
   ]
   edge [
     source 8
     target 7
-    capacity 588
+    capacity 601
   ]
   edge [
     source 9
     target 5
-    capacity 505
+    capacity 848
   ]
   edge [
     source 9
     target 8
-    capacity 873
+    capacity 803
   ]
   edge [
     source 10
     target 11
-    capacity 644
+    capacity 611
   ]
   edge [
     source 10
     target 13
-    capacity 862
+    capacity 601
   ]
   edge [
     source 10
     target 3
-    capacity 934
+    capacity 900
   ]
   edge [
     source 11
     target 12
-    capacity 960
+    capacity 735
   ]
   edge [
     source 11
     target 8
-    capacity 861
+    capacity 535
   ]
   edge [
     source 11
     target 10
-    capacity 644
+    capacity 611
   ]
   edge [
     source 12
     target 13
-    capacity 500
+    capacity 947
   ]
   edge [
     source 12
     target 5
-    capacity 775
+    capacity 886
   ]
   edge [
     source 12
     target 11
-    capacity 960
+    capacity 735
   ]
   edge [
     source 13
     target 8
-    capacity 523
+    capacity 668
   ]
   edge [
     source 13
     target 10
-    capacity 862
+    capacity 601
   ]
   edge [
     source 13
     target 12
-    capacity 500
+    capacity 947
   ]
 ]

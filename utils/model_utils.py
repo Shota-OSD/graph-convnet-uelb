@@ -66,7 +66,7 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
     # class weights are ignored for now
-    y = F.log_softmax(y_pred_edges, dim=3)  # B x V x V x F x voc_edges
+    y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x F x voc_edges
     y = y.permute(0, 4, 1, 2, 3).contiguous()  # B x voc_edges x V x V x F
     
     y_edges = y_edges.long()

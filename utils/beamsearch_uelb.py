@@ -106,7 +106,7 @@ class BeamsearchUELB:
 
                     # 次ノードへの移動でのフローの確率スコア
                     flow_probability = y_pred_edges[current_node, next_node]
-                    new_score = current_score + flow_probability
+                    new_score = current_score * flow_probability
 
                     # 容量制約の確認
                     if demand <= remaining_edges_capacity[current_node, next_node]:
