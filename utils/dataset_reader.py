@@ -102,11 +102,11 @@ class DatasetReader(object):
                 capacity_matrix[source, target] = capacity
             
             """ Make node features """
-            nodes = np.ones((num_nodes, num_commodities), dtype=int)
+            nodes = np.zeros((num_nodes, num_commodities), dtype=int)
             # commodity_listを参照してsourceとtargetに基づきnodesを更新
             for commodity_index, (source, target, demand) in enumerate(commodity_list):
                 nodes[source, commodity_index] = demand  # sourceの場合はdemandを設定
-                nodes[target, commodity_index] = -demand  # targetの場合は負のdemandを設定
+                nodes[target, commodity_index] = demand  # targetの場合は負のdemandを設定
             
             """ Read node target """
             nodes_target = []

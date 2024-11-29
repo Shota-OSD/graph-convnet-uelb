@@ -50,6 +50,8 @@ class NodeFeatures(nn.Module):
         self.aggregation = aggregation
         self.U = nn.Linear(hidden_dim, hidden_dim)
         self.V = nn.Linear(hidden_dim, hidden_dim)
+        nn.init.kaiming_normal_(self.U.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.V.weight, nonlinearity='relu')
 
     def forward(self, x, edge_gate):
         """
@@ -76,6 +78,8 @@ class EdgeFeatures(nn.Module):
         super(EdgeFeatures, self).__init__()
         self.U = nn.Linear(hidden_dim, hidden_dim)
         self.V = nn.Linear(hidden_dim, hidden_dim)
+        nn.init.kaiming_normal_(self.U.weight, nonlinearity='relu')
+        nn.init.kaiming_normal_(self.V.weight, nonlinearity='relu')
 
     def forward(self, x, e):
         """
@@ -117,7 +121,7 @@ class ResidualGatedGCNLayer(nn.Module):
         e_in = e
         x_in = x
         e_tmp = self.edge_feat(x_in, e_in)
-        edge_gate = torch.sigmoid(e_tmp)
+        edge_gate = self.relu(e_tmp)
         x_tmp = self.node_feat(x_in, edge_gate)
         e_tmp = self.bn_edge(e_tmp)
         x_tmp = self.bn_node(x_tmp)

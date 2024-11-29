@@ -54,10 +54,18 @@ class ResidualGatedGCNModel(nn.Module):
             # y_pred_nodes: Predictions for nodes (batch_size, num_nodes)
             loss: Value of loss function
         """
-        # Node and edge embedding
+        # Nomalize node and edge capacity
+        x_nodes_min = x_nodes.min()
+        x_nodes_max = x_nodes.max()
+        normalized_x_nodes = (x_nodes - x_nodes_min) / (x_nodes_max - x_nodes_min)
+        
+        x_edges_capacity_min = x_edges_capacity.min()
+        x_edges_capacity_max = x_edges_capacity.max()
+        normalized_x_edges_capacity = (x_edges_capacity - x_edges_capacity_min) / (x_edges_capacity_max - x_edges_capacity_min)
+        # Node and edge embeddings
         #x_edges_capacity = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
-        x = self.nodes_commodity_embedding(x_nodes)
-        e = self.edges_values_embedding(x_edges_capacity.unsqueeze(3))
+        x = self.nodes_commodity_embedding(normalized_x_nodes)
+        e = self.edges_values_embedding(normalized_x_edges_capacity.unsqueeze(3))
         #e = self.edges_values_embedding(x_edges_capacity)
         # GCN layers
         for layer in range(self.num_layers):

@@ -9,8 +9,8 @@
     "solver_type": "pulp",
     "graph_model": "nsfnet",
     "num_train_data": 1600,
-    "num_test_data": 40,
-    "num_val_data": 40,
+    "num_test_data": 320,
+    "num_val_data": 320,
     "num_nodes": 14,
     "num_neighbors": 5,
     "num_commodities": 10,
@@ -26,8 +26,8 @@
     "voc_edges_out": 10,
     "beam_size": 10,
     "hidden_dim": 50,
-    "num_layers": 3,
-    "mlp_layers": 4,
+    "num_layers": 30,
+    "mlp_layers": 3,
     "aggregation": "mean",
     "max_epochs": 20,
     "val_every": 5,
@@ -35,6 +35,6 @@
     "batch_size": 40,
     "batches_per_epoch": 500,
     "accumulation_steps": 1,
-    "learning_rate": 0.002,
-    "decay_rate": 2.0
+    "learning_rate": 0.005,
+    "decay_rate": 1.1
 }

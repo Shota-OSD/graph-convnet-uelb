@@ -68,7 +68,8 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
     # class weights are ignored for now
     #pos_weight = torch.tensor([2.0])  # ポジティブクラスに2倍の重み
-    criterion = nn.BCEWithLogitsLoss(weight=edge_cw)
+    #criterion = nn.BCEWithLogitsLoss(weight=edge_cw)
+    criterion = nn.BCEWithLogitsLoss()
     loss_edges = criterion(y_pred_edges, y_edges)
     
 
