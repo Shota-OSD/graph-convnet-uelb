@@ -75,11 +75,12 @@ class ResidualGatedGCNModel(nn.Module):
         y_pred_edges = self.mlp_edges(e)
 
         # Compute loss
-        #edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
-        
+        edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensor
+        """
         x_edges_expand = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
         ones_tensor = torch.ones_like(x_edges_expand)
         edge_cw = x_edges_expand + ones_tensor
-        loss = loss_edges(y_pred_edges, y_edges, x_edges_expand)
+        """
+        loss = loss_edges(y_pred_edges, y_edges, edge_cw)
 
         return y_pred_edges, loss
