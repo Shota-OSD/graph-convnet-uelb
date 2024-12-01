@@ -61,7 +61,7 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     
     """
     # Ensure tensors are contiguous
-    y_pred_edges = y_pred_edges.contiguous()
+    y_pred_edges = y_pred_edges
     y_edges = y_edges.contiguous().float()  # BCEWithLogitsLoss expects float type for targets
     
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
@@ -266,8 +266,9 @@ def edge_error(y_pred, y_target, x_edges):
     
     """
     # Make Binery output from y_pred
-    y = (y_pred > 0.5).float()  # B x V x V x F
-
+    y = F.softmax(y_pred, dim=4) # B x V x V x C xvoc_edges
+    y = y.argmax(dim=4)
+    
     # Mask out edges which are not on true TSP tours or are not predicted positively by model
     mask_no_uelb = ((y_target + y) > 0).long()
     err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)

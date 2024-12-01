@@ -81,8 +81,8 @@ class EdgeFeatures(nn.Module):
     def forward(self, x, e):
         """
         Args:
-            x: Node features (batch_size, num_nodes, hidden_dim)
-            e: Edge features (batch_size, num_nodes, num_nodes, hidden_dim)
+            x: Node features (batch_size, num_nodes, num_commodities, hidden_dim)
+            e: Edge features (batch_size, num_nodes, num_nodes, num_commodities, hidden_dim)
         Returns:
             e_new: Convolved edge features (batch_size, num_nodes, num_nodes, hidden_dim)
         """
@@ -97,14 +97,14 @@ class EdgeFeatures(nn.Module):
 class ResidualGatedGCNLayer(nn.Module):
     """Convnet layer with gating and residual connection."""
 
-    def __init__(self, hidden_dim, aggregation="sum"):
+    def __init__(self, hidden_dim, aggregation="sum", dropout_rate=0.3):
         super().__init__()
         self.node_feat = NodeFeatures(hidden_dim, aggregation)
         self.edge_feat = EdgeFeatures(hidden_dim)
         self.bn_node = BatchNormNode(hidden_dim)
         self.bn_edge = BatchNormEdge(hidden_dim)
         self.relu = nn.ReLU(inplace=True)
-
+        self.dropout = nn.Dropout(dropout_rate)
     def forward(self, x, e):
         """
         Args:
@@ -117,24 +117,30 @@ class ResidualGatedGCNLayer(nn.Module):
         e_in = e
         x_in = x
         e_tmp = self.edge_feat(x_in, e_in)
-        edge_gate = self.relu(e_tmp)
+        edge_gate = torch.sigmoid(e_tmp)
         x_tmp = self.node_feat(x_in, edge_gate)
-        e_tmp = self.bn_edge(e_tmp) #ここでエラー
+        e_tmp = self.bn_edge(e_tmp)
         x_tmp = self.bn_node(x_tmp)
         e_new = self.relu(e_tmp) + e_in
         x_new = self.relu(x_tmp) + x_in
+        # Apply dropout
+        e_new = self.dropout(e_new)
+        x_new = self.dropout(x_new)
         return x_new, e_new
 
 
 class MLP(nn.Module):
     """Multi-layer Perceptron for output prediction."""
 
-    def __init__(self, hidden_dim, output_dim, num_layers=2):
+    def __init__(self, hidden_dim, output_dim, num_layers=2, dropout_rate=0.2):
         super().__init__()
-        layers = [nn.Linear(hidden_dim, hidden_dim) for _ in range(num_layers - 1)]
-        self.layers = nn.ModuleList(layers)
+        layers = []
+        for _ in range(num_layers - 1):
+            layers.append(nn.Linear(hidden_dim, hidden_dim))
+            layers.append(nn.ReLU(inplace=True))
+            layers.append(nn.Dropout(dropout_rate))  # ドロップアウトを追加
+        self.layers = nn.Sequential(*layers)
         self.output_layer = nn.Linear(hidden_dim, output_dim)
-        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         """
@@ -143,8 +149,6 @@ class MLP(nn.Module):
         Returns:
             y: Output predictions (batch_size, output_dim)
         """
-        for layer in self.layers:
-            x = layer(x)
-            x = self.relu(x)
+        x = self.layers(x)
         y = self.output_layer(x)
         return y
