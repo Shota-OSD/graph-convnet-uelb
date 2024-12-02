@@ -18,7 +18,7 @@ class BeamsearchUELB:
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
         self.mode_strict = mode_strict
-        self.max_iter = 10
+        self.max_iter = 5
 
     def search(self):
         # Perform beamsearch
