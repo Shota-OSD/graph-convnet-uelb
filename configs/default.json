@@ -31,14 +31,14 @@
   
     "beam_size": 10,
   
-    "hidden_dim": 50,
+    "hidden_dim": 64,
     "num_layers": 10,
     "mlp_layers": 2,
     "aggregation": "mean",
   
-    "max_epochs": 15,
-    "val_every": 3,
-    "test_every": 5,
+    "max_epochs": 1,
+    "val_every": 5,
+    "test_every": 10,
   
     "batch_size": 40,
     "batches_per_epoch": 500,

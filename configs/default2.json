@@ -1,0 +1,49 @@
+{
+    "expt_name": "deafult",
+    "gpu_id": "0",
+  
+    "graph_filepath": "./data/graph.gml",
+    "edge_numbering_filepath": "./data/edge_numbering_file.csv",
+    "train_filepath": "./data/gragh.gml",
+    "val_filepath": "./data/tsp10_val_concorde.txt",
+    "test_filepath": "./data/tsp10_test_concorde.txt",
+  
+    "solver_type": "pulp",
+    "graph_model": "random",
+
+    "num_train_data": 3200,
+    "num_test_data": 100,
+    "num_val_data": 100,
+    "num_nodes": 90,
+    "num_commodities": 5,
+    "sample_size": 5,
+    "capacity_lower": 1000,
+    "capacity_higher": 10000,
+    "demand_lower": 1,
+    "demand_higher": 500,
+      
+    "node_dim": 10,
+    "voc_nodes_in": 30,
+    "voc_nodes_out": 2,
+    "voc_edges_in": 3,
+    "voc_edges_out": 2,
+  
+    "beam_size": 10,
+    "hidden_dim": 128,
+    "num_layers": 10,
+    "mlp_layers": 2,
+    "aggregation": "mean",
+  
+    "max_epochs": 9,
+    "val_every": 3,
+    "test_every": 3,
+  
+    "batch_size": 20,
+    "batches_per_epoch": 500,
+    "accumulation_steps": 1,
+  
+    "learning_rate": 0.0005,
+    "decay_rate": 1.5,
+    "dropout_rate": 0.5
+  }
+  

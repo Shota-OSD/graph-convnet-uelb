@@ -17,6 +17,7 @@ class DataMaker:
         self.graph_file = config.graph_filepath
         self.edge_numbering_file = config.edge_numbering_filepath
         self.G = None
+        self.degree = 3
 
     def create_graph(self):
         if self.graph_model == 'grid':
@@ -24,7 +25,7 @@ class DataMaker:
             self.G.gridMaker(self.G, self.node * self.node, self.node, self.node, 0.1, self.capa_l, self.capa_h)
         elif self.graph_model == 'random':
             self.G = Graphs(self.commodity)
-            self.G.randomGraph(self.G, degree, self.node, self.capa_l, self.capa_h)
+            self.G.randomGraph(self.G, self.degree, self.node, self.capa_l, self.capa_h)
         elif self.graph_model == 'nsfnet':
             self.G = Graphs(self.commodity)
             self.G.nsfnet(self.G, self.capa_l, self.capa_h)

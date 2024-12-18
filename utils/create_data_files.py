@@ -19,9 +19,12 @@ def create_data_files(config, data_mode="test"):
     exact_file_name = f"./data/{data_mode}_data/exact_solution.csv"
     infinit_loop_count = 0
     incorrect_value_count = 0
+    
+    if os.path.exists(exact_file_name):
+        os.remove(exact_file_name)
 
     for i in range(num_data):
-        data = i + 1600
+        data = i
         if data % 10 == 0:
             print(f"{data} data was created.")
 
