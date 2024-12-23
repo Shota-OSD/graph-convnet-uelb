@@ -320,1054 +320,974 @@ graph [
     id 79
     label "79"
   ]
-  node [
-    id 80
-    label "80"
-  ]
-  node [
-    id 81
-    label "81"
-  ]
-  node [
-    id 82
-    label "82"
-  ]
-  node [
-    id 83
-    label "83"
-  ]
-  node [
-    id 84
-    label "84"
-  ]
-  node [
-    id 85
-    label "85"
-  ]
-  node [
-    id 86
-    label "86"
-  ]
-  node [
-    id 87
-    label "87"
-  ]
-  node [
-    id 88
-    label "88"
-  ]
-  node [
-    id 89
-    label "89"
-  ]
   edge [
     source 0
     target 1
-    capacity 2915
+    capacity 2275
   ]
   edge [
     source 0
-    target 89
-    capacity 1622
-  ]
-  edge [
-    source 0
-    target 86
-    capacity 3208
+    target 79
+    capacity 3746
   ]
   edge [
     source 1
     target 0
-    capacity 2915
+    capacity 2275
   ]
   edge [
     source 1
     target 2
-    capacity 1067
+    capacity 9531
   ]
   edge [
     source 2
     target 1
-    capacity 1067
+    capacity 9531
   ]
   edge [
     source 2
     target 3
-    capacity 2088
+    capacity 2488
   ]
   edge [
     source 2
-    target 23
-    capacity 8046
+    target 14
+    capacity 6882
+  ]
+  edge [
+    source 2
+    target 74
+    capacity 9479
   ]
   edge [
     source 3
     target 2
-    capacity 2088
+    capacity 2488
   ]
   edge [
     source 3
     target 4
-    capacity 6216
+    capacity 8186
   ]
   edge [
     source 4
     target 3
-    capacity 6216
+    capacity 8186
   ]
   edge [
     source 4
     target 5
-    capacity 7380
+    capacity 7828
   ]
   edge [
     source 5
     target 4
-    capacity 7380
+    capacity 7828
   ]
   edge [
     source 5
     target 6
-    capacity 8526
+    capacity 5675
+  ]
+  edge [
+    source 5
+    target 24
+    capacity 1416
   ]
   edge [
     source 6
     target 5
-    capacity 8526
+    capacity 5675
   ]
   edge [
     source 6
     target 7
-    capacity 7120
+    capacity 4795
   ]
   edge [
     source 7
     target 6
-    capacity 7120
+    capacity 4795
   ]
   edge [
     source 7
     target 8
-    capacity 2249
+    capacity 4978
   ]
   edge [
     source 8
     target 7
-    capacity 2249
+    capacity 4978
   ]
   edge [
     source 8
     target 9
-    capacity 1790
+    capacity 6233
   ]
   edge [
     source 9
     target 8
-    capacity 1790
+    capacity 6233
   ]
   edge [
     source 9
     target 10
-    capacity 5388
+    capacity 1782
   ]
   edge [
     source 10
     target 9
-    capacity 5388
+    capacity 1782
   ]
   edge [
     source 10
     target 11
-    capacity 7211
+    capacity 6045
   ]
   edge [
     source 11
     target 10
-    capacity 7211
+    capacity 6045
   ]
   edge [
     source 11
     target 12
-    capacity 3174
-  ]
-  edge [
-    source 11
-    target 33
-    capacity 3253
+    capacity 2791
   ]
   edge [
     source 12
     target 11
-    capacity 3174
+    capacity 2791
   ]
   edge [
     source 12
     target 13
-    capacity 9729
+    capacity 9314
   ]
   edge [
     source 13
     target 12
-    capacity 9729
+    capacity 9314
   ]
   edge [
     source 13
     target 14
-    capacity 6796
+    capacity 9086
   ]
   edge [
     source 14
-    target 13
-    capacity 6796
-  ]
-  edge [
-    source 14
-    target 15
-    capacity 3386
-  ]
-  edge [
-    source 15
-    target 14
-    capacity 3386
-  ]
-  edge [
-    source 15
-    target 16
-    capacity 9139
-  ]
-  edge [
-    source 15
-    target 52
-    capacity 3667
-  ]
-  edge [
-    source 16
-    target 15
-    capacity 9139
-  ]
-  edge [
-    source 16
-    target 17
-    capacity 8030
-  ]
-  edge [
-    source 17
-    target 16
-    capacity 8030
-  ]
-  edge [
-    source 17
-    target 18
-    capacity 8178
-  ]
-  edge [
-    source 17
-    target 72
-    capacity 1505
-  ]
-  edge [
-    source 18
-    target 17
-    capacity 8178
-  ]
-  edge [
-    source 18
-    target 19
-    capacity 7261
-  ]
-  edge [
-    source 19
-    target 18
-    capacity 7261
-  ]
-  edge [
-    source 19
-    target 20
-    capacity 5520
-  ]
-  edge [
-    source 20
-    target 19
-    capacity 5520
-  ]
-  edge [
-    source 20
-    target 21
-    capacity 9913
-  ]
-  edge [
-    source 21
-    target 20
-    capacity 9913
-  ]
-  edge [
-    source 21
-    target 22
-    capacity 5352
-  ]
-  edge [
-    source 21
-    target 81
-    capacity 6577
-  ]
-  edge [
-    source 22
-    target 21
-    capacity 5352
-  ]
-  edge [
-    source 22
-    target 23
-    capacity 4311
-  ]
-  edge [
-    source 22
-    target 88
-    capacity 8430
-  ]
-  edge [
-    source 23
     target 2
-    capacity 8046
+    capacity 6882
+  ]
+  edge [
+    source 14
+    target 13
+    capacity 9086
+  ]
+  edge [
+    source 14
+    target 15
+    capacity 3360
+  ]
+  edge [
+    source 14
+    target 62
+    capacity 1020
+  ]
+  edge [
+    source 15
+    target 14
+    capacity 3360
+  ]
+  edge [
+    source 15
+    target 16
+    capacity 2235
+  ]
+  edge [
+    source 15
+    target 26
+    capacity 5180
+  ]
+  edge [
+    source 16
+    target 15
+    capacity 2235
+  ]
+  edge [
+    source 16
+    target 17
+    capacity 6583
+  ]
+  edge [
+    source 17
+    target 16
+    capacity 6583
+  ]
+  edge [
+    source 17
+    target 18
+    capacity 6086
+  ]
+  edge [
+    source 18
+    target 17
+    capacity 6086
+  ]
+  edge [
+    source 18
+    target 19
+    capacity 2559
+  ]
+  edge [
+    source 19
+    target 18
+    capacity 2559
+  ]
+  edge [
+    source 19
+    target 20
+    capacity 7940
+  ]
+  edge [
+    source 19
+    target 74
+    capacity 7250
+  ]
+  edge [
+    source 19
+    target 59
+    capacity 3953
+  ]
+  edge [
+    source 20
+    target 19
+    capacity 7940
+  ]
+  edge [
+    source 20
+    target 21
+    capacity 1710
+  ]
+  edge [
+    source 21
+    target 20
+    capacity 1710
+  ]
+  edge [
+    source 21
+    target 22
+    capacity 9342
+  ]
+  edge [
+    source 21
+    target 39
+    capacity 1693
+  ]
+  edge [
+    source 22
+    target 21
+    capacity 9342
+  ]
+  edge [
+    source 22
+    target 23
+    capacity 5731
   ]
   edge [
     source 23
     target 22
-    capacity 4311
+    capacity 5731
   ]
   edge [
     source 23
     target 24
-    capacity 5858
+    capacity 6973
+  ]
+  edge [
+    source 24
+    target 5
+    capacity 1416
   ]
   edge [
     source 24
     target 23
-    capacity 5858
+    capacity 6973
   ]
   edge [
     source 24
     target 25
-    capacity 3356
+    capacity 6148
   ]
   edge [
     source 25
     target 24
-    capacity 3356
+    capacity 6148
   ]
   edge [
     source 25
     target 26
-    capacity 7198
+    capacity 4068
+  ]
+  edge [
+    source 26
+    target 15
+    capacity 5180
   ]
   edge [
     source 26
     target 25
-    capacity 7198
+    capacity 4068
   ]
   edge [
     source 26
     target 27
-    capacity 4751
+    capacity 6788
   ]
   edge [
     source 27
     target 26
-    capacity 4751
+    capacity 6788
   ]
   edge [
     source 27
     target 28
-    capacity 6515
+    capacity 2308
   ]
   edge [
     source 28
     target 27
-    capacity 6515
+    capacity 2308
   ]
   edge [
     source 28
     target 29
-    capacity 6407
-  ]
-  edge [
-    source 28
-    target 54
-    capacity 9845
-  ]
-  edge [
-    source 28
-    target 86
-    capacity 7404
+    capacity 6353
   ]
   edge [
     source 29
     target 28
-    capacity 6407
+    capacity 6353
   ]
   edge [
     source 29
     target 30
-    capacity 8843
+    capacity 6652
+  ]
+  edge [
+    source 29
+    target 63
+    capacity 9865
   ]
   edge [
     source 30
     target 29
-    capacity 8843
+    capacity 6652
   ]
   edge [
     source 30
     target 31
-    capacity 2116
+    capacity 5055
+  ]
+  edge [
+    source 30
+    target 78
+    capacity 2579
   ]
   edge [
     source 31
     target 30
-    capacity 2116
+    capacity 5055
   ]
   edge [
     source 31
     target 32
-    capacity 1987
+    capacity 1850
   ]
   edge [
     source 32
     target 31
-    capacity 1987
+    capacity 1850
   ]
   edge [
     source 32
     target 33
-    capacity 9485
-  ]
-  edge [
-    source 33
-    target 11
-    capacity 3253
+    capacity 1252
   ]
   edge [
     source 33
     target 32
-    capacity 9485
+    capacity 1252
   ]
   edge [
     source 33
     target 34
-    capacity 5653
+    capacity 3059
   ]
   edge [
     source 34
     target 33
-    capacity 5653
+    capacity 3059
   ]
   edge [
     source 34
     target 35
-    capacity 3730
-  ]
-  edge [
-    source 34
-    target 76
-    capacity 2004
+    capacity 4246
   ]
   edge [
     source 35
     target 34
-    capacity 3730
+    capacity 4246
   ]
   edge [
     source 35
     target 36
-    capacity 9486
+    capacity 7776
   ]
   edge [
     source 36
     target 35
-    capacity 9486
+    capacity 7776
   ]
   edge [
     source 36
     target 37
-    capacity 5264
+    capacity 4630
   ]
   edge [
     source 37
     target 36
-    capacity 5264
+    capacity 4630
   ]
   edge [
     source 37
     target 38
-    capacity 3275
+    capacity 3255
   ]
   edge [
     source 38
     target 37
-    capacity 3275
+    capacity 3255
   ]
   edge [
     source 38
     target 39
-    capacity 8352
+    capacity 7970
+  ]
+  edge [
+    source 38
+    target 43
+    capacity 2886
+  ]
+  edge [
+    source 38
+    target 50
+    capacity 2005
   ]
   edge [
     source 39
-    target 38
-    capacity 8352
-  ]
-  edge [
-    source 39
-    target 40
-    capacity 6199
-  ]
-  edge [
-    source 40
-    target 39
-    capacity 6199
-  ]
-  edge [
-    source 40
-    target 41
-    capacity 1507
-  ]
-  edge [
-    source 41
-    target 40
-    capacity 1507
-  ]
-  edge [
-    source 41
-    target 42
-    capacity 2443
-  ]
-  edge [
-    source 42
-    target 41
-    capacity 2443
-  ]
-  edge [
-    source 42
-    target 43
-    capacity 2440
-  ]
-  edge [
-    source 43
-    target 42
-    capacity 2440
-  ]
-  edge [
-    source 43
-    target 44
-    capacity 6000
-  ]
-  edge [
-    source 44
-    target 43
-    capacity 6000
-  ]
-  edge [
-    source 44
-    target 45
-    capacity 9634
-  ]
-  edge [
-    source 45
-    target 44
-    capacity 9634
-  ]
-  edge [
-    source 45
-    target 46
-    capacity 3837
-  ]
-  edge [
-    source 46
-    target 45
-    capacity 3837
-  ]
-  edge [
-    source 46
-    target 47
-    capacity 3839
-  ]
-  edge [
-    source 47
-    target 46
-    capacity 3839
-  ]
-  edge [
-    source 47
-    target 48
-    capacity 4738
-  ]
-  edge [
-    source 48
-    target 47
-    capacity 4738
-  ]
-  edge [
-    source 48
-    target 49
-    capacity 2896
-  ]
-  edge [
-    source 49
-    target 48
-    capacity 2896
-  ]
-  edge [
-    source 49
-    target 50
-    capacity 8742
-  ]
-  edge [
-    source 50
-    target 49
-    capacity 8742
-  ]
-  edge [
-    source 50
-    target 51
-    capacity 6320
-  ]
-  edge [
-    source 51
-    target 50
-    capacity 6320
-  ]
-  edge [
-    source 51
-    target 52
-    capacity 6422
-  ]
-  edge [
-    source 52
-    target 15
-    capacity 3667
-  ]
-  edge [
-    source 52
-    target 51
-    capacity 6422
-  ]
-  edge [
-    source 52
-    target 53
-    capacity 4650
-  ]
-  edge [
-    source 53
-    target 52
-    capacity 4650
-  ]
-  edge [
-    source 53
-    target 54
-    capacity 5880
-  ]
-  edge [
-    source 53
-    target 59
-    capacity 3875
-  ]
-  edge [
-    source 54
-    target 28
-    capacity 9845
-  ]
-  edge [
-    source 54
-    target 53
-    capacity 5880
-  ]
-  edge [
-    source 54
-    target 55
-    capacity 4826
-  ]
-  edge [
-    source 55
-    target 54
-    capacity 4826
-  ]
-  edge [
-    source 55
-    target 56
-    capacity 2112
-  ]
-  edge [
-    source 56
-    target 55
-    capacity 2112
-  ]
-  edge [
-    source 56
-    target 57
-    capacity 7086
-  ]
-  edge [
-    source 57
-    target 56
-    capacity 7086
-  ]
-  edge [
-    source 57
-    target 58
-    capacity 6417
-  ]
-  edge [
-    source 58
-    target 57
-    capacity 6417
-  ]
-  edge [
-    source 58
-    target 59
-    capacity 5339
-  ]
-  edge [
-    source 59
-    target 53
-    capacity 3875
-  ]
-  edge [
-    source 59
-    target 58
-    capacity 5339
-  ]
-  edge [
-    source 59
-    target 60
-    capacity 7243
-  ]
-  edge [
-    source 60
-    target 59
-    capacity 7243
-  ]
-  edge [
-    source 60
-    target 61
-    capacity 7659
-  ]
-  edge [
-    source 61
-    target 60
-    capacity 7659
-  ]
-  edge [
-    source 61
-    target 62
-    capacity 5876
-  ]
-  edge [
-    source 62
-    target 61
-    capacity 5876
-  ]
-  edge [
-    source 62
-    target 63
-    capacity 4755
-  ]
-  edge [
-    source 63
-    target 62
-    capacity 4755
-  ]
-  edge [
-    source 63
-    target 64
-    capacity 1361
-  ]
-  edge [
-    source 64
-    target 63
-    capacity 1361
-  ]
-  edge [
-    source 64
-    target 65
-    capacity 3767
-  ]
-  edge [
-    source 65
-    target 64
-    capacity 3767
-  ]
-  edge [
-    source 65
-    target 66
-    capacity 7146
-  ]
-  edge [
-    source 66
-    target 65
-    capacity 7146
-  ]
-  edge [
-    source 66
-    target 67
-    capacity 4930
-  ]
-  edge [
-    source 67
-    target 66
-    capacity 4930
-  ]
-  edge [
-    source 67
-    target 68
-    capacity 8072
-  ]
-  edge [
-    source 68
-    target 67
-    capacity 8072
-  ]
-  edge [
-    source 68
-    target 69
-    capacity 7420
-  ]
-  edge [
-    source 69
-    target 68
-    capacity 7420
-  ]
-  edge [
-    source 69
-    target 70
-    capacity 3807
-  ]
-  edge [
-    source 70
-    target 69
-    capacity 3807
-  ]
-  edge [
-    source 70
-    target 71
-    capacity 7092
-  ]
-  edge [
-    source 71
-    target 70
-    capacity 7092
-  ]
-  edge [
-    source 71
-    target 72
-    capacity 7855
-  ]
-  edge [
-    source 72
-    target 17
-    capacity 1505
-  ]
-  edge [
-    source 72
-    target 71
-    capacity 7855
-  ]
-  edge [
-    source 72
-    target 73
-    capacity 7242
-  ]
-  edge [
-    source 73
-    target 72
-    capacity 7242
-  ]
-  edge [
-    source 73
-    target 74
-    capacity 6535
-  ]
-  edge [
-    source 74
-    target 73
-    capacity 6535
-  ]
-  edge [
-    source 74
-    target 75
-    capacity 5116
-  ]
-  edge [
-    source 75
-    target 74
-    capacity 5116
-  ]
-  edge [
-    source 75
-    target 76
-    capacity 6097
-  ]
-  edge [
-    source 76
-    target 34
-    capacity 2004
-  ]
-  edge [
-    source 76
-    target 75
-    capacity 6097
-  ]
-  edge [
-    source 76
-    target 77
-    capacity 6007
-  ]
-  edge [
-    source 77
-    target 76
-    capacity 6007
-  ]
-  edge [
-    source 77
-    target 78
-    capacity 5917
-  ]
-  edge [
-    source 78
-    target 77
-    capacity 5917
-  ]
-  edge [
-    source 78
-    target 79
-    capacity 6689
-  ]
-  edge [
-    source 79
-    target 78
-    capacity 6689
-  ]
-  edge [
-    source 79
-    target 80
-    capacity 3539
-  ]
-  edge [
-    source 80
-    target 79
-    capacity 3539
-  ]
-  edge [
-    source 80
-    target 81
-    capacity 2235
-  ]
-  edge [
-    source 81
     target 21
-    capacity 6577
+    capacity 1693
   ]
   edge [
-    source 81
-    target 80
-    capacity 2235
+    source 39
+    target 38
+    capacity 7970
   ]
   edge [
-    source 81
-    target 82
-    capacity 7640
+    source 39
+    target 40
+    capacity 1108
   ]
   edge [
-    source 82
-    target 81
-    capacity 7640
+    source 40
+    target 39
+    capacity 1108
   ]
   edge [
-    source 82
-    target 83
-    capacity 2075
+    source 40
+    target 41
+    capacity 7750
   ]
   edge [
-    source 83
-    target 82
-    capacity 2075
+    source 41
+    target 40
+    capacity 7750
   ]
   edge [
-    source 83
-    target 84
-    capacity 7774
+    source 41
+    target 42
+    capacity 2632
   ]
   edge [
-    source 84
-    target 83
-    capacity 7774
+    source 41
+    target 59
+    capacity 6519
   ]
   edge [
-    source 84
-    target 85
-    capacity 2351
+    source 42
+    target 41
+    capacity 2632
   ]
   edge [
-    source 85
-    target 84
-    capacity 2351
+    source 42
+    target 43
+    capacity 5706
   ]
   edge [
-    source 85
-    target 86
-    capacity 9434
+    source 43
+    target 38
+    capacity 2886
   ]
   edge [
-    source 86
-    target 0
-    capacity 3208
+    source 43
+    target 42
+    capacity 5706
   ]
   edge [
-    source 86
-    target 28
-    capacity 7404
+    source 43
+    target 44
+    capacity 2797
   ]
   edge [
-    source 86
-    target 85
-    capacity 9434
+    source 44
+    target 43
+    capacity 2797
   ]
   edge [
-    source 86
-    target 87
-    capacity 3101
+    source 44
+    target 45
+    capacity 5907
   ]
   edge [
-    source 87
-    target 86
-    capacity 3101
+    source 45
+    target 44
+    capacity 5907
   ]
   edge [
-    source 87
-    target 88
+    source 45
+    target 46
+    capacity 3034
+  ]
+  edge [
+    source 45
+    target 48
+    capacity 2216
+  ]
+  edge [
+    source 46
+    target 45
+    capacity 3034
+  ]
+  edge [
+    source 46
+    target 47
+    capacity 1772
+  ]
+  edge [
+    source 47
+    target 46
+    capacity 1772
+  ]
+  edge [
+    source 47
+    target 48
+    capacity 5850
+  ]
+  edge [
+    source 48
+    target 45
+    capacity 2216
+  ]
+  edge [
+    source 48
+    target 47
+    capacity 5850
+  ]
+  edge [
+    source 48
+    target 49
     capacity 7733
   ]
   edge [
-    source 88
-    target 22
-    capacity 8430
+    source 48
+    target 64
+    capacity 4834
   ]
   edge [
-    source 88
-    target 87
+    source 49
+    target 48
     capacity 7733
   ]
   edge [
-    source 88
-    target 89
-    capacity 5675
+    source 49
+    target 50
+    capacity 6568
   ]
   edge [
-    source 89
+    source 50
+    target 38
+    capacity 2005
+  ]
+  edge [
+    source 50
+    target 49
+    capacity 6568
+  ]
+  edge [
+    source 50
+    target 51
+    capacity 3093
+  ]
+  edge [
+    source 51
+    target 50
+    capacity 3093
+  ]
+  edge [
+    source 51
+    target 52
+    capacity 7098
+  ]
+  edge [
+    source 52
+    target 51
+    capacity 7098
+  ]
+  edge [
+    source 52
+    target 53
+    capacity 8580
+  ]
+  edge [
+    source 53
+    target 52
+    capacity 8580
+  ]
+  edge [
+    source 53
+    target 54
+    capacity 2499
+  ]
+  edge [
+    source 54
+    target 53
+    capacity 2499
+  ]
+  edge [
+    source 54
+    target 55
+    capacity 3733
+  ]
+  edge [
+    source 54
+    target 59
+    capacity 1970
+  ]
+  edge [
+    source 55
+    target 54
+    capacity 3733
+  ]
+  edge [
+    source 55
+    target 56
+    capacity 9637
+  ]
+  edge [
+    source 56
+    target 55
+    capacity 9637
+  ]
+  edge [
+    source 56
+    target 57
+    capacity 8708
+  ]
+  edge [
+    source 57
+    target 56
+    capacity 8708
+  ]
+  edge [
+    source 57
+    target 58
+    capacity 4699
+  ]
+  edge [
+    source 58
+    target 57
+    capacity 4699
+  ]
+  edge [
+    source 58
+    target 59
+    capacity 5852
+  ]
+  edge [
+    source 58
+    target 76
+    capacity 7436
+  ]
+  edge [
+    source 59
+    target 19
+    capacity 3953
+  ]
+  edge [
+    source 59
+    target 41
+    capacity 6519
+  ]
+  edge [
+    source 59
+    target 54
+    capacity 1970
+  ]
+  edge [
+    source 59
+    target 58
+    capacity 5852
+  ]
+  edge [
+    source 59
+    target 60
+    capacity 6209
+  ]
+  edge [
+    source 60
+    target 59
+    capacity 6209
+  ]
+  edge [
+    source 60
+    target 61
+    capacity 7536
+  ]
+  edge [
+    source 61
+    target 60
+    capacity 7536
+  ]
+  edge [
+    source 61
+    target 62
+    capacity 9713
+  ]
+  edge [
+    source 62
+    target 14
+    capacity 1020
+  ]
+  edge [
+    source 62
+    target 61
+    capacity 9713
+  ]
+  edge [
+    source 62
+    target 63
+    capacity 7850
+  ]
+  edge [
+    source 63
+    target 29
+    capacity 9865
+  ]
+  edge [
+    source 63
+    target 62
+    capacity 7850
+  ]
+  edge [
+    source 63
+    target 64
+    capacity 6525
+  ]
+  edge [
+    source 64
+    target 48
+    capacity 4834
+  ]
+  edge [
+    source 64
+    target 63
+    capacity 6525
+  ]
+  edge [
+    source 64
+    target 65
+    capacity 2580
+  ]
+  edge [
+    source 65
+    target 64
+    capacity 2580
+  ]
+  edge [
+    source 65
+    target 66
+    capacity 5873
+  ]
+  edge [
+    source 66
+    target 65
+    capacity 5873
+  ]
+  edge [
+    source 66
+    target 67
+    capacity 2081
+  ]
+  edge [
+    source 67
+    target 66
+    capacity 2081
+  ]
+  edge [
+    source 67
+    target 68
+    capacity 3844
+  ]
+  edge [
+    source 68
+    target 67
+    capacity 3844
+  ]
+  edge [
+    source 68
+    target 69
+    capacity 1715
+  ]
+  edge [
+    source 69
+    target 68
+    capacity 1715
+  ]
+  edge [
+    source 69
+    target 70
+    capacity 9879
+  ]
+  edge [
+    source 70
+    target 69
+    capacity 9879
+  ]
+  edge [
+    source 70
+    target 71
+    capacity 2323
+  ]
+  edge [
+    source 71
+    target 70
+    capacity 2323
+  ]
+  edge [
+    source 71
+    target 72
+    capacity 7785
+  ]
+  edge [
+    source 72
+    target 71
+    capacity 7785
+  ]
+  edge [
+    source 72
+    target 73
+    capacity 5239
+  ]
+  edge [
+    source 73
+    target 72
+    capacity 5239
+  ]
+  edge [
+    source 73
+    target 74
+    capacity 1112
+  ]
+  edge [
+    source 74
+    target 2
+    capacity 9479
+  ]
+  edge [
+    source 74
+    target 19
+    capacity 7250
+  ]
+  edge [
+    source 74
+    target 73
+    capacity 1112
+  ]
+  edge [
+    source 74
+    target 75
+    capacity 2935
+  ]
+  edge [
+    source 75
+    target 74
+    capacity 2935
+  ]
+  edge [
+    source 75
+    target 76
+    capacity 1122
+  ]
+  edge [
+    source 76
+    target 58
+    capacity 7436
+  ]
+  edge [
+    source 76
+    target 75
+    capacity 1122
+  ]
+  edge [
+    source 76
+    target 77
+    capacity 4681
+  ]
+  edge [
+    source 77
+    target 76
+    capacity 4681
+  ]
+  edge [
+    source 77
+    target 78
+    capacity 9052
+  ]
+  edge [
+    source 78
+    target 30
+    capacity 2579
+  ]
+  edge [
+    source 78
+    target 77
+    capacity 9052
+  ]
+  edge [
+    source 78
+    target 79
+    capacity 3052
+  ]
+  edge [
+    source 79
     target 0
-    capacity 1622
+    capacity 3746
   ]
   edge [
-    source 89
-    target 88
-    capacity 5675
+    source 79
+    target 78
+    capacity 3052
   ]
 ]
