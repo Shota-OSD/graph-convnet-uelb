@@ -9,6 +9,7 @@
     "test_filepath": "./data/tsp10_test_concorde.txt",
   
     "solver_type": "pulp",
+<<<<<<< HEAD:configs/default2.json
     "graph_model": "random",
 
     "num_train_data": 3200,
@@ -16,6 +17,15 @@
     "num_val_data": 100,
     "num_nodes": 80,
     "num_commodities": 5,
+=======
+    "graph_model": "nsfnet",
+    "num_train_data": 1600,
+    "num_test_data": 320,
+    "num_val_data": 320,
+    "num_nodes": 14,
+    "num_neighbors": 5,
+    "num_commodities": 10,
+>>>>>>> origin/main:logs/deafult/config.json
     "sample_size": 5,
     "capacity_lower": 1000,
     "capacity_higher": 10000,
@@ -26,13 +36,18 @@
     "voc_nodes_in": 30,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
+<<<<<<< HEAD:configs/default2.json
     "voc_edges_out": 2,
   
+=======
+    "voc_edges_out": 10,
+>>>>>>> origin/main:logs/deafult/config.json
     "beam_size": 10,
     "hidden_dim": 128,
     "num_layers": 10,
     "mlp_layers": 2,
     "aggregation": "mean",
+<<<<<<< HEAD:configs/default2.json
   
     "max_epochs": 8,
     "val_every": 3,
@@ -47,3 +62,14 @@
     "dropout_rate": 0.5
   }
   
+=======
+    "max_epochs": 20,
+    "val_every": 5,
+    "test_every": 10,
+    "batch_size": 40,
+    "batches_per_epoch": 500,
+    "accumulation_steps": 1,
+    "learning_rate": 0.005,
+    "decay_rate": 1.1
+}
+>>>>>>> origin/main:logs/deafult/config.json
