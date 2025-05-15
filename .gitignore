@@ -4,3 +4,7 @@ configs/events.out.tfevents.*
 **/__pycache__/
 **/*.pyc
 
+# macOS 特有のメタファイルを無視
+__MACOSX/
+*.DS_Store
+._*
