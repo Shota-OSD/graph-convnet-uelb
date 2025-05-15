@@ -30,12 +30,8 @@ class ResidualGatedGCNModel(nn.Module):
         self.aggregation = config['aggregation']
         self.dropout_rate = config.get('dropout_rate', 0.2)
         # Node and edge embedding layers/lookups
-<<<<<<< HEAD
         self.nodes_embedding = nn.Embedding(self.voc_nodes_in, self.hidden_dim // 2)
         self.commodities_embedding = nn.Linear(1, self.hidden_dim // 2, bias=False)
-=======
-        self.nodes_commodity_embedding = nn.Linear(self.num_commodities, self.hidden_dim, bias=False)
->>>>>>> origin/main
         self.edges_values_embedding = nn.Linear(1, self.hidden_dim, bias=False)
         # Define GCN Layers
         gcn_layers = []
@@ -60,16 +56,11 @@ class ResidualGatedGCNModel(nn.Module):
             y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
             # y_pred_nodes: Predictions for nodes (batch_size, num_nodes)
             loss: Value of loss function
-<<<<<<< HEAD
         
-=======
-        """
->>>>>>> origin/main
         # Nomalize node and edge capacity
         x_edges_capacity_min = x_edges_capacity.min()
         x_edges_capacity_max = x_edges_capacity.max()
         normalized_x_edges_capacity = (x_edges_capacity - x_edges_capacity_min) / (x_edges_capacity_max - x_edges_capacity_min)
-<<<<<<< HEAD
         """
         # Features embedding
         x_edges_capacity_expanded = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
@@ -85,35 +76,12 @@ class ResidualGatedGCNModel(nn.Module):
         # GCN layers
         for layer in range(self.num_layers):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x C x H, B x V x V x C x H
-=======
-        # Node and edge embeddings
-        #x_edges_capacity = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
-        x = self.nodes_commodity_embedding(x_nodes)
-        e = self.edges_values_embedding(normalized_x_edges_capacity.unsqueeze(3))
-        #e = self.edges_values_embedding(x_edges_capacity)
-        # GCN layers
-        for layer in range(self.num_layers):
-            x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x H, B x V x V x H
-
->>>>>>> origin/main
         # MLP classifier
         y_pred_edges = self.mlp_edges(e)
 
         # Compute loss
-<<<<<<< HEAD
         edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
         #edge_cw = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
         loss = loss_edges(y_pred_edges, y_edges, edge_cw)
             
         return y_pred_edges, loss
-=======
-        edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensor
-        """
-        x_edges_expand = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities) # B x V x V x 10
-        ones_tensor = torch.ones_like(x_edges_expand)
-        edge_cw = x_edges_expand + ones_tensor
-        """
-        loss = loss_edges(y_pred_edges, y_edges, edge_cw)
-
-        return y_pred_edges, loss
->>>>>>> origin/main

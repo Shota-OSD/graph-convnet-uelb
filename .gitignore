@@ -1,3 +1,6 @@
 **/data/
 **/logs/
 configs/events.out.tfevents.*
+__pycache__/
+*.pyc
+

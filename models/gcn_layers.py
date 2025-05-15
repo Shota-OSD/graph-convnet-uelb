@@ -101,13 +101,8 @@ class EdgeFeatures(nn.Module):
 class ResidualGatedGCNLayer(nn.Module):
     """Convnet layer with gating and residual connection."""
 
-<<<<<<< HEAD
     def __init__(self, hidden_dim, aggregation="sum", dropout_rate=0.3):
         super().__init__()
-=======
-    def __init__(self, hidden_dim, aggregation="sum"):
-        super(ResidualGatedGCNLayer, self).__init__()
->>>>>>> origin/main
         self.node_feat = NodeFeatures(hidden_dim, aggregation)
         self.edge_feat = EdgeFeatures(hidden_dim)
         self.bn_node = BatchNormNode(hidden_dim)
@@ -141,7 +136,6 @@ class ResidualGatedGCNLayer(nn.Module):
 class MLP(nn.Module):
     """Multi-layer Perceptron for output prediction."""
 
-<<<<<<< HEAD
     def __init__(self, hidden_dim, output_dim, num_layers=2, dropout_rate=0.2):
         super().__init__()
         layers = []
@@ -150,12 +144,6 @@ class MLP(nn.Module):
             layers.append(nn.ReLU(inplace=True))
             layers.append(nn.Dropout(dropout_rate))  # ドロップアウトを追加
         self.layers = nn.Sequential(*layers)
-=======
-    def __init__(self, hidden_dim, output_dim, num_layers=2):
-        super(MLP, self).__init__()
-        layers = [nn.Linear(hidden_dim, hidden_dim) for _ in range(num_layers - 1)]
-        self.layers = nn.ModuleList(layers)
->>>>>>> origin/main
         self.output_layer = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x):

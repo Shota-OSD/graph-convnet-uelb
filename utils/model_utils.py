@@ -66,7 +66,6 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
 
     # Edge loss (no need for log_softmax, directly use BCEWithLogitsLoss)
     # class weights are ignored for now
-<<<<<<< HEAD
     y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x F x voc_edges
     y = y.permute(0, 4, 1, 2, 3).contiguous()  # B x voc_edges x V x V x F
     
@@ -75,14 +74,6 @@ def loss_edges(y_pred_edges, y_edges, edge_cw):
     
     criterion = nn.NLLLoss(edge_cw)
     loss_edges = criterion(y, y_edges)
-=======
-    #pos_weight = torch.tensor([2.0])  # ポジティブクラスに2倍の重み
-    #criterion = nn.BCEWithLogitsLoss(weight=edge_cw)
-    edge_cw = edge_cw[1] / edge_cw[0]   # 0のクラスに対して1のクラスの重みを使う
-    criterion = nn.BCEWithLogitsLoss()
-    loss_edges = criterion(y_pred_edges, y_edges)
-    
->>>>>>> origin/main
 
     return loss_edges
 
@@ -275,29 +266,11 @@ def edge_error(y_pred, y_target, x_edges):
     
     """
     # Make Binery output from y_pred
-<<<<<<< HEAD
     y = F.softmax(y_pred, dim=4) # B x V x V x C xvoc_edges
     y = y.argmax(dim=4)
     
     # Mask out edges which are not on true TSP tours or are not predicted positively by model
     mask_no_uelb = ((y_target + y) > 0).long()
-=======
-    batch_size, num_nodes, _, num_commodities = y_pred.size()
-    min_values, _ = y_pred.view(batch_size, -1, num_commodities).min(dim=1)  # V x V を結合して最小値
-    max_values, _ = y_pred.view(batch_size, -1, num_commodities).max(dim=1)  # V x V を結合して最大値
-
-    # ブロードキャストして正規化
-    epsilon = 1e-8  # ゼロ除算防止
-    normalized_y = (y_pred - min_values[:, None, None, :]) / (
-        max_values[:, None, None, :] - min_values[:, None, None, :] + epsilon
-    )
-    
-    y = (normalized_y > 0.5).float()  # B x V x V x F
-
-    # エッジがある中で調べる
-    acc_edges = x_edges.unsqueeze(3).expand_as(y_target).float()  # B x V x V x F
-    mask_no_uelb = ((acc_edges) > 0).long()
->>>>>>> origin/main
     err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)
 
     return 100 * err_uelb, err_idx_uelb
