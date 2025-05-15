@@ -181,11 +181,16 @@ def test(net, config, master_bar, mode='test'):
             approximation_rate = 0
     return time.time()-start_test, loss, epoch_mean_maximum_load_factor, mean_gt_load_factor, approximation_rate, infeasible_rate
 
+def ask_remake_dataset():
+    ans = input("トレーニング・検証・テスト用データを再作成しますか？ (y/n): ").strip().lower()
+    return ans in ["y", "yes"]
+
 def main():
     config_path = "configs/default2.json"
     config = get_config(config_path)
     dtypeFloat, dtypeLong = set_gpu(config)
-    make_graph_dataset(config)
+    if ask_remake_dataset():
+        make_graph_dataset(config)
     # test_data_loading(config)  # 必要なら有効化
     net, optimizer = instantiate_model(config, dtypeFloat, dtypeLong)
     max_epochs = config.max_epochs
