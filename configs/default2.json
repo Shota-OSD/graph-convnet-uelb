@@ -9,21 +9,26 @@
     "test_filepath": "./data/tsp10_test_concorde.txt",
   
     "solver_type": "pulp",
-    "graph_model": "nsfnet",
+<<<<<<< HEAD:configs/default2.json
+    "graph_model": "random",
 
-<<<<<<< HEAD
     "num_train_data": 3200,
+    "num_test_data": 100,
+    "num_val_data": 100,
+    "num_nodes": 80,
+    "num_commodities": 5,
 =======
+    "graph_model": "nsfnet",
     "num_train_data": 1600,
->>>>>>> origin/main
     "num_test_data": 320,
     "num_val_data": 320,
     "num_nodes": 14,
     "num_neighbors": 5,
     "num_commodities": 10,
+>>>>>>> origin/main:logs/deafult/config.json
     "sample_size": 5,
-    "capacity_lower": 500,
-    "capacity_higher": 1000,
+    "capacity_lower": 1000,
+    "capacity_higher": 10000,
     "demand_lower": 1,
     "demand_higher": 500,
       
@@ -31,34 +36,40 @@
     "voc_nodes_in": 30,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
+<<<<<<< HEAD:configs/default2.json
+    "voc_edges_out": 2,
+  
+=======
     "voc_edges_out": 10,
-  
+>>>>>>> origin/main:logs/deafult/config.json
     "beam_size": 10,
-  
-    "hidden_dim": 64,
+    "hidden_dim": 128,
     "num_layers": 10,
     "mlp_layers": 2,
     "aggregation": "mean",
+<<<<<<< HEAD:configs/default2.json
   
-<<<<<<< HEAD
-    "max_epochs": 1,
-=======
-    "max_epochs": 20,
->>>>>>> origin/main
-    "val_every": 5,
-    "test_every": 10,
+    "max_epochs": 8,
+    "val_every": 3,
+    "test_every": 3,
   
-    "batch_size": 40,
+    "batch_size": 20,
     "batches_per_epoch": 500,
     "accumulation_steps": 1,
   
-<<<<<<< HEAD
-    "learning_rate": 0.001,
+    "learning_rate": 0.0005,
     "decay_rate": 1.5,
-    "dropout_rate": 0.3
-=======
-    "learning_rate": 0.005,
-    "decay_rate": 1.1
->>>>>>> origin/main
+    "dropout_rate": 0.5
   }
   
+=======
+    "max_epochs": 20,
+    "val_every": 5,
+    "test_every": 10,
+    "batch_size": 40,
+    "batches_per_epoch": 500,
+    "accumulation_steps": 1,
+    "learning_rate": 0.005,
+    "decay_rate": 1.1
+}
+>>>>>>> origin/main:logs/deafult/config.json

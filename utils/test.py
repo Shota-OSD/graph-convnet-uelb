@@ -1,46 +1,27 @@
-import numpy as np
-import csv
+import matplotlib.pyplot as plt
 
-# Edgeファイルの読み込みとエッジIDマッピング
-edge_dict = {}
-with open('./data/edge_file/0/edge_numbering_file_0.csv', 'r') as edge_file:
-    reader = csv.reader(edge_file)
-    for row in reader:
-        edge_id, source, target = int(row[0]), int(row[1]), int(row[2])
-        edge_dict[(source, target)] = edge_id
-        edge_dict[(target, source)] = edge_id  # 無向グラフの場合、逆も対応
+# 与えられた数値リストと対応するノード数
+nodes = [20, 30, 40, 50, 60, 70, 80, 90]
+times = [
+    3.26236415, 9.42217278, 15.18681598, 24.30926299, 
+    31.68406987, 75.96639729, 106.47728515, 148.52063799
+]
 
-# Flowファイルの読み込み
-flows = []
-with open('./data/exact_flow/0/exact_flow_0.csv', 'r') as flow_file:
-    reader = csv.reader(flow_file)
-    for row in reader:
-        flows.append([int(x) for x in row])
+# 平均値を計算
+mean_time = sum(times) / len(times)
+print("平均値:", mean_time)
 
-# 品種数とノード数
-num_flows = len(flows)
-num_nodes = len(flows[0])
+# グラフを作成
+plt.figure(figsize=(8, 6))
+plt.plot(nodes, times, marker='o', linestyle='-', color='b', label='Computation Time')
 
-# エッジ数（edge_fileの長さ）
-num_edges = len(edge_dict)
+# グラフの設定
+plt.title("Computation Time vs Number of Nodes")
+plt.xlabel("Number of Nodes")
+plt.ylabel("Computation Time (s)")
+plt.axhline(y=mean_time, color='r', linestyle='--', label=f'Average Time: {mean_time:.2f}s')
+plt.legend()
+plt.grid(True)
 
-# エッジ行列の作成（縦: 品種, 横: エッジ）
-flow_matrix = np.zeros((num_flows, num_edges), dtype=int)
-
-# Flowからエッジへの変換
-for flow_idx, flow in enumerate(flows):
-    # 各品種のフロー（ノード間の移動をエッジに変換）
-    for i in range(1, num_nodes):
-        if flow[i-1] != 0 and flow[i] != 0:  # 0は無視
-            source, target = flow[i-1], flow[i]
-            if (source, target) in edge_dict:
-                edge_id = edge_dict[(source, target)]
-                flow_matrix[flow_idx, edge_id] = i  # i番目の順序として保存
-
-# 結果を表示
-print(flow_matrix)
-
-# 結果をCSVファイルとして保存
-with open('flow_edge_matrix.csv', 'w', newline='') as csvfile:
-    writer = csv.writer(csvfile)
-    writer.writerows(flow_matrix)
+# グラフを表示
+plt.show()

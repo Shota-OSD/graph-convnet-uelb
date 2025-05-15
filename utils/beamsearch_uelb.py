@@ -1,8 +1,16 @@
 import torch
+import torch.nn.functional as F
 
 class BeamsearchUELB:
     def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, dtypeFloat, dtypeLong, mode_strict=False):
-        self.y_pred_edges = y_pred_edges  # (batch_size, num_nodes, num_nodes, num_commodities)
+        #y_pred_edges  # (batch_size, num_nodes, num_nodes, num_commodities, num_vec)
+        
+        # Compute logits over edge prediction matrix
+        y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x C x voc_edges
+        # Consider the second dimension only
+        y = y[:, :, :, :, 1]  # B x V x V
+        y[y == 0] = -1e-20  # Set 0s (i.e. log(1)s) to very small negative number
+        self.y = y
         self.beam_size = beam_size
         self.batch_size = batch_size
         self.edges_capacity = edges_capacity  # (batch_size, num_nodes, num_nodes)
@@ -10,9 +18,10 @@ class BeamsearchUELB:
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
         self.mode_strict = mode_strict
-        self.max_iter = 10
+        self.max_iter = 5
 
     def search(self):
+        # Perform beamsearch
         # batchサイズでの結果を格納するリスト
         node_orders = []
         all_commodity_paths = []
@@ -30,7 +39,7 @@ class BeamsearchUELB:
 
     def _beam_search_single_batch(self, batch):
         # バッチ内の各コモディティに対してルートを探索
-        batch_y_pred_edges = self.y_pred_edges[batch]
+        batch_y_pred_edges = self.y[batch]
         commodities = self.commodities[batch]
         count = 0
 
@@ -74,12 +83,12 @@ class BeamsearchUELB:
                 #print("探索失敗のため、繰り返しを行いました", count)
                 is_feasible = False
                 #unshaffled_commodity_paths = [[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]]
-                unshaffled_commodity_paths = [[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9]]
+                unshaffled_commodity_paths = [[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9]]
                 count += 1
         
         return node_orders, unshaffled_commodity_paths, is_feasible
 
-    def _beam_search_for_commodity(self, edges_capacity, y_pred_edges, source, target, demand):
+    def _beam_search_for_commodity(self, edges_capacity, y_commodities, source, target, demand):
         # 初期状態のキュー
         beam_queue = [(source, [source], 0, edges_capacity.clone())]  # (current_node, path, current_score, remaining_edges_capacity)
 
@@ -105,7 +114,7 @@ class BeamsearchUELB:
                         continue  # 容量が0、つまりエッジが存在しない場合
 
                     # 次ノードへの移動でのフローの確率スコア
-                    flow_probability = y_pred_edges[current_node, next_node]
+                    flow_probability = y_commodities[current_node, next_node]
                     new_score = current_score + flow_probability
 
                     # 容量制約の確認
