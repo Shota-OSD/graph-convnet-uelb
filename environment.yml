@@ -1,0 +1,23 @@
+name: gcn-uelb-env
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  #- python=3.7.9
+  - python=3.9
+  - pip
+  - pytorch>=1.9,<3.0
+  - torchvision
+  - torchaudio
+  - jupyter
+  - pip:
+    - numpy>=1.21,<1.24
+    - tensorboard==2.11.0
+    - matplotlib>=3.4,<3.6
+    - networkx>=2.6,<2.8
+    - scikit-learn>=0.24,<1.2
+    - fastprogress==1.0.0
+    - scipy>=1.6,<1.11
+    - mip==1.15.0
+    - pulp>=2.6,<2.8
