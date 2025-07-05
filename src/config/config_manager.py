@@ -17,12 +17,12 @@ class ConfigManager:
         
         if torch.cuda.is_available():
             print(f"CUDA available, using GPU ID {self.config.gpu_id}")
-            dtypeFloat = torch.cuda.FloatTensor
-            dtypeLong = torch.cuda.LongTensor
+            dtypeFloat = torch.float32
+            dtypeLong = torch.long
             torch.cuda.manual_seed(1)
         else:
             print("CUDA not available")
-            dtypeFloat = torch.float
+            dtypeFloat = torch.float32
             dtypeLong = torch.long
             torch.manual_seed(1)
         
