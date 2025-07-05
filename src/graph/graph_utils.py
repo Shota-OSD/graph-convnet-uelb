@@ -100,7 +100,9 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
         mean_tour_len: Mean tour length over batch
     """
     
-    bs_edges = torch.zeros((num_batch, num_node, num_node, num_flow), dtype=torch.int32)
+    # Move tensors to the same device as commodities
+    device = commodities.device
+    bs_edges = torch.zeros((num_batch, num_node, num_node, num_flow), dtype=torch.int32, device=device)
 
     # 改行なしでテンソル全体を出力するオプション
     torch.set_printoptions(linewidth=200)
@@ -126,7 +128,7 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     # compute the load factor
     load_factors = torch.where(
         edges_capacity == 0,               # 条件: edges_capacity が 0 の場合
-        torch.tensor(0.0),                 # true の場合の値: 0 を設定
+        torch.tensor(0.0, device=device),  # true の場合の値: 0 を設定
         bs_edges_summed.float() / edges_capacity.float()  # false の場合の値: 通常の割り算
     )
     
@@ -155,9 +157,10 @@ def compute_load_factor(edges_target, edges_capacity, commodities):
     edges_summed = edges_demand.sum(dim=-1)
     
     # Compute the load factor
+    device = edges_capacity.device
     load_factor = torch.where(
         edges_capacity == 0,               # 条件: edges_capacity が 0 の場合
-        torch.tensor(0.0),                 # true の場合の値: 0 を設定
+        torch.tensor(0.0, device=device),  # true の場合の値: 0 を設定
         edges_summed.float() / edges_capacity.float()  # false の場合の値: 通常の割り算
     )
     max_values_per_batch = load_factor.max(dim=1).values.max(dim=1).values
