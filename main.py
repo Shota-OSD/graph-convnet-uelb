@@ -4,6 +4,8 @@ Graph Convolutional Network for UELB (Undirected Edge Load Balancing)
 Refactored main script with modular architecture
 """
 
+import sys
+import argparse
 from fastprogress import master_bar
 
 from src.config.config_manager import ConfigManager
@@ -14,8 +16,14 @@ from src.train.metrics import MetricsLogger, metrics_to_str
 
 def main():
     """メイン関数"""
+    # コマンドライン引数の解析
+    parser = argparse.ArgumentParser(description='Graph Convolutional Network for UELB')
+    parser.add_argument('--config', type=str, default='configs/default2.json',
+                       help='設定ファイルのパス (default: configs/default2.json)')
+    args = parser.parse_args()
+    
     # 設定の初期化
-    config_manager = ConfigManager("configs/default2.json")
+    config_manager = ConfigManager(args.config)
     config = config_manager.get_config()
     dtypeFloat, dtypeLong = config_manager.get_dtypes()
     

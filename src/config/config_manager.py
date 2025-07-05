@@ -12,16 +12,20 @@ class ConfigManager:
     
     def _setup_gpu(self):
         """GPU設定を行う"""
-        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(self.config.gpu_id)
+        use_gpu = getattr(self.config, 'use_gpu', True)  # デフォルトはTrue
         
-        if torch.cuda.is_available():
+        if use_gpu and torch.cuda.is_available():
+            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(self.config.gpu_id)
             print(f"CUDA available, using GPU ID {self.config.gpu_id}")
             dtypeFloat = torch.float32
             dtypeLong = torch.long
             torch.cuda.manual_seed(1)
         else:
-            print("CUDA not available")
+            if use_gpu and not torch.cuda.is_available():
+                print("GPU requested but CUDA not available, falling back to CPU")
+            else:
+                print("Using CPU (GPU disabled in config)")
             dtypeFloat = torch.float32
             dtypeLong = torch.long
             torch.manual_seed(1)

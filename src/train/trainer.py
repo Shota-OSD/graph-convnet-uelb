@@ -21,8 +21,15 @@ class Trainer:
     def _instantiate_model(self):
         """モデルとオプティマイザーを初期化"""
         net = nn.DataParallel(ResidualGatedGCNModel(self.config, self.dtypeFloat, self.dtypeLong))
-        if torch.cuda.is_available():
+        
+        # GPU使用設定を確認
+        use_gpu = getattr(self.config, 'use_gpu', True)
+        if use_gpu and torch.cuda.is_available():
             net.cuda()
+            print("Model moved to GPU")
+        else:
+            print("Model using CPU")
+            
         print(net)
         nb_param = sum(np.prod(list(param.data.size())) for param in net.parameters())
         print('Number of parameters:', nb_param)
