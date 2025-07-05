@@ -1,7 +1,7 @@
 {
-    "expt_name": "default_extended",
+    "expt_name": "actual",
     "gpu_id": "0",
-    "use_gpu": true,
+    "use_gpu": false,
 
     "graph_filepath": "./data/graph.gml",
     "edge_numbering_filepath": "./data/edge_numbering_file.csv",
