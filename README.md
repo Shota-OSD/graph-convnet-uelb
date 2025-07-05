@@ -14,6 +14,9 @@
 pip install -r requirements.txt
 ```
 
+conda env create -n myenv -f environment.yml
+
+
 2. 設定ファイル（例: `configs/default2.json`）を編集して、学習条件やデータパスを調整します。
 
 ## 使い方
