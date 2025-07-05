@@ -269,6 +269,9 @@ def edge_error(y_pred, y_target, x_edges):
     y = F.softmax(y_pred, dim=4) # B x V x V x C xvoc_edges
     y = y.argmax(dim=4)
     
+    # Move y_target to the same device as y
+    y_target = y_target.to(y.device)
+    
     # Mask out edges which are not on true TSP tours or are not predicted positively by model
     mask_no_uelb = ((y_target + y) > 0).long()
     err_uelb, err_idx_uelb = _edge_error(y, y_target, mask_no_uelb)

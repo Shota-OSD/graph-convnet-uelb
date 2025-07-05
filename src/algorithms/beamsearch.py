@@ -42,12 +42,17 @@ class Beamsearch(object):
         self.start_nodes[:, 0, :] = self.target_nodes_list
         self.target_nodes = self.target_nodes_list.unsqueeze(1)  # (batch_size, 1, num_commodities)
         
+        # Move tensors to the same device as commodity_list
+        device = commodity_list.device
+        self.start_nodes = self.start_nodes.to(device)
+        self.target_nodes = self.target_nodes.to(device)
+        
         # Mask for constructing valid hypothesis
-        self.mask = torch.ones(batch_size, beam_size, num_nodes, self.num_commodities, dtype=self.dtypeFloat)
+        self.mask = torch.ones(batch_size, beam_size, num_nodes, self.num_commodities, dtype=self.dtypeFloat, device=device)
         self.update_mask(self.start_nodes)  # Mask the starting node of the beam search
         
         # Score for each translation on the beam
-        self.scores = torch.zeros(batch_size, beam_size, self.num_commodities, dtype=self.dtypeFloat)
+        self.scores = torch.zeros(batch_size, beam_size, self.num_commodities, dtype=self.dtypeFloat, device=device)
         self.all_scores = []
         
         # Backpointers at each time-step
@@ -109,6 +114,8 @@ class Beamsearch(object):
     def update_mask(self, new_nodes):
         """Sets new_nodes to zero in mask.
         """
+        # Move mask to the same device as new_nodes
+        self.mask = self.mask.to(new_nodes.device)
         arr = torch.arange(self.num_nodes, device=new_nodes.device).unsqueeze(0).unsqueeze(1).unsqueeze(3).expand_as(self.mask)
         new_nodes = new_nodes.unsqueeze(2).expand_as(self.mask)
         update_mask = 1 - (arr == new_nodes).float()

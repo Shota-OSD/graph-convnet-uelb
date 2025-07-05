@@ -66,6 +66,15 @@ class Trainer:
             batch_commodities = torch.LongTensor(batch.commodities).to(torch.long).contiguous().requires_grad_(False)
             x_commodities = batch_commodities[:, :, 2].to(torch.float)
             
+            # Move tensors to the same device as the model
+            device = next(self.net.parameters()).device
+            x_edges = x_edges.to(device)
+            x_edges_capacity = x_edges_capacity.to(device)
+            x_nodes = x_nodes.to(device)
+            y_edges = y_edges.to(device)
+            batch_commodities = batch_commodities.to(device)
+            x_commodities = x_commodities.to(device)
+            
             if type(edge_cw) != torch.Tensor:
                 edge_labels = y_edges.cpu().numpy().flatten()
                 edge_cw = compute_class_weight("balanced", classes=np.unique(edge_labels), y=edge_labels)
