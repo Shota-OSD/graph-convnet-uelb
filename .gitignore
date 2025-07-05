@@ -2,7 +2,8 @@
 **/logs/
 configs/events.out.tfevents.*
 **/__pycache__/
-**/*.pyc
+**/*.py[cod]
+**/*.pyo
 
 # macOS 特有のメタファイルを無視
 __MACOSX/
