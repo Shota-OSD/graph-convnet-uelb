@@ -13,8 +13,8 @@
     "graph_model": "random",
 
     "num_train_data": 3200,
-    "num_test_data": 400,
-    "num_val_data": 400,
+    "num_test_data": 100,
+    "num_val_data": 100,
     "num_nodes": 40,
     "num_commodities": 5,
     "sample_size": 5,
