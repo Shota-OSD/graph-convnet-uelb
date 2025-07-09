@@ -1,7 +1,7 @@
 {
-    "expt_name": "deafult",
+    "expt_name": "actual",
     "gpu_id": "0",
-    "use_gpu": true,
+    "use_gpu": false,
 
     "graph_filepath": "./data/graph.gml",
     "edge_numbering_filepath": "./data/edge_numbering_file.csv",
@@ -12,9 +12,9 @@
     "solver_type": "pulp",
     "graph_model": "random",
 
-    "num_train_data": 100,
-    "num_test_data": 20,
-    "num_val_data": 20,
+    "num_train_data": 3200,
+    "num_test_data": 100,
+    "num_val_data": 100,
     "num_nodes": 40,
     "num_commodities": 5,
     "sample_size": 5,
@@ -35,15 +35,15 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 3,
-    "val_every": 3,
-    "test_every": 3,
+    "max_epochs": 50,
+    "val_every": 5,
+    "test_every": 5,
 
-    "batch_size": 20,
-    "batches_per_epoch": 500,
+    "batch_size": 32,
+    "batches_per_epoch": 1000,
     "accumulation_steps": 1,
 
     "learning_rate": 0.0005,
     "decay_rate": 1.5,
     "dropout_rate": 0.5
-}
+} 

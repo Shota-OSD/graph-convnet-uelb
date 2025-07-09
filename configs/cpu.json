@@ -1,7 +1,7 @@
 {
-    "expt_name": "deafult",
+    "expt_name": "cpu_experiment",
     "gpu_id": "0",
-    "use_gpu": true,
+    "use_gpu": false,
 
     "graph_filepath": "./data/graph.gml",
     "edge_numbering_filepath": "./data/edge_numbering_file.csv",
@@ -35,7 +35,7 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 3,
+    "max_epochs": 8,
     "val_every": 3,
     "test_every": 3,
 
@@ -46,4 +46,4 @@
     "learning_rate": 0.0005,
     "decay_rate": 1.5,
     "dropout_rate": 0.5
-}
+} 
