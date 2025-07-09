@@ -73,7 +73,35 @@ def main():
     
     # 結果の出力
     metrics_logger.print_summary()
-    metrics_logger.print_results_table(val_every, test_every)
+    
+    # 設定情報を辞書形式で準備（安全な形式のみ）
+    safe_config_info = {
+        'config_file': args.config,
+        'max_epochs': max_epochs,
+        'val_every': val_every,
+        'test_every': test_every,
+        'initial_learning_rate': config.learning_rate,
+        'decay_rate': decay_rate,
+        'use_gpu': getattr(config, 'use_gpu', True),
+        'gpu_id': getattr(config, 'gpu_id', 0),
+    }
+    
+    # 設定オブジェクトから安全に変換できる属性のみを追加
+    try:
+        config_dict = dict(config)
+        # 基本的な設定値のみを抽出
+        basic_config = {}
+        for key, value in config_dict.items():
+            if isinstance(value, (int, float, str, bool, list, dict)) or value is None:
+                basic_config[key] = value
+        safe_config_info['basic_config'] = basic_config
+    except Exception as e:
+        print(f"Warning: Could not extract full config: {e}")
+        safe_config_info['basic_config'] = {}
+    
+    # 結果をファイルに保存
+    metrics_logger.save_results(safe_config_info)
+    
     print("Training finished.")
 
 if __name__ == "__main__":
