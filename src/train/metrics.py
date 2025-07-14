@@ -13,24 +13,40 @@ class MetricsLogger:
         self.train_err_edges_list = []
         self.val_approximation_rate_list = []
         self.test_approximation_rate_list = []
+        
+        # 時間関連のメトリクスを追加
+        self.train_time_list = []
+        self.val_time_list = []
+        self.test_time_list = []
+        self.total_train_time = 0.0
+        self.total_test_time = 0.0
+        
         self.save_dir = save_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # 保存ディレクトリの作成
         os.makedirs(self.save_dir, exist_ok=True)
     
-    def log_train_metrics(self, loss: float, edge_error: float):
+    def log_train_metrics(self, loss: float, edge_error: float, train_time: float = None):
         """トレーニングメトリクスを記録"""
         self.train_loss_list.append(loss)
         self.train_err_edges_list.append(edge_error)
+        if train_time is not None:
+            self.train_time_list.append(train_time)
+            self.total_train_time += train_time
     
-    def log_val_metrics(self, approximation_rate: float):
+    def log_val_metrics(self, approximation_rate: float, val_time: float = None):
         """検証メトリクスを記録"""
         self.val_approximation_rate_list.append(approximation_rate)
+        if val_time is not None:
+            self.val_time_list.append(val_time)
     
-    def log_test_metrics(self, approximation_rate: float):
+    def log_test_metrics(self, approximation_rate: float, test_time: float = None):
         """テストメトリクスを記録"""
         self.test_approximation_rate_list.append(approximation_rate)
+        if test_time is not None:
+            self.test_time_list.append(test_time)
+            self.total_test_time += test_time
     
     def get_final_metrics(self) -> dict:
         """最終メトリクスを取得"""
@@ -40,11 +56,33 @@ class MetricsLogger:
             'final_val_approximation_rate': self.val_approximation_rate_list[-1] if self.val_approximation_rate_list else 0.0,
             'final_test_approximation_rate': self.test_approximation_rate_list[-1] if self.test_approximation_rate_list else 0.0,
             'best_val_approximation_rate': max(self.val_approximation_rate_list) if self.val_approximation_rate_list else 0.0,
-            'best_test_approximation_rate': max(self.test_approximation_rate_list) if self.test_approximation_rate_list else 0.0
+            'best_test_approximation_rate': max(self.test_approximation_rate_list) if self.test_approximation_rate_list else 0.0,
+            'total_train_time': self.total_train_time,
+            'total_test_time': self.total_test_time,
+            'avg_train_time_per_epoch': np.mean(self.train_time_list) if self.train_time_list else 0.0,
+            'avg_test_time_per_epoch': np.mean(self.test_time_list) if self.test_time_list else 0.0
         }
+    
+    def calculate_time_per_data(self, num_train_data: int, num_test_data: int) -> dict:
+        """一つのデータあたりの経過時間を計算"""
+        total_train_samples = num_train_data * len(self.train_time_list) if self.train_time_list else 0
+        total_test_samples = num_test_data * len(self.test_time_list) if self.test_time_list else 0
+        
+        time_per_data = {
+            'train_time_per_data': self.total_train_time / total_train_samples if total_train_samples > 0 else 0.0,
+            'test_time_per_data': self.total_test_time / total_test_samples if total_test_samples > 0 else 0.0,
+            'total_train_samples': total_train_samples,
+            'total_test_samples': total_test_samples
+        }
+        return time_per_data
     
     def save_results(self, config_info: dict = None):
         """結果をファイルに保存"""
+        # 時間関連の計算
+        num_train_data = config_info.get('num_train_data', 0) if config_info else 0
+        num_test_data = config_info.get('num_test_data', 0) if config_info else 0
+        time_per_data = self.calculate_time_per_data(num_train_data, num_test_data)
+        
         # 結果データの準備
         results = {
             'timestamp': self.timestamp,
@@ -52,7 +90,11 @@ class MetricsLogger:
             'train_err_edges_list': self.train_err_edges_list,
             'val_approximation_rate_list': self.val_approximation_rate_list,
             'test_approximation_rate_list': self.test_approximation_rate_list,
+            'train_time_list': self.train_time_list,
+            'val_time_list': self.val_time_list,
+            'test_time_list': self.test_time_list,
             'final_metrics': self.get_final_metrics(),
+            'time_per_data': time_per_data,
             'config_info': config_info or {}
         }
         
@@ -98,18 +140,36 @@ class MetricsLogger:
                 f.write(f"  Final Test Approximation Rate: {metrics['final_test_approximation_rate']:.2f}%\n")
                 f.write(f"  Best Test Approximation Rate: {metrics['best_test_approximation_rate']:.2f}%\n")
             
+            # 時間関連のメトリクス
+            f.write("\nTIME METRICS:\n")
+            f.write(f"  Total Training Time: {metrics['total_train_time']:.2f}s\n")
+            f.write(f"  Total Test Time: {metrics['total_test_time']:.2f}s\n")
+            f.write(f"  Average Training Time per Epoch: {metrics['avg_train_time_per_epoch']:.2f}s\n")
+            f.write(f"  Average Test Time per Epoch: {metrics['avg_test_time_per_epoch']:.2f}s\n")
+            
+            # 一つのデータあたりの時間
+            time_per_data = self.calculate_time_per_data(
+                config_info.get('num_train_data', 0) if config_info else 0,
+                config_info.get('num_test_data', 0) if config_info else 0
+            )
+            f.write(f"  Training Time per Data: {time_per_data['train_time_per_data']:.4f}s\n")
+            f.write(f"  Test Time per Data: {time_per_data['test_time_per_data']:.4f}s\n")
+            f.write(f"  Total Training Samples: {time_per_data['total_train_samples']}\n")
+            f.write(f"  Total Test Samples: {time_per_data['total_test_samples']}\n")
+            
             f.write("\n" + "="*50 + "\n")
             f.write("DETAILED RESULTS\n")
             f.write("="*50 + "\n")
             
             # エポックごとの詳細結果
-            f.write(f"{'Epoch':<6} {'Train Loss':<12} {'Edge Error':<12} {'Val Approx':<12} {'Test Approx':<12}\n")
-            f.write("-" * 60 + "\n")
+            f.write(f"{'Epoch':<6} {'Train Loss':<12} {'Edge Error':<12} {'Train Time':<12} {'Val Approx':<12} {'Test Approx':<12}\n")
+            f.write("-" * 72 + "\n")
             
             max_epochs = len(self.train_loss_list)
             for epoch in range(max_epochs):
                 train_loss = self.train_loss_list[epoch]
                 edge_error = self.train_err_edges_list[epoch]
+                train_time = self.train_time_list[epoch] if epoch < len(self.train_time_list) else 0.0
                 
                 # 検証とテストの近似率（該当するエポックのみ）
                 val_approx = "N/A"
@@ -123,15 +183,15 @@ class MetricsLogger:
                 if epoch < len(self.test_approximation_rate_list):
                     test_approx = f"{self.test_approximation_rate_list[epoch]:.2f}%"
                 
-                f.write(f"{epoch+1:<6} {train_loss:<12.4f} {edge_error:<12.2f} {val_approx:<12} {test_approx:<12}\n")
+                f.write(f"{epoch+1:<6} {train_loss:<12.4f} {edge_error:<12.2f} {train_time:<12.2f} {val_approx:<12} {test_approx:<12}\n")
             
-            f.write("-" * 60 + "\n")
+            f.write("-" * 72 + "\n")
         
         print(f"Results saved to Text: {txt_filename}")
         
         return pickle_filename, txt_filename
     
-    def print_summary(self):
+    def print_summary(self, config_info: dict = None):
         """最終結果のサマリーを表示"""
         metrics = self.get_final_metrics()
         print("\n" + "="*50)
@@ -143,6 +203,22 @@ class MetricsLogger:
             print(f"Final Val Approximation Rate: {metrics['final_val_approximation_rate']:.2f}%")
         if self.test_approximation_rate_list:
             print(f"Final Test Approximation Rate: {metrics['final_test_approximation_rate']:.2f}%")
+        
+        # 時間関連のメトリクス
+        print("\nTIME METRICS:")
+        print(f"Total Training Time: {metrics['total_train_time']:.2f}s")
+        print(f"Total Test Time: {metrics['total_test_time']:.2f}s")
+        print(f"Average Training Time per Epoch: {metrics['avg_train_time_per_epoch']:.2f}s")
+        print(f"Average Test Time per Epoch: {metrics['avg_test_time_per_epoch']:.2f}s")
+        
+        # 一つのデータあたりの時間
+        num_train_data = config_info.get('num_train_data', 0) if config_info else 0
+        num_test_data = config_info.get('num_test_data', 0) if config_info else 0
+        time_per_data = self.calculate_time_per_data(num_train_data, num_test_data)
+        print(f"Training Time per Data: {time_per_data['train_time_per_data']:.4f}s")
+        print(f"Test Time per Data: {time_per_data['test_time_per_data']:.4f}s")
+        print(f"Total Training Samples: {time_per_data['total_train_samples']}")
+        print(f"Total Test Samples: {time_per_data['total_test_samples']}")
 
 def metrics_to_str(epoch: int, time: float, learning_rate: float, loss: float, 
                   mean_maximum_load_factor: float, gt_load_factor: float, 

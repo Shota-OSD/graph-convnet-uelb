@@ -49,14 +49,14 @@ def main():
     for epoch in epoch_bar:
         # トレーニング
         train_time, train_loss, train_err_edges = trainer.train_one_epoch(epoch_bar)
-        metrics_logger.log_train_metrics(train_loss, train_err_edges)
+        metrics_logger.log_train_metrics(train_loss, train_err_edges, train_time)
         epoch_bar.write(f"\nEpoch {epoch+1}/{max_epochs}")
-        epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%")
+        epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
         
         # 検証
         if epoch % val_every == 0 or epoch == max_epochs - 1:
             val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(trainer.get_model(), epoch_bar, mode='val')
-            metrics_logger.log_val_metrics(val_approximation_rate)
+            metrics_logger.log_val_metrics(val_approximation_rate, val_time)
             epoch_bar.write('v: ' + metrics_to_str(epoch, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
         
         # 学習率の更新
@@ -68,11 +68,8 @@ def main():
         # テスト
         if epoch % test_every == 0 or epoch == max_epochs - 1:
             test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(trainer.get_model(), epoch_bar, mode='test')
-            metrics_logger.log_test_metrics(test_approximation_rate)
+            metrics_logger.log_test_metrics(test_approximation_rate, test_time)
             epoch_bar.write('T: ' + metrics_to_str(epoch, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
-    
-    # 結果の出力
-    metrics_logger.print_summary()
     
     # 設定情報を辞書形式で準備（安全な形式のみ）
     safe_config_info = {
@@ -84,7 +81,13 @@ def main():
         'decay_rate': decay_rate,
         'use_gpu': getattr(config, 'use_gpu', True),
         'gpu_id': getattr(config, 'gpu_id', 0),
+        'num_train_data': getattr(config, 'num_train_data', 0),
+        'num_test_data': getattr(config, 'num_test_data', 0),
+        'num_val_data': getattr(config, 'num_val_data', 0),
     }
+    
+    # 結果の出力
+    metrics_logger.print_summary(safe_config_info)
     
     # 設定オブジェクトから安全に変換できる属性のみを追加
     try:
