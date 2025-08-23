@@ -1,101 +1,139 @@
 import torch
 import torch.nn.functional as F
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Optional
+import time
 
-class BeamsearchUELB:
-    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, dtypeFloat, dtypeLong, mode_strict=False):
-        #y_pred_edges  # (batch_size, num_nodes, num_nodes, num_commodities, num_vec)
-        
-        # Compute logits over edge prediction matrix
+class BeamSearchAlgorithm(ABC):
+    """ビームサーチアルゴリズムの抽象基底クラス"""
+    
+    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, 
+                 dtypeFloat, dtypeLong, mode_strict=False, max_iter=5):
+        # 共通の初期化処理
         y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x C x voc_edges
-        # Consider the second dimension only
         y = y[:, :, :, :, 1]  # B x V x V
         y[y == 0] = -1e-20  # Set 0s (i.e. log(1)s) to very small negative number
+        
         self.y = y
         self.beam_size = beam_size
         self.batch_size = batch_size
-        self.edges_capacity = edges_capacity  # (batch_size, num_nodes, num_nodes)
-        self.commodities = commodities  # (batch_size, num_commodities, 3) -> (source_node, target_node, demand)
+        self.edges_capacity = edges_capacity
+        self.commodities = commodities
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
         self.mode_strict = mode_strict
-        self.max_iter = 5
+        self.max_iter = max_iter
+        
+        # パフォーマンス計測用
+        self.execution_time = 0.0
+        self.algorithm_name = self.__class__.__name__
 
-    def search(self):
-        # Perform beamsearch
-        # batchサイズでの結果を格納するリスト
+    def search(self) -> Tuple[List[List[List[int]]], bool]:
+        """
+        メインの検索メソッド - 共通のフレームワーク
+        
+        Returns:
+            Tuple[List[List[List[int]]], bool]: (all_commodity_paths, is_feasible)
+        """
+        start_time = time.time()
+        
         node_orders = []
         all_commodity_paths = []
 
         for batch in range(self.batch_size):
-            # バッチごとにフローを計算
-            batch_node_orders, commodity_paths, is_feasible = self._beam_search_single_batch(batch)
+            batch_node_orders, commodity_paths, is_feasible = self._search_single_batch(batch)
             node_orders.append(batch_node_orders)
             all_commodity_paths.append(commodity_paths)
-            #tensor_node_orders = torch.tensor(node_orders, dtype=self.dtypeLong)
 
-
-        #return tensor_node_orders, all_commodity_paths
+        self.execution_time = time.time() - start_time
         return all_commodity_paths, is_feasible
 
-    def _beam_search_single_batch(self, batch):
-        # バッチ内の各コモディティに対してルートを探索
+    @abstractmethod
+    def _search_single_batch(self, batch: int) -> Tuple[List[List[int]], List[List[int]], bool]:
+        """
+        単一バッチでの検索 - アルゴリズム固有の実装
+        
+        Args:
+            batch: バッチインデックス
+            
+        Returns:
+            Tuple[List[List[int]], List[List[int]], bool]: (node_orders, commodity_paths, is_feasible)
+        """
+        pass
+
+    def get_performance_info(self) -> dict:
+        """
+        パフォーマンス情報の取得
+        
+        Returns:
+            dict: パフォーマンス情報
+        """
+        return {
+            'algorithm_name': self.algorithm_name,
+            'execution_time': self.execution_time,
+            'beam_size': self.beam_size,
+            'batch_size': self.batch_size,
+            'max_iter': self.max_iter
+        }
+
+
+class StandardBeamSearch(BeamSearchAlgorithm):
+    """標準的なビームサーチアルゴリズム（元の実装）"""
+    
+    def _search_single_batch(self, batch: int) -> Tuple[List[List[int]], List[List[int]], bool]:
+        """標準的なビームサーチによる単一バッチ検索"""
         batch_y_pred_edges = self.y[batch]
         commodities = self.commodities[batch]
         count = 0
 
         while count < self.max_iter:
-
             batch_edges_capacity = self.edges_capacity[batch]
-            #if count == 0:
-                #print("元々のエッジ容量：", batch_edges_capacity)
+            
+            # ランダムシャッフルによる前処理
             random_indices = torch.randperm(commodities.size(0))
-            #  探索する品種の順番をシャッフル
-            shaffled_commodities = commodities[random_indices]
-            shaffled_pred_edges = batch_y_pred_edges[:, :, random_indices]
-            #shaffled_commodities = commodities
-            #shaffled_pred_edges = batch_y_pred_edges
+            shuffled_commodities = commodities[random_indices]
+            shuffled_pred_edges = batch_y_pred_edges[:, :, random_indices]
             _, original_indices = torch.sort(random_indices)
 
             node_orders = []
             commodity_paths = []
             is_feasible = True
 
-            for index, commodity in enumerate(shaffled_commodities):
+            for index, commodity in enumerate(shuffled_commodities):
                 source_node = commodity[0].item()
                 target_node = commodity[1].item()
                 demand = commodity[2].item()
-                # ビームサーチで最適なパスを探索
-                node_order, remaining_edges_capacity, best_path = self._beam_search_for_commodity(batch_edges_capacity, shaffled_pred_edges[:, :, index], source_node, target_node, demand)
+                
+                # ビームサーチによるパス探索
+                node_order, remaining_edges_capacity, best_path = self._beam_search_for_commodity(
+                    batch_edges_capacity, shuffled_pred_edges[:, :, index], 
+                    source_node, target_node, demand
+                )
+                
                 if best_path == []:
                     break
-                # ノード順の追加
+                    
                 node_orders.append(node_order)
-                # エッジ容量の更新
                 if self.mode_strict:
                     batch_edges_capacity = remaining_edges_capacity
                 commodity_paths.append(best_path)
-                # 最後まで行くと終了
+
             if len(commodity_paths) == commodities.shape[0]:
                 count = self.max_iter
-                unshaffled_commodity_paths = [commodity_paths[i] for i in original_indices]
-                #print("無事探索終了")
+                unshuffled_commodity_paths = [commodity_paths[i] for i in original_indices]
             else:
-                #print("探索失敗のため、繰り返しを行いました", count)
                 is_feasible = False
-                #unshaffled_commodity_paths = [[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1],[0,1]]
-                unshaffled_commodity_paths = [[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9]]
+                unshuffled_commodity_paths = self._get_fallback_paths(commodities.shape[0])
                 count += 1
         
-        return node_orders, unshaffled_commodity_paths, is_feasible
+        return node_orders, unshuffled_commodity_paths, is_feasible
 
     def _beam_search_for_commodity(self, edges_capacity, y_commodities, source, target, demand):
-        # 初期状態のキュー
-        beam_queue = [(source, [source], 0, edges_capacity.clone())]  # (current_node, path, current_score, remaining_edges_capacity)
-
+        """標準的なビームサーチによるパス探索"""
+        beam_queue = [(source, [source], 0, edges_capacity.clone())]
         best_paths = []
 
         while beam_queue:
-            # スコアでソートし、上位ビームサイズだけを残す
             current_scores = [item[2] for item in beam_queue]
             beam_queue = sorted(beam_queue, key=lambda x: x[2], reverse=True)[:self.beam_size]
 
@@ -105,40 +143,276 @@ class BeamsearchUELB:
                     best_paths.append((path, current_score, remaining_edges_capacity))
                     continue
 
-                # 隣接ノードへの探索
                 for next_node in range(edges_capacity.shape[0]):
-                    # next_nodeがすでにパスに含まれている場合
                     if next_node in path:
                         continue
                     if (edges_capacity[current_node, next_node].item() == 0):
-                        continue  # 容量が0、つまりエッジが存在しない場合
+                        continue
 
-                    # 次ノードへの移動でのフローの確率スコア
                     flow_probability = y_commodities[current_node, next_node]
                     new_score = current_score + flow_probability
 
-                    # 容量制約の確認
                     if demand <= remaining_edges_capacity[current_node, next_node]:
-                        # 新しい remaining_edges_capacity を作成して更新
                         updated_capacity = remaining_edges_capacity.clone()
                         updated_capacity[current_node, next_node] -= demand
-                        # 新しいパスを作成
                         new_path = path + [next_node]
                         next_beam_queue.append((next_node, new_path, new_score, updated_capacity))
                         
             beam_queue = next_beam_queue
 
-        # 厳密解が出なかった時の処理
         if not best_paths:
-            # デフォルトのnode_order、remaining_edges_capacity、およびbest_pathを設定
             node_order = [0] * edges_capacity.shape[0]
-            #print("探索失敗")
-            return node_order, edges_capacity, []  # 空のパスを返す
+            return node_order, edges_capacity, []
 
-        # 最もスコアの高いパスを返す
         best_paths = sorted(best_paths, key=lambda x: x[1], reverse=True)
-        # パスをノードのリストに変換
         node_order = [0] * edges_capacity.shape[0]
         for idx, node in enumerate(best_paths[0][0]):
-            node_order[node] = idx + 1  # 通った順番（1から始まる
-        return node_order, best_paths[0][2], best_paths[0][0]  # ノードのリスト、残りの容量, パスのリスト
+            node_order[node] = idx + 1
+        return node_order, best_paths[0][2], best_paths[0][0]
+
+    def _get_fallback_paths(self, num_commodities: int) -> List[List[int]]:
+        """フォールバックパスの生成"""
+        return [[0,1,2,3,4,5,6,7,8,9] for _ in range(num_commodities)]
+
+
+class DeterministicBeamSearch(BeamSearchAlgorithm):
+    """決定論的なビームサーチアルゴリズム（シャッフルなし）"""
+    
+    def _search_single_batch(self, batch: int) -> Tuple[List[List[int]], List[List[int]], bool]:
+        """決定論的なビームサーチによる単一バッチ検索"""
+        batch_y_pred_edges = self.y[batch]
+        commodities = self.commodities[batch]
+        count = 0
+
+        while count < self.max_iter:
+            batch_edges_capacity = self.edges_capacity[batch]
+            
+            # シャッフルなしの決定論的処理
+            original_indices = torch.arange(commodities.size(0))
+            processed_commodities = commodities
+            processed_pred_edges = batch_y_pred_edges
+
+            node_orders = []
+            commodity_paths = []
+            is_feasible = True
+
+            for index, commodity in enumerate(processed_commodities):
+                source_node = commodity[0].item()
+                target_node = commodity[1].item()
+                demand = commodity[2].item()
+                
+                # ビームサーチによるパス探索
+                node_order, remaining_edges_capacity, best_path = self._beam_search_for_commodity(
+                    batch_edges_capacity, processed_pred_edges[:, :, index], 
+                    source_node, target_node, demand
+                )
+                
+                if best_path == []:
+                    break
+                    
+                node_orders.append(node_order)
+                if self.mode_strict:
+                    batch_edges_capacity = remaining_edges_capacity
+                commodity_paths.append(best_path)
+
+            if len(commodity_paths) == commodities.shape[0]:
+                count = self.max_iter
+                unshuffled_commodity_paths = [commodity_paths[i] for i in original_indices]
+            else:
+                is_feasible = False
+                unshuffled_commodity_paths = self._get_fallback_paths(commodities.shape[0])
+                count += 1
+        
+        return node_orders, unshuffled_commodity_paths, is_feasible
+
+    def _beam_search_for_commodity(self, edges_capacity, y_commodities, source, target, demand):
+        """決定論的なビームサーチによるパス探索（元の実装と同じ）"""
+        beam_queue = [(source, [source], 0, edges_capacity.clone())]
+        best_paths = []
+
+        while beam_queue:
+            current_scores = [item[2] for item in beam_queue]
+            beam_queue = sorted(beam_queue, key=lambda x: x[2], reverse=True)[:self.beam_size]
+
+            next_beam_queue = []
+            for current_node, path, current_score, remaining_edges_capacity in beam_queue:
+                if current_node == target:
+                    best_paths.append((path, current_score, remaining_edges_capacity))
+                    continue
+
+                for next_node in range(edges_capacity.shape[0]):
+                    if next_node in path:
+                        continue
+                    if (edges_capacity[current_node, next_node].item() == 0):
+                        continue
+
+                    flow_probability = y_commodities[current_node, next_node]
+                    new_score = current_score + flow_probability
+
+                    if demand <= remaining_edges_capacity[current_node, next_node]:
+                        updated_capacity = remaining_edges_capacity.clone()
+                        updated_capacity[current_node, next_node] -= demand
+                        new_path = path + [next_node]
+                        next_beam_queue.append((next_node, new_path, new_score, updated_capacity))
+                        
+            beam_queue = next_beam_queue
+
+        if not best_paths:
+            node_order = [0] * edges_capacity.shape[0]
+            return node_order, edges_capacity, []
+
+        best_paths = sorted(best_paths, key=lambda x: x[1], reverse=True)
+        node_order = [0] * edges_capacity.shape[0]
+        for idx, node in enumerate(best_paths[0][0]):
+            node_order[node] = idx + 1
+        return node_order, best_paths[0][2], best_paths[0][0]
+
+    def _get_fallback_paths(self, num_commodities: int) -> List[List[int]]:
+        """フォールバックパスの生成"""
+        return [[0,1,2,3,4,5,6,7,8,9] for _ in range(num_commodities)]
+
+
+class GreedyBeamSearch(BeamSearchAlgorithm):
+    """貪欲的なビームサーチアルゴリズム（ビームサイズ1）"""
+    
+    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, 
+                 dtypeFloat, dtypeLong, mode_strict=False, max_iter=5):
+        super().__init__(y_pred_edges, 1, batch_size, edges_capacity, commodities, 
+                        dtypeFloat, dtypeLong, mode_strict, max_iter)
+
+    def _search_single_batch(self, batch: int) -> Tuple[List[List[int]], List[List[int]], bool]:
+        """貪欲的なビームサーチによる単一バッチ検索"""
+        batch_y_pred_edges = self.y[batch]
+        commodities = self.commodities[batch]
+        count = 0
+
+        while count < self.max_iter:
+            batch_edges_capacity = self.edges_capacity[batch]
+            
+            # ランダムシャッフルによる前処理
+            random_indices = torch.randperm(commodities.size(0))
+            shuffled_commodities = commodities[random_indices]
+            shuffled_pred_edges = batch_y_pred_edges[:, :, random_indices]
+            _, original_indices = torch.sort(random_indices)
+
+            node_orders = []
+            commodity_paths = []
+            is_feasible = True
+
+            for index, commodity in enumerate(shuffled_commodities):
+                source_node = commodity[0].item()
+                target_node = commodity[1].item()
+                demand = commodity[2].item()
+                
+                # 貪欲的なパス探索（ビームサイズ1）
+                node_order, remaining_edges_capacity, best_path = self._greedy_search_for_commodity(
+                    batch_edges_capacity, shuffled_pred_edges[:, :, index], 
+                    source_node, target_node, demand
+                )
+                
+                if best_path == []:
+                    break
+                    
+                node_orders.append(node_order)
+                if self.mode_strict:
+                    batch_edges_capacity = remaining_edges_capacity
+                commodity_paths.append(best_path)
+
+            if len(commodity_paths) == commodities.shape[0]:
+                count = self.max_iter
+                unshuffled_commodity_paths = [commodity_paths[i] for i in original_indices]
+            else:
+                is_feasible = False
+                unshuffled_commodity_paths = self._get_fallback_paths(commodities.shape[0])
+                count += 1
+        
+        return node_orders, unshuffled_commodity_paths, is_feasible
+
+    def _greedy_search_for_commodity(self, edges_capacity, y_commodities, source, target, demand):
+        """貪欲的なパス探索（ビームサイズ1）"""
+        beam_queue = [(source, [source], 0, edges_capacity.clone())]
+        best_paths = []
+
+        while beam_queue:
+            current_scores = [item[2] for item in beam_queue]
+            beam_queue = sorted(beam_queue, key=lambda x: x[2], reverse=True)[:self.beam_size]
+
+            next_beam_queue = []
+            for current_node, path, current_score, remaining_edges_capacity in beam_queue:
+                if current_node == target:
+                    best_paths.append((path, current_score, remaining_edges_capacity))
+                    continue
+
+                for next_node in range(edges_capacity.shape[0]):
+                    if next_node in path:
+                        continue
+                    if (edges_capacity[current_node, next_node].item() == 0):
+                        continue
+
+                    flow_probability = y_commodities[current_node, next_node]
+                    new_score = current_score + flow_probability
+
+                    if demand <= remaining_edges_capacity[current_node, next_node]:
+                        updated_capacity = remaining_edges_capacity.clone()
+                        updated_capacity[current_node, next_node] -= demand
+                        new_path = path + [next_node]
+                        next_beam_queue.append((next_node, new_path, new_score, updated_capacity))
+                        
+            beam_queue = next_beam_queue
+
+        if not best_paths:
+            node_order = [0] * edges_capacity.shape[0]
+            return node_order, edges_capacity, []
+
+        best_paths = sorted(best_paths, key=lambda x: x[1], reverse=True)
+        node_order = [0] * edges_capacity.shape[0]
+        for idx, node in enumerate(best_paths[0][0]):
+            node_order[node] = idx + 1
+        return node_order, best_paths[0][2], best_paths[0][0]
+
+    def _get_fallback_paths(self, num_commodities: int) -> List[List[int]]:
+        """フォールバックパスの生成"""
+        return [[0,1,2,3,4,5,6,7,8,9] for _ in range(num_commodities)]
+
+
+class BeamSearchFactory:
+    """ビームサーチアルゴリズムのファクトリークラス"""
+    
+    ALGORITHMS = {
+        'standard': StandardBeamSearch,
+        'deterministic': DeterministicBeamSearch,
+        'greedy': GreedyBeamSearch
+    }
+    
+    @classmethod
+    def create_algorithm(cls, algorithm_name: str, **kwargs) -> BeamSearchAlgorithm:
+        """
+        指定されたアルゴリズムのインスタンスを作成
+        
+        Args:
+            algorithm_name: アルゴリズム名 ('standard', 'deterministic', 'greedy')
+            **kwargs: アルゴリズムの初期化パラメータ
+            
+        Returns:
+            BeamSearchAlgorithm: アルゴリズムのインスタンス
+            
+        Raises:
+            ValueError: 無効なアルゴリズム名の場合
+        """
+        if algorithm_name not in cls.ALGORITHMS:
+            available = ', '.join(cls.ALGORITHMS.keys())
+            raise ValueError(f"無効なアルゴリズム名: {algorithm_name}. 利用可能: {available}")
+        
+        algorithm_class = cls.ALGORITHMS[algorithm_name]
+        return algorithm_class(**kwargs)
+    
+    @classmethod
+    def get_available_algorithms(cls) -> List[str]:
+        """利用可能なアルゴリズムのリストを取得"""
+        return list(cls.ALGORITHMS.keys())
+
+
+# 後方互換性のためのエイリアス
+class BeamsearchUELB(StandardBeamSearch):
+    """後方互換性のためのエイリアス"""
+    pass
