@@ -47,6 +47,48 @@ python main.py
   が自動で行われます。
 - ログやモデルの重みは`logs/`ディレクトリに保存されます。
 
+### モデルの保存・再利用機能
+
+#### 新規トレーニング（モデル保存あり）
+```sh
+python main.py --config configs/with_model_saving.json
+```
+
+#### 保存済みモデルの再利用
+```sh
+# 最新のモデルを自動読み込み
+python main.py --config configs/load_saved_model.json
+
+# 特定のエポックのモデルを指定読み込み
+python main.py --config configs/load_specific_epoch.json
+```
+
+#### モデル保存の設定オプション
+
+設定ファイルに以下のオプションを追加することで、モデルの保存・読み込み動作をカスタマイズできます：
+
+```json
+{
+  "models_dir": "./saved_models",        // モデル保存ディレクトリ
+  "save_model": true,                    // モデル保存の有効/無効
+  "save_every_epoch": true,              // 毎エポックでモデル保存
+  "load_saved_model": true,              // 起動時に保存済みモデルを読み込み
+  "load_model_epoch": 5,                 // 特定エポックのモデルを読み込み（省略時は最新版）
+  "cleanup_old_models": true             // 古いモデルファイルの自動削除
+}
+```
+
+#### モデル選択の仕組み
+
+- **自動識別**: モデル構造の設定（`hidden_dim`, `num_layers`等）から生成されるハッシュで同一構造のモデルのみ読み込み
+- **ファイル形式**: 
+  - 最新版: `model_{hash}_latest.pt`
+  - エポック別: `model_{hash}_epoch_{番号}.pt`
+- **選択ロジック**:
+  - `load_model_epoch`**未指定** → 最新版(`latest.pt`)を自動選択
+  - `load_model_epoch: 5` → エポック5のモデル(`epoch_5.pt`)を選択
+- **利用可能なモデル表示**: 指定したモデルが見つからない場合、利用可能なモデル一覧を自動表示
+
 ### Jupyter Notebook版の実行
 
 ```sh
@@ -56,6 +98,13 @@ jupyter notebook main.ipynb
 ### 設定のカスタマイズ
 - `configs/default2.json`を編集することで、エポック数やバッチサイズ、学習率などを変更できます。
 - GPUの指定は`gpu_id`で行います。
+
+#### 利用可能な設定ファイル
+
+- `configs/default2.json`: 基本設定（モデル保存なし）
+- `configs/with_model_saving.json`: モデル保存機能を有効化
+- `configs/load_saved_model.json`: 保存済みモデルの最新版を読み込み
+- `configs/load_specific_epoch.json`: 特定エポックのモデルを読み込み
 
 ### 環境の管理
 

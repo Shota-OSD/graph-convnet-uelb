@@ -44,6 +44,45 @@ def main():
     learning_rate = config.learning_rate
     decay_rate = config.decay_rate
     
+    # load_saved_modelがtrueの場合は評価のみ実行
+    if config.get('load_saved_model', False):
+        print("\n" + "="*60)
+        print("MODEL EVALUATION MODE")
+        print("="*60)
+        print("Loaded saved model - Skipping training, running evaluation only\n")
+        
+        # 検証の実行
+        print("Running validation...")
+        val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(trainer.get_model(), None, mode='val')
+        metrics_logger.log_val_metrics(val_approximation_rate, val_time)
+        print('v: ' + metrics_to_str(0, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
+        
+        # テストの実行
+        print("Running test...")
+        test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(trainer.get_model(), None, mode='test')
+        metrics_logger.log_test_metrics(test_approximation_rate, test_time)
+        print('T: ' + metrics_to_str(0, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
+        
+        # 設定情報を辞書形式で準備（評価モード用）
+        safe_config_info = {
+            'config_file': args.config,
+            'mode': 'evaluation_only',
+            'model_hash': trainer._get_config_hash(),
+            'num_val_data': config.get('num_val_data', 0),
+            'num_test_data': config.get('num_test_data', 0),
+        }
+        
+        # 評価結果のサマリーを表示
+        metrics_logger.print_evaluation_summary(safe_config_info)
+        
+        # 評価結果をファイルに保存
+        metrics_logger.save_results(safe_config_info)
+        
+        print("\n" + "="*60)
+        print("EVALUATION COMPLETED")
+        print("="*60)
+        return
+    
     # トレーニングループ
     epoch_bar = master_bar(range(max_epochs))
     for epoch in epoch_bar:
@@ -70,20 +109,24 @@ def main():
             test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(trainer.get_model(), epoch_bar, mode='test')
             metrics_logger.log_test_metrics(test_approximation_rate, test_time)
             epoch_bar.write('T: ' + metrics_to_str(epoch, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
+        
+        # モデル保存
+        if config.get('save_model', True):
+            trainer.save_model(epoch, train_loss)
+            
+            # 古いモデルの削除
+            if config.get('cleanup_old_models', True):
+                trainer.cleanup_old_models()
     
     # 設定情報を辞書形式で準備（安全な形式のみ）
     safe_config_info = {
         'config_file': args.config,
+        'mode': 'training',
+        'model_hash': trainer._get_config_hash(),
         'max_epochs': max_epochs,
-        'val_every': val_every,
-        'test_every': test_every,
-        'initial_learning_rate': config.learning_rate,
-        'decay_rate': decay_rate,
-        'use_gpu': getattr(config, 'use_gpu', True),
-        'gpu_id': getattr(config, 'gpu_id', 0),
-        'num_train_data': getattr(config, 'num_train_data', 0),
-        'num_test_data': getattr(config, 'num_test_data', 0),
-        'num_val_data': getattr(config, 'num_val_data', 0),
+        'num_train_data': config.get('num_train_data', 0),
+        'num_test_data': config.get('num_test_data', 0),
+        'num_val_data': config.get('num_val_data', 0),
     }
     
     # 結果の出力
