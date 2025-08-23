@@ -1,0 +1,29 @@
+[
+  {
+    "algorithm": "standard",
+    "execution_time": 0.017004013061523438,
+    "is_feasible": true,
+    "num_paths_found": 10,
+    "total_path_length": 35,
+    "beam_size": 3,
+    "batch_size": 2
+  },
+  {
+    "algorithm": "deterministic",
+    "execution_time": 0.01736307144165039,
+    "is_feasible": true,
+    "num_paths_found": 10,
+    "total_path_length": 35,
+    "beam_size": 3,
+    "batch_size": 2
+  },
+  {
+    "algorithm": "greedy",
+    "execution_time": 0.006186962127685547,
+    "is_feasible": true,
+    "num_paths_found": 10,
+    "total_path_length": 62,
+    "beam_size": 3,
+    "batch_size": 2
+  }
+]
