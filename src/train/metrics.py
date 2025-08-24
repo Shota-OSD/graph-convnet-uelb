@@ -124,9 +124,12 @@ class MetricsLogger:
         txt_filename = os.path.join(self.save_dir, f"training_results_{self.timestamp}.txt")
         with open(txt_filename, 'w', encoding='utf-8') as f:
             f.write("="*50 + "\n")
-            f.write("TRAINING RESULTS\n")
+            f.write("TRAINING/EVALUATION RESULTS\n")
             f.write("="*50 + "\n")
-            f.write(f"Timestamp: {self.timestamp}\n\n")
+            f.write(f"Timestamp: {self.timestamp}\n")
+            f.write(f"Mode: {config_info.get('mode', 'unknown') if config_info else 'unknown'}\n")
+            f.write(f"Config File: {config_info.get('config_file', 'unknown') if config_info else 'unknown'}\n")
+            f.write(f"Model Hash: {config_info.get('model_hash', 'unknown') if config_info else 'unknown'}\n\n")
             
             # 最終メトリクス
             metrics = self.get_final_metrics()
@@ -219,6 +222,41 @@ class MetricsLogger:
         print(f"Test Time per Data: {time_per_data['test_time_per_data']:.4f}s")
         print(f"Total Training Samples: {time_per_data['total_train_samples']}")
         print(f"Total Test Samples: {time_per_data['total_test_samples']}")
+    
+    def print_evaluation_summary(self, config_info: dict = None):
+        """評価のみモード用のサマリー表示"""
+        print("\n" + "="*50)
+        print("EVALUATION SUMMARY")
+        print("="*50)
+        
+        # 検証結果
+        if self.val_approximation_rate_list:
+            val_approx = self.val_approximation_rate_list[-1]
+            val_time = self.val_time_list[-1] if self.val_time_list else 0.0
+            print(f"VALIDATION:")
+            print(f"  Approximation Rate: {val_approx:.2f}%")
+            print(f"  Execution Time: {val_time:.2f}s")
+        
+        # テスト結果
+        if self.test_approximation_rate_list:
+            test_approx = self.test_approximation_rate_list[-1]
+            test_time = self.test_time_list[-1] if self.test_time_list else 0.0
+            print(f"TEST:")
+            print(f"  Approximation Rate: {test_approx:.2f}%")
+            print(f"  Execution Time: {test_time:.2f}s")
+        
+        # 総合結果
+        if self.val_approximation_rate_list and self.test_approximation_rate_list:
+            avg_approx = (self.val_approximation_rate_list[-1] + self.test_approximation_rate_list[-1]) / 2
+            total_time = (self.val_time_list[-1] if self.val_time_list else 0.0) + (self.test_time_list[-1] if self.test_time_list else 0.0)
+            print(f"OVERALL:")
+            print(f"  Average Approximation Rate: {avg_approx:.2f}%")
+            print(f"  Total Evaluation Time: {total_time:.2f}s")
+        
+        # 設定情報（シンプル）
+        if config_info:
+            print(f"\nUsed Config: {config_info.get('config_file', 'Unknown')}")
+            print(f"Model Hash: {config_info.get('model_hash', 'Unknown')}")
 
 def metrics_to_str(epoch: int, time: float, learning_rate: float, loss: float, 
                   mean_maximum_load_factor: float, gt_load_factor: float, 
