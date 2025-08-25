@@ -1,0 +1,6 @@
+batch_id,algorithm_name,algorithm_type,beam_size,mode_strict,execution_time,approximation_rate,infeasible_rate,mean_load_factor,is_feasible
+0,standard_beam_5,standard,5,True,0.9431607723236084,tensor(54.3657),0,tensor(0.3284),tensor(True)
+0,standard_beam_10,standard,10,True,1.6440701484680176,tensor(57.5792),0,tensor(0.3101),tensor(True)
+0,deterministic_beam_5,deterministic,5,True,0.9057259559631348,tensor(54.3657),0,tensor(0.3284),tensor(True)
+0,deterministic_beam_10,deterministic,10,True,1.6458430290222168,tensor(57.5792),0,tensor(0.3101),tensor(True)
+0,greedy,greedy,1,True,0.31168484687805176,tensor(24.1225),0,tensor(0.7402),tensor(True)

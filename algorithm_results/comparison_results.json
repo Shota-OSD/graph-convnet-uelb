@@ -1,0 +1,196 @@
+{
+  "comparison_name": "BeamSearch Algorithm Performance Test",
+  "timestamp": "2025-08-25 22:46:29",
+  "config": {
+    "comparison_name": "BeamSearch Algorithm Performance Test",
+    "output_dir": "./algorithm_results",
+    "algorithms": [
+      "standard",
+      "deterministic",
+      "greedy"
+    ],
+    "test_cases": [
+      {
+        "name": "small_scale",
+        "description": "Small scale test (5 nodes, 3 commodities)",
+        "batch_size": 1,
+        "num_nodes": 5,
+        "num_commodities": 3,
+        "beam_size": 2,
+        "max_iter": 3,
+        "mode_strict": false,
+        "capacity_range": [
+          1,
+          5
+        ],
+        "demand_range": [
+          1,
+          3
+        ]
+      },
+      {
+        "name": "medium_scale",
+        "description": "Medium scale test (10 nodes, 5 commodities)",
+        "batch_size": 2,
+        "num_nodes": 10,
+        "num_commodities": 5,
+        "beam_size": 3,
+        "max_iter": 5,
+        "mode_strict": false,
+        "capacity_range": [
+          1,
+          8
+        ],
+        "demand_range": [
+          1,
+          5
+        ]
+      },
+      {
+        "name": "large_scale",
+        "description": "Large scale test (15 nodes, 8 commodities)",
+        "batch_size": 1,
+        "num_nodes": 15,
+        "num_commodities": 8,
+        "beam_size": 5,
+        "max_iter": 10,
+        "mode_strict": true,
+        "capacity_range": [
+          2,
+          10
+        ],
+        "demand_range": [
+          1,
+          6
+        ]
+      }
+    ],
+    "data_generation": {
+      "random_seed": 42,
+      "edge_probability": 0.7,
+      "self_loops": false
+    },
+    "output_formats": [
+      "json",
+      "csv",
+      "console"
+    ],
+    "metrics": [
+      "execution_time",
+      "is_feasible",
+      "num_paths_found",
+      "total_path_length",
+      "success_rate"
+    ]
+  },
+  "results": [
+    {
+      "execution_time": 0.010551214218139648,
+      "is_feasible": false,
+      "num_paths_found": 3,
+      "total_path_length": 30,
+      "beam_size": 2,
+      "max_iter": 3,
+      "mode_strict": false,
+      "test_case": "small_scale",
+      "algorithm": "standard",
+      "test_description": "Small scale test (5 nodes, 3 commodities)"
+    },
+    {
+      "execution_time": 0.0009341239929199219,
+      "is_feasible": false,
+      "num_paths_found": 3,
+      "total_path_length": 30,
+      "beam_size": 2,
+      "max_iter": 3,
+      "mode_strict": false,
+      "test_case": "small_scale",
+      "algorithm": "deterministic",
+      "test_description": "Small scale test (5 nodes, 3 commodities)"
+    },
+    {
+      "execution_time": 0.0006477832794189453,
+      "is_feasible": false,
+      "num_paths_found": 3,
+      "total_path_length": 30,
+      "beam_size": 2,
+      "max_iter": 3,
+      "mode_strict": false,
+      "test_case": "small_scale",
+      "algorithm": "greedy",
+      "test_description": "Small scale test (5 nodes, 3 commodities)"
+    },
+    {
+      "execution_time": 0.014279842376708984,
+      "is_feasible": true,
+      "num_paths_found": 10,
+      "total_path_length": 39,
+      "beam_size": 3,
+      "max_iter": 5,
+      "mode_strict": false,
+      "test_case": "medium_scale",
+      "algorithm": "standard",
+      "test_description": "Medium scale test (10 nodes, 5 commodities)"
+    },
+    {
+      "execution_time": 0.014463186264038086,
+      "is_feasible": true,
+      "num_paths_found": 10,
+      "total_path_length": 39,
+      "beam_size": 3,
+      "max_iter": 5,
+      "mode_strict": false,
+      "test_case": "medium_scale",
+      "algorithm": "deterministic",
+      "test_description": "Medium scale test (10 nodes, 5 commodities)"
+    },
+    {
+      "execution_time": 0.006208181381225586,
+      "is_feasible": false,
+      "num_paths_found": 10,
+      "total_path_length": 68,
+      "beam_size": 3,
+      "max_iter": 5,
+      "mode_strict": false,
+      "test_case": "medium_scale",
+      "algorithm": "greedy",
+      "test_description": "Medium scale test (10 nodes, 5 commodities)"
+    },
+    {
+      "execution_time": 0.050863027572631836,
+      "is_feasible": true,
+      "num_paths_found": 8,
+      "total_path_length": 34,
+      "beam_size": 5,
+      "max_iter": 10,
+      "mode_strict": true,
+      "test_case": "large_scale",
+      "algorithm": "standard",
+      "test_description": "Large scale test (15 nodes, 8 commodities)"
+    },
+    {
+      "execution_time": 0.050003767013549805,
+      "is_feasible": true,
+      "num_paths_found": 8,
+      "total_path_length": 34,
+      "beam_size": 5,
+      "max_iter": 10,
+      "mode_strict": true,
+      "test_case": "large_scale",
+      "algorithm": "deterministic",
+      "test_description": "Large scale test (15 nodes, 8 commodities)"
+    },
+    {
+      "execution_time": 0.008976936340332031,
+      "is_feasible": true,
+      "num_paths_found": 8,
+      "total_path_length": 75,
+      "beam_size": 5,
+      "max_iter": 10,
+      "mode_strict": true,
+      "test_case": "large_scale",
+      "algorithm": "greedy",
+      "test_description": "Large scale test (15 nodes, 8 commodities)"
+    }
+  ]
+}

@@ -2,23 +2,23 @@
   "description": "小規模テスト (5ノード, 3コモディティ)",
   "results": {
     "standard": {
-      "execution_time": 0.0007491111755371094,
-      "is_feasible": true,
+      "execution_time": 0.0013260841369628906,
+      "is_feasible": false,
       "num_paths_found": 3,
-      "total_path_length": 7,
+      "total_path_length": 30,
       "beam_size": 2,
       "batch_size": 1
     },
     "deterministic": {
-      "execution_time": 0.000720977783203125,
-      "is_feasible": true,
+      "execution_time": 0.001459360122680664,
+      "is_feasible": false,
       "num_paths_found": 3,
-      "total_path_length": 7,
+      "total_path_length": 30,
       "beam_size": 2,
       "batch_size": 1
     },
     "greedy": {
-      "execution_time": 0.0016269683837890625,
+      "execution_time": 0.0005161762237548828,
       "is_feasible": false,
       "num_paths_found": 3,
       "total_path_length": 30,
