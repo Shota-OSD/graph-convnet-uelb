@@ -1,28 +1,28 @@
 [
   {
     "algorithm": "standard",
-    "execution_time": 0.017004013061523438,
+    "execution_time": 0.016721248626708984,
     "is_feasible": true,
     "num_paths_found": 10,
-    "total_path_length": 35,
+    "total_path_length": 44,
     "beam_size": 3,
     "batch_size": 2
   },
   {
     "algorithm": "deterministic",
-    "execution_time": 0.01736307144165039,
+    "execution_time": 0.017016887664794922,
     "is_feasible": true,
     "num_paths_found": 10,
-    "total_path_length": 35,
+    "total_path_length": 44,
     "beam_size": 3,
     "batch_size": 2
   },
   {
     "algorithm": "greedy",
-    "execution_time": 0.006186962127685547,
+    "execution_time": 0.0053441524505615234,
     "is_feasible": true,
     "num_paths_found": 10,
-    "total_path_length": 62,
+    "total_path_length": 55,
     "beam_size": 3,
     "batch_size": 2
   }

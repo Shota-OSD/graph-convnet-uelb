@@ -1,0 +1,61 @@
+{
+    "comparison_name": "BeamSearch Algorithm Performance Comparison",
+    "output_dir": "./beamsearch_results",
+    
+    "model_config": {
+        "config_path": "configs/load_saved_model.json",
+        "model_path": "./saved_models",
+        "use_latest_model": true
+    },
+    
+    "test_config": {
+        "data_mode": "test",
+        "num_batches": 5,
+        "batch_size": null
+    },
+    
+    "algorithms": [
+        {
+            "name": "standard_beam_5",
+            "algorithm_type": "standard",
+            "beam_size": 5,
+            "mode_strict": true
+        },
+        {
+            "name": "standard_beam_10",
+            "algorithm_type": "standard", 
+            "beam_size": 10,
+            "mode_strict": true
+        },
+        {
+            "name": "deterministic_beam_5",
+            "algorithm_type": "deterministic",
+            "beam_size": 5,
+            "mode_strict": true
+        },
+        {
+            "name": "deterministic_beam_10",
+            "algorithm_type": "deterministic",
+            "beam_size": 10,
+            "mode_strict": true
+        },
+        {
+            "name": "greedy",
+            "algorithm_type": "greedy",
+            "beam_size": 1,
+            "mode_strict": true
+        }
+    ],
+    
+    "output_formats": [
+        "console",
+        "csv"
+    ],
+    
+    "metrics": [
+        "execution_time",
+        "approximation_rate", 
+        "infeasible_rate",
+        "mean_load_factor"
+    ]
+}
