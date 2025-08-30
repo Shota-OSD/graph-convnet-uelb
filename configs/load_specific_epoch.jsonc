@@ -1,0 +1,64 @@
+{
+    // ===== 実験設定 =====
+    "expt_name": "load_specific_epoch",
+    
+    // ===== ハードウェア設定 =====
+    "gpu_id": "0",
+    "use_gpu": true,
+
+    // ===== データファイルパス =====
+    "graph_filepath": "./data/graph.gml",
+    "edge_numbering_filepath": "./data/edge_numbering_file.csv",
+    "train_filepath": "./data/gragh.gml",
+    "val_filepath": "./data/tsp10_val_concorde.txt",
+    "test_filepath": "./data/tsp10_test_concorde.txt",
+
+    // ===== グラフ生成設定 =====
+    "solver_type": "pulp",
+    "graph_model": "random",
+
+    // ===== データセット設定 =====
+    "num_train_data": 100,
+    "num_test_data": 20,
+    "num_val_data": 20,
+    "num_nodes": 40,
+    "num_commodities": 5,
+    "sample_size": 5,
+    "capacity_lower": 1000,
+    "capacity_higher": 10000,
+    "demand_lower": 1,
+    "demand_higher": 500,
+        
+    // ===== モデルアーキテクチャ設定 =====
+    "node_dim": 10,
+    "voc_nodes_in": 30,
+    "voc_nodes_out": 2,
+    "voc_edges_in": 3,
+    "voc_edges_out": 2,
+    "hidden_dim": 64,
+    "num_layers": 10,
+    "mlp_layers": 2,
+    "aggregation": "mean",
+
+    // ===== ビームサーチ設定 =====
+    "beam_size": 10,
+
+    // ===== 学習設定 =====
+    "max_epochs": 5,
+    "val_every": 2,
+    "test_every": 2,
+    "batch_size": 20,
+    "batches_per_epoch": 500,
+    "accumulation_steps": 1,
+    "learning_rate": 0.0005,
+    "decay_rate": 1.5,
+    "dropout_rate": 0.5,
+
+    // ===== モデル保存設定 =====
+    "models_dir": "./saved_models",
+    "save_model": false,
+    "save_every_epoch": false,
+    "load_saved_model": true,
+    "load_model_epoch": 5,
+    "cleanup_old_models": true
+}
