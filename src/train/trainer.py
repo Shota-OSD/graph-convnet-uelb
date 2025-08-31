@@ -127,18 +127,38 @@ class Trainer:
     
     def _get_config_hash(self):
         """設定のハッシュを生成してモデル識別に使用"""
-        config_for_hash = {
-            'hidden_dim': self.config.hidden_dim,
-            'num_layers': self.config.num_layers,
-            'mlp_layers': self.config.mlp_layers,
-            'node_dim': self.config.node_dim,
-            'voc_nodes_in': self.config.voc_nodes_in,
-            'voc_nodes_out': self.config.voc_nodes_out,
-            'voc_edges_in': self.config.voc_edges_in,
-            'voc_edges_out': self.config.voc_edges_out,
-            'aggregation': self.config.aggregation,
-            'dropout_rate': self.config.get('dropout_rate', 0.0),
-        }
+        # すべての設定を含むハッシュ計算
+        config_for_hash = {}
+        
+        # 設定オブジェクトから辞書に変換（Settingsはdictを継承）
+        config_dict = dict(self.config)
+        
+        # ハッシュ計算に使用する設定を選択
+        # モデル構造に影響する設定とデータ関連の設定を含める
+        hash_keys = [
+            # モデル構造関連
+            'hidden_dim', 'num_layers', 'mlp_layers', 'node_dim',
+            'voc_nodes_in', 'voc_nodes_out', 'voc_edges_in', 'voc_edges_out',
+            'aggregation', 'dropout_rate', 'beam_size',
+            
+            # データ関連
+            'num_commodities', 'capacity_lower', 'capacity_higher',
+            'demand_lower', 'demand_higher', 'num_nodes', 'sample_size',
+            
+            # 学習関連
+            'learning_rate', 'batch_size', 'max_epochs', 'decay_rate',
+            
+            # その他の重要な設定
+            'solver_type', 'graph_model', 'expt_name'
+        ]
+        
+        for key in hash_keys:
+            if key in config_dict:
+                value = config_dict[key]
+                # 数値、文字列、ブール値のみを含める
+                if isinstance(value, (int, float, str, bool)) or value is None:
+                    config_for_hash[key] = value
+        
         config_str = json.dumps(config_for_hash, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()[:8]
     
