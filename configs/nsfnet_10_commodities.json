@@ -48,7 +48,7 @@
     "dropout_rate": 0.5,
 
     "models_dir": "./saved_models",
-    "save_model": false,
+    "save_model": true,
     "save_every_epoch": false,
     "load_saved_model": false,
     "cleanup_old_models": true
