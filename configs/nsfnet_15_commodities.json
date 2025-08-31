@@ -35,9 +35,9 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 10,
-    "val_every": 3,
-    "test_every": 3,
+    "max_epochs": 8,
+    "val_every": 4,
+    "test_every": 2,
 
     "batch_size": 20,
     "batches_per_epoch": 500,
