@@ -13,6 +13,7 @@ from src.data_management.dataset_manager import DatasetManager
 from src.train.trainer import Trainer
 from src.train.evaluator import Evaluator
 from src.train.metrics import MetricsLogger, metrics_to_str
+from src.algorithms.rl_trainer import RLTrainer
 
 def main():
     """メイン関数"""
@@ -20,12 +21,64 @@ def main():
     parser = argparse.ArgumentParser(description='Graph Convolutional Network for UELB')
     parser.add_argument('--config', type=str, default='configs/default2.json',
                        help='設定ファイルのパス (default: configs/default2.json)')
+    parser.add_argument('--mode', type=str, default='gcn', choices=['gcn', 'rl'],
+                       help='訓練モード: gcn (GCN訓練) or rl (強化学習) (default: gcn)')
     args = parser.parse_args()
     
     # 設定の初期化
     config_manager = ConfigManager(args.config)
     config = config_manager.get_config()
     dtypeFloat, dtypeLong = config_manager.get_dtypes()
+    
+    # 強化学習モードかGCNモードかで分岐
+    if args.mode == 'rl':
+        # 強化学習モード
+        print("\n" + "="*60)
+        print("REINFORCEMENT LEARNING MODE")
+        print("="*60)
+        
+        # データセット管理（GCNと共通）
+        dataset_manager = DatasetManager(config)
+        if dataset_manager.remake_dataset():
+            dataset_manager.create_all_datasets()
+        
+        rl_trainer = RLTrainer(dict(config))
+        
+        # 学習の実行
+        rl_trainer.train()
+        
+        # テストの実行
+        test_episodes = config.get('test_episodes', 100)
+        rl_trainer.test(test_episodes)
+        
+        # 設定情報を辞書形式で準備（GCNと同じ形式）
+        safe_config_info = {
+            'config_file': args.config,
+            'mode': 'reinforcement_learning',
+            'episodes': config.get('episodes', 100),
+            'test_episodes': test_episodes,
+            'num_train_data': config.get('num_train_data', 100),
+            'num_test_data': config.get('num_test_data', 20),
+            'K': config.get('K', 10),
+            'n_action': config.get('n_action', 20),
+            'learning_rate': config.get('learning_rate', 0.0005),
+            'epsilon': config.get('epsilon', 0.8),
+            'gamma': config.get('gamma', 0.85)
+        }
+        
+        # 結果の出力とログ保存（GCNと同じスタイル）
+        rl_trainer.metrics_logger.print_summary(safe_config_info)
+        rl_trainer.metrics_logger.save_results(safe_config_info)
+        
+        print("\n" + "="*60)
+        print("REINFORCEMENT LEARNING COMPLETED")
+        print("="*60)
+        return
+    
+    # GCNモード（従来の処理）
+    print("\n" + "="*60)
+    print("GRAPH CONVOLUTIONAL NETWORK MODE")
+    print("="*60)
     
     # データセット管理
     dataset_manager = DatasetManager(config)

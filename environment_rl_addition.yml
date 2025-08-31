@@ -1,0 +1,11 @@
+# Additional conda dependencies for RL functionality
+# Add these to your existing environment
+
+name: gcn-uelb-env  # Use existing environment
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - gym>=0.26.0
+  - pip:
+    - gymnasium>=0.26.0

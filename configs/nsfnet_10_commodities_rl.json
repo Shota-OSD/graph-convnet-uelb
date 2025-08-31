@@ -1,64 +1,74 @@
 {
-    // ===== 実験設定 =====
-    "expt_name": "load_specific_epoch",
-    
-    // ===== ハードウェア設定 =====
+    "expt_name": "nsfnet_10_commodities_rl",
     "gpu_id": "0",
     "use_gpu": true,
 
-    // ===== データファイルパス =====
     "graph_filepath": "./data/graph.gml",
     "edge_numbering_filepath": "./data/edge_numbering_file.csv",
     "train_filepath": "./data/gragh.gml",
     "val_filepath": "./data/tsp10_val_concorde.txt",
     "test_filepath": "./data/tsp10_test_concorde.txt",
 
-    // ===== グラフ生成設定 =====
     "solver_type": "pulp",
-    "graph_model": "random",
+    "graph_model": "nsfnet",
 
-    // ===== データセット設定 =====
     "num_train_data": 100,
     "num_test_data": 20,
     "num_val_data": 20,
-    "num_nodes": 40,
-    "num_commodities": 5,
+    "num_nodes": 14,
+    "num_commodities": 10,
     "sample_size": 5,
     "capacity_lower": 1000,
-    "capacity_higher": 10000,
-    "demand_lower": 1,
-    "demand_higher": 500,
+    "capacity_higher": 5000,
+    "demand_lower": 10,
+    "demand_higher": 1000,
         
-    // ===== モデルアーキテクチャ設定 =====
     "node_dim": 10,
     "voc_nodes_in": 30,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
     "voc_edges_out": 2,
+
+    "beam_size": 10,
     "hidden_dim": 64,
     "num_layers": 10,
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    // ===== ビームサーチ設定 =====
-    "beam_size": 10,
+    "max_epochs": 10,
+    "val_every": 3,
+    "test_every": 3,
 
-    // ===== 学習設定 =====
-    "max_epochs": 5,
-    "val_every": 2,
-    "test_every": 2,
     "batch_size": 20,
     "batches_per_epoch": 500,
     "accumulation_steps": 1,
+
     "learning_rate": 0.0005,
     "decay_rate": 1.5,
     "dropout_rate": 0.5,
 
-    // ===== モデル保存設定 =====
+    "_comment": "=== Reinforcement Learning Parameters ===",
+    "K": 10,
+    "n_action": 20,
+    "max_step": 20,
+    "initial_state": 1,
+    "reward_state": 2,
+    "count_limit": 100000,
+    "obs_low": -20,
+    "obs_high": 20,
+    "epsilon": 0.8,
+    "epsilon_decay": 0.995,
+    "gamma": 0.85,
+    "episodes": 1000,
+    "test_episodes": 20,
+    "hidden_dims": [64, 64, 64],
+    
+    "_comment_model_saving": "=== Model Saving Parameters ===",
     "models_dir": "./saved_models",
-    "save_model": false,
-    "save_every_epoch": false,
-    "load_saved_model": true,
-    "load_model_epoch": 5,
+    "save_model": true,
+    "save_every_episode": false,
+    "save_every_n_episodes": 100,
+    "load_saved_model": false,
+    "load_model_epoch": null,
     "cleanup_old_models": true
 }
