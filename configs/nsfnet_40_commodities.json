@@ -1,5 +1,5 @@
 {
-    "expt_name": "nsfnet_10_commodities",
+    "expt_name": "nsfnet_40_commodities",
     "gpu_id": "0",
     "use_gpu": true,
 
@@ -16,10 +16,10 @@
     "num_test_data": 320,
     "num_val_data": 320,
     "num_nodes": 14,
-    "num_commodities": 10,
+    "num_commodities": 40,
     "sample_size": 5,
-    "capacity_lower": 1000,
-    "capacity_higher": 5000,
+    "capacity_lower": 4000,
+    "capacity_higher": 20000,
     "demand_lower": 10,
     "demand_higher": 1000,
         
