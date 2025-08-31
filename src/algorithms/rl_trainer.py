@@ -133,16 +133,37 @@ class RLTrainer:
     
     def _get_config_hash(self) -> str:
         """設定のハッシュを生成してモデル識別に使用"""
-        config_for_hash = {
-            'hidden_dims': self.config.get('hidden_dims', [32, 32, 32]),
-            'learning_rate': self.config.get('learning_rate', 0.0001),
-            'gamma': self.config.get('gamma', 0.85),
-            'epsilon': self.config.get('epsilon', 0.8),
-            'epsilon_decay': self.config.get('epsilon_decay', 0.995),
-            'n_action': self.config.get('n_action', 20),
-            'obs_low': self.config.get('obs_low', -20),
-            'obs_high': self.config.get('obs_high', 20),
-        }
+        # すべての設定を含むハッシュ計算
+        config_for_hash = {}
+        
+        # 設定オブジェクトから辞書に変換（Settingsはdictを継承）
+        config_dict = dict(self.config)
+        
+        # ハッシュ計算に使用する設定を選択
+        # モデル構造に影響する設定とデータ関連の設定を含める
+        hash_keys = [
+            # モデル構造関連
+            'hidden_dims', 'learning_rate', 'gamma', 'epsilon', 'epsilon_decay',
+            'n_action', 'obs_low', 'obs_high', 'K', 'max_step',
+            
+            # データ関連
+            'num_commodities', 'capacity_lower', 'capacity_higher',
+            'demand_lower', 'demand_higher', 'num_nodes', 'sample_size',
+            
+            # 学習関連
+            'batch_size', 'max_epochs', 'episodes', 'test_episodes',
+            
+            # その他の重要な設定
+            'solver_type', 'graph_model', 'expt_name'
+        ]
+        
+        for key in hash_keys:
+            if key in config_dict:
+                value = config_dict[key]
+                # 数値、文字列、ブール値、リストのみを含める
+                if isinstance(value, (int, float, str, bool, list)) or value is None:
+                    config_for_hash[key] = value
+        
         config_str = json.dumps(config_for_hash, sort_keys=True)
         return hashlib.md5(config_str.encode()).hexdigest()[:8]
     
