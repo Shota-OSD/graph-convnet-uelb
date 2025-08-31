@@ -34,9 +34,9 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 10,
-    "val_every": 3,
-    "test_every": 3,
+    "max_epochs": 12,
+    "val_every": 4,
+    "test_every": 2,
 
     "batch_size": 20,
     "batches_per_epoch": 500,
@@ -48,7 +48,7 @@
 
     "models_dir": "./saved_models",
     "save_model": true,
-    "save_every_epoch": false,
+    "save_every_epoch": 2,
     "load_saved_model": false,
     "cleanup_old_models": true
 }
