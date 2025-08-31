@@ -1,0 +1,12 @@
+# Additional dependencies for Reinforcement Learning functionality
+# These can be added to the existing environment without conflicts
+
+gymnasium>=0.26.0,<1.0
+
+# Already included in current environment (no action needed):
+# numpy>=1.21,<1.24  ✓
+# networkx>=2.6,<2.8  ✓
+# matplotlib>=3.4,<3.6  ✓
+# torch>=1.9,<3.0  ✓
+# mip==1.15.0  ✓
+# pulp>=2.6,<2.8  ✓
