@@ -12,9 +12,9 @@
     "solver_type": "pulp",
     "graph_model": "nsfnet",
 
-    "num_train_data": 100,
-    "num_test_data": 20,
-    "num_val_data": 20,
+    "num_train_data": 3200,
+    "num_test_data": 320,
+    "num_val_data": 320,
     "num_nodes": 14,
     "num_commodities": 10,
     "sample_size": 5,
