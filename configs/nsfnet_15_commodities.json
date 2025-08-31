@@ -18,8 +18,8 @@
     "num_nodes": 14,
     "num_commodities": 15,
     "sample_size": 5,
-    "capacity_lower": 1500,
-    "capacity_higher": 7500,
+    "capacity_lower": 3000,
+    "capacity_higher": 30000,
     "demand_lower": 5,
     "demand_higher": 500,
         
