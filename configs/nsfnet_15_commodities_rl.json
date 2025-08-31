@@ -24,7 +24,6 @@
     "demand_higher": 500,
         
     "node_dim": 10,
-    "voc_nodes_in": 30,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
     "voc_edges_out": 2,
