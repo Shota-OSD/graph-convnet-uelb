@@ -1,0 +1,44 @@
+==================================================
+TRAINING RESULTS
+==================================================
+Timestamp: 20250714_222255
+
+FINAL METRICS:
+  Final Train Loss: 0.4401
+  Final Train Edge Error: 92.08%
+  Final Val Approximation Rate: 65.18%
+  Best Val Approximation Rate: 79.01%
+  Final Test Approximation Rate: 65.93%
+  Best Test Approximation Rate: 77.93%
+
+TIME METRICS:
+  Total Training Time: 1982.80s
+  Total Test Time: 217.71s
+  Average Training Time per Epoch: 132.19s
+  Average Test Time per Epoch: 36.29s
+  Training Time per Data: 0.0413s
+  Test Time per Data: 0.3629s
+  Total Training Samples: 48000
+  Total Test Samples: 600
+
+==================================================
+DETAILED RESULTS
+==================================================
+Epoch  Train Loss   Edge Error   Train Time   Val Approx   Test Approx 
+------------------------------------------------------------------------
+1      250.1096     99.07        132.85       58.60%       60.32%      
+2      111.6264     95.93        132.35       58.60%       60.32%      
+3      70.9938      92.55        132.17       79.01%       77.93%      
+4      43.0696      92.01        132.08       66.63%       68.26%      
+5      25.9896      91.96        132.10       66.16%       66.26%      
+6      15.8254      91.99        132.20       65.18%       65.93%      
+7      8.3026       92.00        132.20       N/A          N/A         
+8      3.7455       92.05        132.06       N/A          N/A         
+9      1.2697       92.11        132.03       N/A          N/A         
+10     0.8713       92.16        132.16       N/A          N/A         
+11     0.5386       92.12        132.03       N/A          N/A         
+12     0.5637       92.14        132.10       N/A          N/A         
+13     0.6447       92.13        132.13       N/A          N/A         
+14     0.4421       92.07        132.28       N/A          N/A         
+15     0.4401       92.08        132.08       N/A          N/A         
+------------------------------------------------------------------------

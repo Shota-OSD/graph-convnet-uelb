@@ -1,0 +1,41 @@
+==================================================
+TRAINING/EVALUATION RESULTS
+==================================================
+Timestamp: 20250825_192951
+Mode: training
+Config File: configs/cpu-train-3200.json
+Model Hash: 49a6a2e9
+
+FINAL METRICS:
+  Final Train Loss: 1.4577
+  Final Train Edge Error: 92.10%
+  Final Val Approximation Rate: 66.15%
+  Best Val Approximation Rate: 78.72%
+  Final Test Approximation Rate: 66.26%
+  Best Test Approximation Rate: 77.93%
+
+TIME METRICS:
+  Total Training Time: 3694.56s
+  Total Test Time: 54.93s
+  Average Training Time per Epoch: 410.51s
+  Average Test Time per Epoch: 13.73s
+  Training Time per Data: 0.1283s
+  Test Time per Data: 0.1373s
+  Total Training Samples: 28800
+  Total Test Samples: 400
+
+==================================================
+DETAILED RESULTS
+==================================================
+Epoch  Train Loss   Edge Error   Train Time   Val Approx   Test Approx 
+------------------------------------------------------------------------
+1      250.9904     99.08        414.85       58.60%       60.32%      
+2      111.3010     95.86        424.67       58.60%       60.32%      
+3      71.8442      92.49        416.34       78.72%       77.93%      
+4      43.2137      92.05        407.31       66.15%       66.26%      
+5      25.9454      91.96        409.88       N/A          N/A         
+6      16.0459      91.97        406.93       N/A          N/A         
+7      8.5585       91.98        406.59       N/A          N/A         
+8      4.0397       92.04        398.82       N/A          N/A         
+9      1.4577       92.10        409.16       N/A          N/A         
+------------------------------------------------------------------------
