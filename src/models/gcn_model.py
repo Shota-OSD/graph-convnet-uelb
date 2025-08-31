@@ -20,7 +20,7 @@ class ResidualGatedGCNModel(nn.Module):
         # Define net parameters
         self.num_nodes = config.num_nodes
         self.num_commodities = config.num_commodities
-        self.voc_nodes_in = config['voc_nodes_in']
+        self.voc_nodes_in = config.num_commodities * 3
         self.voc_nodes_out = config['num_nodes']  # config['voc_nodes_out']
         self.voc_edges_in = config['voc_edges_in']
         self.voc_edges_out = config['voc_edges_out']

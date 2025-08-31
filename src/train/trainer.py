@@ -138,7 +138,7 @@ class Trainer:
         hash_keys = [
             # モデル構造関連
             'hidden_dim', 'num_layers', 'mlp_layers', 'node_dim',
-            'voc_nodes_in', 'voc_nodes_out', 'voc_edges_in', 'voc_edges_out',
+            'voc_nodes_out', 'voc_edges_in', 'voc_edges_out',
             'aggregation', 'dropout_rate', 'beam_size',
             
             # データ関連
@@ -242,7 +242,7 @@ class Trainer:
                 'num_layers': self.config.num_layers,
                 'mlp_layers': self.config.mlp_layers,
                 'node_dim': self.config.node_dim,
-                'voc_nodes_in': self.config.voc_nodes_in,
+                'voc_nodes_in': self.config.num_commodities * 3,
                 'voc_nodes_out': self.config.voc_nodes_out,
                 'voc_edges_in': self.config.voc_edges_in,
                 'voc_edges_out': self.config.voc_edges_out,
