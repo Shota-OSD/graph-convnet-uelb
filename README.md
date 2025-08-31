@@ -31,23 +31,44 @@ conda list
 設定ファイル（例: `configs/default2.json`）を編集して、学習条件やデータパスを調整します。
 
 ## 使い方
-### 学習・評価パイプラインの実行
 
-以下のコマンドで、グラフデータの生成、モデルの学習、検証、テストまで一括で実行できます。
+### 1. データ生成
+
+まず、学習・評価用のデータセットを生成します：
 
 ```sh
-python main.py
+# デフォルト設定でデータ生成
+python generate_data.py
+
+# 特定の設定ファイルでデータ生成
+python generate_data.py --config configs/nsfnet_15_commodities.json
+
+# 特定のモードのみ生成
+python generate_data.py --config configs/nsfnet_15_commodities.json --modes train val
+
+# 確認なしで強制実行
+python generate_data.py --config configs/nsfnet_15_commodities.json --force
+
+# 既存データの削除のみ
+python generate_data.py --clean-only
 ```
 
-- 実行すると、`configs/default2.json`の設定に従い、
-    - データセットの前処理
-    - モデルの構築
-    - 学習ループ
-    - 検証・テスト
-  が自動で行われます。
-- ログやモデルの重みは`logs/`ディレクトリに保存されます。
+### 2. 学習・評価の実行
 
-### モデルの保存・再利用機能
+データ生成後、モデルの学習と評価を実行します：
+
+```sh
+# GCNモード（デフォルト）
+python main.py --config configs/nsfnet_15_commodities.json
+
+# 強化学習モード
+python main.py --config configs/nsfnet_15_commodities_rl.json --mode rl
+```
+
+- データが存在しない場合は、適切なエラーメッセージとともにデータ生成コマンドが表示されます
+- ログやモデルの重みは`saved_models/`ディレクトリに保存されます
+
+### 3. モデルの保存・再利用機能
 
 #### 新規トレーニング（モデル保存あり）
 ```sh
@@ -95,12 +116,23 @@ python main.py --config configs/load_specific_epoch.json
 jupyter notebook main.ipynb
 ```
 
-### 設定のカスタマイズ
-- `configs/default2.json`を編集することで、エポック数やバッチサイズ、学習率などを変更できます。
+### 4. 設定のカスタマイズ
+- 各設定ファイルを編集することで、エポック数やバッチサイズ、学習率などを変更できます。
 - GPUの指定は`gpu_id`で行います。
 
 #### 利用可能な設定ファイル
 
+**Commodities別設定:**
+- `configs/nsfnet_5_commodities.json`: 5コモディティ設定
+- `configs/nsfnet_10_commodities.json`: 10コモディティ設定
+- `configs/nsfnet_15_commodities.json`: 15コモディティ設定
+- `configs/nsfnet_20_commodities.json`: 20コモディティ設定
+- `configs/nsfnet_25_commodities.json`: 25コモディティ設定
+
+**強化学習設定:**
+- `configs/nsfnet_*_commodities_rl.json`: 各種コモディティ数対応の強化学習設定
+
+**その他:**
 - `configs/default2.json`: 基本設定（モデル保存なし）
 - `configs/with_model_saving.json`: モデル保存機能を有効化
 - `configs/load_saved_model.json`: 保存済みモデルの最新版を読み込み
@@ -119,10 +151,25 @@ conda env remove -n gcn-uelb-env
 conda env update -f environment.yml
 ```
 
+### 実行例
+
+```sh
+# 1. データ生成
+python generate_data.py --config configs/nsfnet_15_commodities.json
+
+# 2. GCNトレーニング
+python main.py --config configs/nsfnet_15_commodities.json --mode gcn
+
+# 3. 強化学習トレーニング
+python main.py --config configs/nsfnet_15_commodities_rl.json --mode rl
+```
+
 ### 参考
-- コードの詳細な流れや関数の説明は`main.py`および`main.ipynb`を参照してください。
-- データセットやモデルの詳細は`src/`ディレクトリ内の各ファイルを参照してください。
-- プロジェクト構造の詳細は`README_REFACTORED.md`を参照してください。
+- **データ生成**: `generate_data.py` - データセット生成専用スクリプト
+- **メインスクリプト**: `main.py` - 学習・評価パイプライン
+- **コード詳細**: `src/`ディレクトリ内の各ファイル
+- **プロジェクト構造**: `README_REFACTORED.md`
+- **Notebook版**: `main.ipynb`
 
 ## ライセンス
 本リポジトリのコードは研究目的での利用を想定しています。

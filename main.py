@@ -5,15 +5,27 @@ Refactored main script with modular architecture
 """
 
 import sys
+import os
 import argparse
 from fastprogress import master_bar
 
 from src.config.config_manager import ConfigManager
-from src.data_management.dataset_manager import DatasetManager
 from src.train.trainer import Trainer
 from src.train.evaluator import Evaluator
 from src.train.metrics import MetricsLogger, metrics_to_str
 from src.algorithms.rl_trainer import RLTrainer
+
+def _check_data_exists():
+    """データディレクトリの存在を確認"""
+    data_dirs = ['./data/train_data', './data/val_data', './data/test_data']
+    for data_dir in data_dirs:
+        if not os.path.exists(data_dir):
+            return False
+        # 各ディレクトリに.pklファイルが存在するかチェック
+        pkl_files = [f for f in os.listdir(data_dir) if f.endswith('.pkl')]
+        if len(pkl_files) == 0:
+            return False
+    return True
 
 def main():
     """メイン関数"""
@@ -37,10 +49,11 @@ def main():
         print("REINFORCEMENT LEARNING MODE")
         print("="*60)
         
-        # データセット管理（GCNと共通）
-        dataset_manager = DatasetManager(config)
-        if dataset_manager.remake_dataset():
-            dataset_manager.create_all_datasets()
+        # データの存在確認
+        if not _check_data_exists():
+            print("データが存在しません。以下のコマンドでデータを生成してください:")
+            print(f"python generate_data.py --config {args.config}")
+            sys.exit(1)
         
         rl_trainer = RLTrainer(dict(config))
         
@@ -80,10 +93,11 @@ def main():
     print("GRAPH CONVOLUTIONAL NETWORK MODE")
     print("="*60)
     
-    # データセット管理
-    dataset_manager = DatasetManager(config)
-    if dataset_manager.remake_dataset():
-        dataset_manager.create_all_datasets()
+    # データの存在確認
+    if not _check_data_exists():
+        print("データが存在しません。以下のコマンドでデータを生成してください:")
+        print(f"python generate_data.py --config {args.config}")
+        sys.exit(1)
     
     # トレーナーとエバリュエーターの初期化
     trainer = Trainer(config, dtypeFloat, dtypeLong)
