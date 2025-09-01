@@ -1,0 +1,40 @@
+==================================================
+TRAINING/EVALUATION RESULTS
+==================================================
+Timestamp: 20250901_202629
+Mode: training
+Config File: configs/nsfnet_10_commodities.json
+Model Hash: ee82c8a5
+
+FINAL METRICS:
+  Final Train Loss: 1.1203
+  Final Train Edge Error: 93.10%
+  Final Val Approximation Rate: 58.96%
+  Best Val Approximation Rate: 62.32%
+  Final Test Approximation Rate: 58.11%
+  Best Test Approximation Rate: 62.99%
+
+TIME METRICS:
+  Total Training Time: 430.69s
+  Total Test Time: 82.43s
+  Average Training Time per Epoch: 53.84s
+  Average Test Time per Epoch: 16.49s
+  Training Time per Data: 0.0168s
+  Test Time per Data: 0.0515s
+  Total Training Samples: 25600
+  Total Test Samples: 1600
+
+==================================================
+DETAILED RESULTS
+==================================================
+Epoch  Train Loss   Edge Error   Train Time   Val Approx   Test Approx 
+------------------------------------------------------------------------
+1      256.8020     97.76        52.71        53.54%       52.40%      
+2      96.9796      95.79        52.79        62.32%       58.22%      
+3      30.6962      93.27        53.36        58.96%       60.42%      
+4      3.8952       93.13        54.31        N/A          62.99%      
+5      2.0002       93.08        54.41        N/A          58.11%      
+6      1.1872       93.09        53.82        N/A          N/A         
+7      1.2066       93.09        54.63        N/A          N/A         
+8      1.1203       93.10        54.65        N/A          N/A         
+------------------------------------------------------------------------

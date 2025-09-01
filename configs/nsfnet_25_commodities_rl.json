@@ -1,5 +1,5 @@
 {
-    "expt_name": "nsfnet_25_commodities",
+    "expt_name": "nsfnet_25_commodities_rl",
     "gpu_id": "0",
     "use_gpu": true,
 
@@ -34,7 +34,7 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 8,
+    "max_epochs": 10,
     "val_every": 3,
     "test_every": 3,
 
@@ -46,9 +46,28 @@
     "decay_rate": 1.5,
     "dropout_rate": 0.5,
 
+    "_comment": "=== Reinforcement Learning Parameters ===",
+    "K": 10,
+    "n_action": 20,
+    "max_step": 20,
+    "initial_state": 1,
+    "reward_state": 2,
+    "count_limit": 100000,
+    "obs_low": -20,
+    "obs_high": 20,
+    "epsilon": 0.8,
+    "epsilon_decay": 0.995,
+    "gamma": 0.85,
+    "episodes": 3200,
+    "test_episodes": 320,
+    "hidden_dims": [64, 64, 64],
+    
+    "_comment_model_saving": "=== Model Saving Parameters ===",
     "models_dir": "./saved_models",
     "save_model": true,
-    "save_every_epoch": false,
+    "save_every_episode": false,
+    "save_every_n_episodes": 1000000,
     "load_saved_model": false,
+    "load_model_epoch": null,
     "cleanup_old_models": true
 }
