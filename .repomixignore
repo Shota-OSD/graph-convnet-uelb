@@ -1,11 +1,13 @@
 **/data/
+**/logs/
 **/results/
 configs/events.out.tfevents.*
 **/__pycache__/
 **/*.pyc
-repomix-output.xml
 
 # macOS 特有のメタファイルを無視
 __MACOSX/
 *.DS_Store
 ._*
+main.ipynb
+**/saved_models/
