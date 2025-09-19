@@ -1,0 +1,97 @@
+{
+  "description": "Hyperparameter tuning configuration for GCN model",
+
+  "grid_search": {
+    "description": "Grid search configuration with predefined parameter combinations",
+    "parameters": {
+      "learning_rate": [0.001, 0.01, 0.0001],
+      "hidden_dim": [32, 64, 128],
+      "num_layers": [5, 10, 15],
+      "dropout_rate": [0.2, 0.3, 0.4]
+    }
+  },
+
+  "random_search": {
+    "description": "Random search configuration with parameter ranges",
+    "n_trials": 20,
+    "parameters": {
+      "learning_rate": {
+        "type": "float",
+        "min": 0.0001,
+        "max": 0.01,
+        "log_scale": true
+      },
+      "hidden_dim": {
+        "type": "choice",
+        "choices": [32, 64, 96, 128, 160, 192, 256]
+      },
+      "num_layers": {
+        "type": "int",
+        "min": 3,
+        "max": 20
+      },
+      "dropout_rate": {
+        "type": "float",
+        "min": 0.1,
+        "max": 0.5,
+        "log_scale": false
+      },
+      "batch_size": {
+        "type": "choice",
+        "choices": [20, 32, 40, 64, 80]
+      },
+      "beam_size": {
+        "type": "choice",
+        "choices": [5, 10, 15, 20, 25]
+      },
+      "decay_rate": {
+        "type": "float",
+        "min": 1.0,
+        "max": 2.0,
+        "log_scale": false
+      },
+      "mlp_layers": {
+        "type": "choice",
+        "choices": [1, 2, 3]
+      },
+      "aggregation": {
+        "type": "choice",
+        "choices": ["mean", "sum"]
+      }
+    }
+  },
+
+  "evaluation": {
+    "primary_metric": "test_approximation_rate",
+    "secondary_metrics": [
+      "val_approximation_rate",
+      "test_infeasible_rate",
+      "val_infeasible_rate"
+    ],
+    "optimization_direction": "maximize"
+  },
+
+  "resource_constraints": {
+    "max_epochs_per_trial": 50,
+    "timeout_per_trial_minutes": 60,
+    "max_memory_gb": 8
+  },
+
+  "priority_parameters": {
+    "high_impact": [
+      "learning_rate",
+      "hidden_dim",
+      "num_layers"
+    ],
+    "medium_impact": [
+      "batch_size",
+      "dropout_rate",
+      "beam_size"
+    ],
+    "low_impact": [
+      "decay_rate",
+      "mlp_layers",
+      "aggregation"
+    ]
+  }
+}
