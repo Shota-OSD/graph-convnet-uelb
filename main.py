@@ -117,7 +117,7 @@ def main():
     # load_saved_modelがtrueの場合は評価のみ実行
     if config.get('load_saved_model', False):
         # 評価のみ実行
-        val_result, test_result = trainer.evaluate_only(evaluator, metrics_logger)
+        val_result, test_result = evaluator.evaluate_saved_model(trainer, metrics_logger)
 
         # 設定情報を辞書形式で準備（評価モード用）
         safe_config_info = {
