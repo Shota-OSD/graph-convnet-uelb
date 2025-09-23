@@ -82,8 +82,8 @@ class HyperparameterTuner:
             evaluator = Evaluator(config, dtypeFloat, dtypeLong)
             metrics_logger = MetricsLogger(self.results_dir)
 
-            # 訓練実行（詳細出力を無効にして高速化）
-            best_net = trainer.train(evaluator, metrics_logger, verbose=False)
+            # 訓練実行
+            best_net = trainer.train(evaluator, metrics_logger)
 
             # 最終評価
             from fastprogress import master_bar
