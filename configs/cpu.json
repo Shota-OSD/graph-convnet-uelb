@@ -40,7 +40,6 @@
     "test_every": 3,
 
     "batch_size": 20,
-    "batches_per_epoch": 500,
     "accumulation_steps": 1,
 
     "learning_rate": 0.0005,

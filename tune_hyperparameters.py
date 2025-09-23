@@ -35,8 +35,6 @@ def main():
     # その他
     parser.add_argument('--seed', type=int, default=42,
                        help='ランダムシード (default: 42)')
-    parser.add_argument('--verbose', action='store_true',
-                       help='詳細な出力を表示')
 
     args = parser.parse_args()
 
