@@ -59,7 +59,6 @@
 - `val_every`: 検証実行間隔（エポック）
 - `test_every`: テスト実行間隔（エポック）
 - `batch_size`: バッチサイズ
-- `batches_per_epoch`: エポックあたりのバッチ数
 - `accumulation_steps`: 勾配蓄積ステップ数
 - `learning_rate`: 学習率
 - `decay_rate`: 減衰率

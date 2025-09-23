@@ -40,7 +40,7 @@ python tune_hyperparameters.py --search random
 python tune_hyperparameters.py --search random --trials 50
 
 # 詳細出力
-python tune_hyperparameters.py --search random --trials 30 --verbose
+python tune_hyperparameters.py --search random --trials 30
 ```
 
 ## チューニング設定のカスタマイズ

@@ -82,8 +82,8 @@ class HyperparameterTuner:
             evaluator = Evaluator(config, dtypeFloat, dtypeLong)
             metrics_logger = MetricsLogger(self.results_dir)
 
-            # 訓練実行（詳細出力を無効にして高速化）
-            best_net = trainer.train(evaluator, metrics_logger, verbose=False)
+            # 訓練実行
+            best_net = trainer.train(evaluator, metrics_logger)
 
             # 最終評価
             from fastprogress import master_bar
@@ -103,16 +103,16 @@ class HyperparameterTuner:
             result = {
                 'trial': self.current_trial,
                 'params': params.copy(),
-                'test_approximation_rate': test_approximation_rate,
-                'val_approximation_rate': val_approximation_rate,
-                'test_infeasible_rate': test_infeasible_rate,
-                'val_infeasible_rate': val_infeasible_rate,
-                'test_mean_load_factor': test_mean_load_factor,
-                'val_mean_load_factor': val_mean_load_factor,
-                'test_loss': test_loss,
-                'val_loss': val_loss,
-                'test_time': test_time,
-                'val_time': val_time,
+                'test_approximation_rate': test_approximation_rate.item(),
+                'val_approximation_rate': val_approximation_rate.item(),
+                'test_infeasible_rate': test_infeasible_rate.item(),
+                'val_infeasible_rate': val_infeasible_rate.item(),
+                'test_mean_load_factor': test_mean_load_factor.item(),
+                'val_mean_load_factor': val_mean_load_factor.item(),
+                'test_loss': test_loss.item(),
+                'val_loss': val_loss.item(),
+                'test_time': test_time.item(),
+                'val_time': val_time.item(),
                 'timestamp': datetime.now().isoformat()
             }
 

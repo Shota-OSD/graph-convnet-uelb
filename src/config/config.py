@@ -35,7 +35,6 @@ class Settings(dict):
         "test_every": Interval (in epochs) at which testing is performed
         
         "batch_size": Batch size
-        "batches_per_epoch": Batches per epoch (-1 for using full training set)
         "accumulation_steps": Number of steps for gradient accumulation (DO NOT USE: BUGGY)
         
         "learning_rate": Initial learning rate

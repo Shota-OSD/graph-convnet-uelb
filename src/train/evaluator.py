@@ -21,8 +21,8 @@ class Evaluator:
         net.eval()
         num_data = getattr(self.config, f'num_{mode}_data')
         batch_size = self.config.batch_size
-        batches_per_epoch = self.config.batches_per_epoch
         dataset = DatasetReader(num_data, batch_size, mode)
+        batches_per_epoch = dataset.max_iter
         dataset = iter(dataset)
         edge_cw = None
         running_loss = 0.0
@@ -100,48 +100,42 @@ class Evaluator:
         return (time.time()-start_test, loss, epoch_mean_maximum_load_factor,
                 mean_gt_load_factor, approximation_rate, infeasible_rate)
 
-    def evaluate_saved_model(self, trainer, metrics_logger, verbose=True):
+    def evaluate_saved_model(self, trainer, metrics_logger):
         """保存済みモデルの評価のみを実行
 
         Args:
             trainer: トレーナーオブジェクト（保存済みモデルを持つ）
             metrics_logger: メトリクス記録器
-            verbose: 詳細な出力を行うかどうか
 
         Returns:
             tuple: (val_result, test_result) 各結果は(time, loss, mean_load_factor, gt_load_factor, approximation_rate, infeasible_rate)
         """
         from ..train.metrics import metrics_to_str
 
-        if verbose:
-            print("\n" + "="*60)
-            print("MODEL EVALUATION MODE")
-            print("="*60)
-            print("Loaded saved model - Skipping training, running evaluation only\n")
+        print("\n" + "="*60)
+        print("MODEL EVALUATION MODE")
+        print("="*60)
+        print("Loaded saved model - Skipping training, running evaluation only\n")
 
         learning_rate = self.config.learning_rate
 
         # 検証の実行
-        if verbose:
-            print("Running validation...")
+        print("Running validation...")
         val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = self.evaluate(
             trainer.get_model(), None, mode='val'
         )
         metrics_logger.log_val_metrics(val_approximation_rate, val_time)
 
-        if verbose:
-            print('v: ' + metrics_to_str(0, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
+        print('v: ' + metrics_to_str(0, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
 
         # テストの実行
-        if verbose:
-            print("Running test...")
+        print("Running test...")
         test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = self.evaluate(
             trainer.get_model(), None, mode='test'
         )
         metrics_logger.log_test_metrics(test_approximation_rate, test_time)
 
-        if verbose:
-            print('T: ' + metrics_to_str(0, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
+        print('T: ' + metrics_to_str(0, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
 
         val_result = (val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate)
         test_result = (test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate)
