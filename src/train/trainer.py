@@ -41,9 +41,11 @@ class Trainer:
             print("Model using CPU")
             
         nb_param = sum(np.prod(list(param.data.size())) for param in net.parameters())
-        print('Number of parameters:', nb_param)
         optimizer = torch.optim.Adam(net.parameters(), lr=self.config.learning_rate)
-        print(optimizer)
+        
+        # モデル情報の出力をコメントアウト
+        # print('Number of parameters:', nb_param)
+        # print(optimizer)
         torch.autograd.set_detect_anomaly(True)
         return net, optimizer
     
