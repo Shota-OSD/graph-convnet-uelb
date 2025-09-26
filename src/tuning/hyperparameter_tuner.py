@@ -99,20 +99,29 @@ class HyperparameterTuner:
                 best_net, master_bar_obj, mode='val'
             )
 
-            # 結果をまとめる
+            # 結果をまとめる（Tensorオブジェクトをスカラー値に変換）
+            def convert_to_scalar(value):
+                """Tensorオブジェクトをスカラー値に変換"""
+                if hasattr(value, 'item'):
+                    return value.item()
+                elif hasattr(value, 'cpu'):
+                    return value.cpu().item()
+                else:
+                    return float(value)
+            
             result = {
                 'trial': self.current_trial,
                 'params': params.copy(),
-                'test_approximation_rate': test_approximation_rate,
-                'val_approximation_rate': val_approximation_rate,
-                'test_infeasible_rate': test_infeasible_rate,
-                'val_infeasible_rate': val_infeasible_rate,
-                'test_mean_load_factor': test_mean_load_factor,
-                'val_mean_load_factor': val_mean_load_factor,
-                'test_loss': test_loss,
-                'val_loss': val_loss,
-                'test_time': test_time,
-                'val_time': val_time,
+                'test_approximation_rate': convert_to_scalar(test_approximation_rate),
+                'val_approximation_rate': convert_to_scalar(val_approximation_rate),
+                'test_infeasible_rate': convert_to_scalar(test_infeasible_rate),
+                'val_infeasible_rate': convert_to_scalar(val_infeasible_rate),
+                'test_mean_load_factor': convert_to_scalar(test_mean_load_factor),
+                'val_mean_load_factor': convert_to_scalar(val_mean_load_factor),
+                'test_loss': convert_to_scalar(test_loss),
+                'val_loss': convert_to_scalar(val_loss),
+                'test_time': convert_to_scalar(test_time),
+                'val_time': convert_to_scalar(val_time),
                 'timestamp': datetime.now().isoformat()
             }
 
@@ -316,12 +325,25 @@ class HyperparameterTuner:
         # JSON形式で詳細結果を保存
         json_path = os.path.join(self.results_dir, f"{search_type}_results_{self.timestamp}.json")
 
+        def convert_tensors_to_scalars(obj):
+            """再帰的にTensorオブジェクトをスカラー値に変換"""
+            if hasattr(obj, 'item'):
+                return obj.item()
+            elif hasattr(obj, 'cpu'):
+                return obj.cpu().item()
+            elif isinstance(obj, dict):
+                return {key: convert_tensors_to_scalars(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_tensors_to_scalars(item) for item in obj]
+            else:
+                return obj
+
         final_results = {
             'search_type': search_type,
             'timestamp': self.timestamp,
             'total_trials': len(self.results),
-            'best_result': self.best_result,
-            'all_results': self.results,
+            'best_result': convert_tensors_to_scalars(self.best_result),
+            'all_results': convert_tensors_to_scalars(self.results),
             'tuning_config': self.tuning_config
         }
 
