@@ -1,0 +1,22 @@
+============================================================
+HYPERPARAMETER TUNING SUMMARY - GRID_SEARCH
+============================================================
+Timestamp: 20250923_161052
+Total Trials: 324
+
+BEST RESULT:
+------------------------------
+Trial: 0
+Test Approximation Rate: 0.00%
+Val Approximation Rate: 0.00%
+Test Infeasible Rate: 100.00%
+Val Infeasible Rate: 100.00%
+
+Best Parameters:
+  learning_rate: 0.001
+  hidden_dim: 32
+  num_layers: 5
+  dropout_rate: 0.2
+  max_epochs: 5
+
+============================================================

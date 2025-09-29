@@ -1,0 +1,13 @@
+{
+  "search_type": "grid_search",
+  "timestamp": "20250925_153915",
+  "total_trials": 81,
+  "best_result": {
+    "trial": 72,
+    "params": {
+      "learning_rate": 0.0001,
+      "hidden_dim": 128,
+      "num_layers": 5,
+      "dropout_rate": 0.2
+    },
+    "test_approximation_rate": 
