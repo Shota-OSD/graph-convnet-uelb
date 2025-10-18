@@ -255,14 +255,27 @@ class HyperparameterTuner:
         return params
 
     def _is_better_result(self, result: Dict[str, Any]) -> bool:
-        """結果がベストかどうかを判定（設定ファイルベース）"""
+        """結果がベストかどうかを判定（設定ファイルベース、RL対応）"""
         if self.best_result is None:
             return True
 
         # 設定ファイルから評価設定を取得
         evaluation_config = self.tuning_config.get('evaluation', {})
-        primary_metric = evaluation_config.get('primary_metric', 'test_approximation_rate')
-        optimization_direction = evaluation_config.get('optimization_direction', 'maximize')
+
+        # デフォルトメトリックを決定（training_strategyに基づく）
+        training_strategy = self.tuning_config.get('base_config', {}).get('training_strategy', 'supervised')
+
+        if training_strategy == 'reinforcement':
+            # RLの場合はload_factorを最小化
+            default_metric = 'test_mean_load_factor'
+            default_direction = 'minimize'
+        else:
+            # 教師ありの場合はapproximation_rateを最大化
+            default_metric = 'test_approximation_rate'
+            default_direction = 'maximize'
+
+        primary_metric = evaluation_config.get('primary_metric', default_metric)
+        optimization_direction = evaluation_config.get('optimization_direction', default_direction)
 
         # プライマリメトリクスの値を取得
         current_value = result.get(primary_metric, 0.0)
