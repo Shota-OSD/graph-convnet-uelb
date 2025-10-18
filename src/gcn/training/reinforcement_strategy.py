@@ -139,6 +139,10 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         for i in range(self.batch_size):
             load_factor_i = individual_load_factors[i] if i < len(individual_load_factors) else mean_maximum_load_factor
 
+            # Convert tensor to float
+            if isinstance(load_factor_i, torch.Tensor):
+                load_factor_i = load_factor_i.item()
+
             if self.reward_type == 'load_factor':
                 # Reward = negative load factor (we want to minimize it)
                 if self.use_smooth_penalty:
@@ -237,6 +241,11 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         mean_advantage = advantages.mean().item() if isinstance(advantages, torch.Tensor) else advantages
         advantage_std = advantages.std().item() if isinstance(advantages, torch.Tensor) else 0.0
 
+        # Convert tensors to lists for individual value tracking
+        rewards_list = rewards.detach().cpu().tolist() if isinstance(rewards, torch.Tensor) else []
+        advantages_list = advantages.detach().cpu().tolist() if isinstance(advantages, torch.Tensor) else []
+        load_factors_list = individual_load_factors.detach().cpu().tolist() if isinstance(individual_load_factors, torch.Tensor) else []
+
         metrics = {
             'mean_load_factor': mean_maximum_load_factor,
             'reward': mean_reward,
@@ -247,7 +256,11 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             'baseline': self.reward_baseline if self.reward_baseline else 0.0,
             'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0,
             'policy_loss': policy_loss.item(),
-            'entropy_bonus': entropy_bonus.item()
+            'entropy_bonus': entropy_bonus.item(),
+            # Add individual values for proper epoch-level std calculation
+            'reward_individual': rewards_list,
+            'advantage_individual': advantages_list,
+            'load_factor_individual': load_factors_list
         }
 
         return total_loss, metrics

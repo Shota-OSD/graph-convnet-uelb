@@ -42,9 +42,9 @@
     "batch_size": 20,
     "accumulation_steps": 1,
 
-    "learning_rate": 0.0005,
+    "learning_rate": 0.01,
     "decay_rate": 1.5,
-    "dropout_rate": 0.5,
+    "dropout_rate": 0.1,
 
     "_comment": "=== Training Strategy Configuration ===",
     "training_strategy": "reinforcement",
@@ -57,12 +57,12 @@
     "rl_use_sampling": true,
     "rl_sampling_temperature": 1.0,
     "rl_sampling_top_p": 0.9,
-    "rl_normalize_advantages": true,
+    "rl_normalize_advantages": false,
     "rl_use_smooth_penalty": true,
     "rl_penalty_lambda": 5.0,
     "rl_mask_invalid_edges": true,
 
     "_comment_beam_search": "=== Beam Search Configuration (used during evaluation) ===",
-    "rl_beam_search_type": "standard",
-    "_beam_search_options": "standard, unconstrained, deterministic, greedy"
+    "rl_beam_search_type": "unconstrained",
+    "_beam_search_note": "unconstrained = no capacity constraints during path search"
 }

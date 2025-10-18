@@ -70,11 +70,12 @@ class MetricsLogger:
         with open(csv_filename, 'a', encoding='utf-8') as f:
             if not file_exists:
                 # ヘッダー行
-                f.write("epoch,reward,advantage,entropy,load_factor,baseline\n")
+                f.write("epoch,reward,reward_std,advantage,advantage_std,entropy,load_factor,load_factor_std,baseline\n")
             # データ行
-            f.write(f"{epoch},{rl_metrics.get('reward', 0.0):.6f},{rl_metrics.get('advantage', 0.0):.6f},"
+            f.write(f"{epoch},{rl_metrics.get('reward', 0.0):.6f},{rl_metrics.get('reward_std', 0.0):.6f},"
+                   f"{rl_metrics.get('advantage', 0.0):.6f},{rl_metrics.get('advantage_std', 0.0):.6f},"
                    f"{rl_metrics.get('entropy', 0.0):.6f},{rl_metrics.get('load_factor', 0.0):.6f},"
-                   f"{rl_metrics.get('baseline', 0.0):.6f}\n")
+                   f"{rl_metrics.get('load_factor_std', 0.0):.6f},{rl_metrics.get('baseline', 0.0):.6f}\n")
     
     def get_final_metrics(self) -> dict:
         """最終メトリクスを取得"""
