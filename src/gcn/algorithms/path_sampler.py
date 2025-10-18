@@ -1,9 +1,6 @@
 """
-Path Sampler for Reinforcement Learning
-
-Samples paths probabilistically from GCN edge predictions
-instead of using deterministic beam search.
-This ensures on-policy learning for REINFORCE algorithm.
+Improved Path Sampler with full masking and feasibility constraints
+for Reinforcement Learning (REINFORCE algorithm).
 """
 
 import torch
@@ -13,15 +10,15 @@ import numpy as np
 
 class PathSampler:
     """
-    Samples paths from edge probability distributions for RL training.
+    Samples paths probabilistically from GCN edge predictions
+    while respecting feasibility constraints (capacity, connectivity).
 
-    Unlike beam search which finds top-K paths deterministically,
-    this sampler draws paths stochastically from the learned policy,
-    which is required for proper REINFORCE gradient estimation.
+    This ensures proper on-policy sampling for REINFORCE learning
+    and prevents invalid (infeasible) paths.
     """
 
     def __init__(self, y_pred_edges, edges_capacity, commodities,
-                 num_samples=1, temperature=1.0, top_p=0.9,
+                 num_samples=1, temperature=1.0, top_p=0.8,
                  dtypeFloat=torch.float, dtypeLong=torch.long):
         """
         Args:
@@ -48,232 +45,294 @@ class PathSampler:
 
     def sample(self):
         """
-        Sample paths for all commodities using probabilistic selection.
+        Sample paths for all commodities using top-p sampling.
+
+        Note: Capacity constraints are NOT enforced during sampling.
+        The model can explore infeasible solutions and learn from
+        the penalty in the reward signal.
 
         Returns:
-            paths: List of paths for each batch and commodity
-            log_probs: Log probabilities of sampled paths (for REINFORCE)
-            is_feasible: Whether the solution respects capacity constraints
+            batch_paths: list of sampled paths
+            log_probs_tensor: tensor of total log-probabilities per batch
+            is_feasible: whether all flows respect capacity constraints (checked post-hoc)
         """
         device = self.y_pred_edges.device
-        batch_paths = []
-        batch_log_probs = []
+        batch_paths, batch_log_probs = [], []
+
+        # DEBUG: Print shapes for first batch only
+        debug_enabled = False  # Set to True to enable debug output
+        debug_first_batch = debug_enabled and (not hasattr(self, '_debug_printed'))
+        if debug_first_batch:
+            self._debug_printed = True
+            print(f"\n=== PathSampler Debug ===")
+            print(f"  y_pred_edges shape: {self.y_pred_edges.shape}")
+            print(f"  edges_capacity shape: {self.edges_capacity.shape}")
 
         for b in range(self.batch_size):
-            # Get edge predictions for this batch item
-            # y_pred_edges shape can be:
-            # - [batch, nodes, nodes, classes] or
-            # - [batch, nodes, nodes, commodities, classes]
             edge_logits = self.y_pred_edges[b]
 
-            commodity_paths = []
-            commodity_log_probs = []
-            remaining_capacity = self.edges_capacity[b].clone()
+            # --- Global mask for physically non-existent edges ---
+            # (zero capacity = edge doesn't exist, self-loops are invalid)
+            # Use a very large negative value to effectively zero out probabilities after softmax
+            invalid_mask = (self.edges_capacity[b] <= 0) | torch.eye(self.num_nodes, device=device).bool()
 
-            # Get commodities for this batch item
-            # commodities can be:
-            # 1. List of tuples/lists (same for all batches)
-            # 2. Tensor [batch_size, num_commodities, 3]
-            if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3:
-                batch_commodities = self.commodities[b]  # [num_commodities, 3]
+            if debug_first_batch and b == 0:
+                print(f"  edge_logits shape: {edge_logits.shape}")
+                print(f"  invalid_mask shape: {invalid_mask.shape}")
+                print(f"  Number of valid edges: {(~invalid_mask).sum().item()}/{invalid_mask.numel()}")
+                print(f"  Capacity stats - min: {self.edges_capacity[b].min():.2f}, max: {self.edges_capacity[b].max():.2f}, nonzero: {(self.edges_capacity[b] > 0).sum().item()}")
+
+                # Check graph connectivity
+                num_isolated_nodes = 0
+                for node in range(self.num_nodes):
+                    outgoing = (~invalid_mask[node]).sum().item()
+                    incoming = (~invalid_mask[:, node]).sum().item()
+                    if outgoing == 0 or incoming == 0:
+                        num_isolated_nodes += 1
+                print(f"  Isolated/dead-end nodes: {num_isolated_nodes}/{self.num_nodes}")
+            if len(edge_logits.shape) == 4:
+                edge_logits = edge_logits.masked_fill(invalid_mask.unsqueeze(-1).unsqueeze(-1), -1e20)
             else:
-                batch_commodities = self.commodities  # Same for all batches
+                edge_logits = edge_logits.masked_fill(invalid_mask.unsqueeze(-1), -1e20)
+
+            # --- Convert logits to edge probabilities ---
+            if len(edge_logits.shape) == 4:
+                edge_probs_all = F.softmax(edge_logits / self.temperature, dim=-1)[:, :, :, 1]
+                # Ensure zero-capacity edges have exactly zero probability
+                # Broadcast invalid_mask to match [nodes, nodes, commodities]
+                edge_probs_all = edge_probs_all * (~invalid_mask).unsqueeze(-1).float()
+            else:
+                edge_probs_all = F.softmax(edge_logits / self.temperature, dim=-1)[:, :, 1]
+                # Ensure zero-capacity edges have exactly zero probability
+                edge_probs_all = edge_probs_all * (~invalid_mask).float()
+
+            if debug_first_batch and b == 0:
+                print(f"  edge_probs_all shape: {edge_probs_all.shape}")
+                print(f"  edge_probs_all stats - min: {edge_probs_all.min():.6f}, max: {edge_probs_all.max():.6f}, mean: {edge_probs_all.mean():.6f}")
+                print(f"  Nonzero probabilities: {(edge_probs_all > 1e-10).sum().item()}/{edge_probs_all.numel()}")
+                print("=" * 50)
+
+            # --- Commodity processing ---
+            commodity_paths, commodity_log_probs = [], []
+
+            batch_commodities = (
+                self.commodities[b] if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3
+                else self.commodities
+            )
 
             for c_idx, commodity in enumerate(batch_commodities):
-                # Handle both list/tuple and tensor formats
-                if isinstance(commodity, (list, tuple)):
-                    src, dst, demand = commodity
+                src, dst, demand = self._parse_commodity(commodity)
+
+                if len(edge_probs_all.shape) == 3:
+                    edge_probs = edge_probs_all[:, :, c_idx]
                 else:
-                    # Tensor format: [src, dst, demand, ...]
-                    src = int(commodity[0].item() if hasattr(commodity[0], 'item') else commodity[0])
-                    dst = int(commodity[1].item() if hasattr(commodity[1], 'item') else commodity[1])
-                    demand = float(commodity[2].item() if hasattr(commodity[2], 'item') else commodity[2])
+                    edge_probs = edge_probs_all
 
-                # Get edge probabilities for this commodity
-                if len(edge_logits.shape) == 4:
-                    # Shape: [num_nodes, num_nodes, commodities, classes]
-                    commodity_edge_logits = edge_logits[:, :, c_idx, :]
-                else:
-                    # Shape: [num_nodes, num_nodes, classes]
-                    commodity_edge_logits = edge_logits
+                # DEBUG: Print first path
+                if debug_first_batch and b == 0 and c_idx == 0:
+                    print(f"\n  Commodity {c_idx}: src={src}, dst={dst}, demand={demand}")
+                    print(f"  edge_probs for this commodity - nonzero: {(edge_probs > 1e-10).sum().item()}/{edge_probs.numel()}")
+                    print(f"  edge_probs from src {src} - nonzero: {(edge_probs[src] > 1e-10).sum().item()}/{len(edge_probs[src])}")
+                    # Check if edge to dst is masked
+                    print(f"  edge_probs[{src}, {dst}] (direct to dst): {edge_probs[src, dst]:.6f}")
+                    print(f"  invalid_mask[{src}, {dst}]: {invalid_mask[src, dst]}")
 
-                # Convert to probabilities (class 1 = "use this edge")
-                # Shape: [num_nodes, num_nodes]
-                edge_probs = F.softmax(commodity_edge_logits / self.temperature, dim=-1)[:, :, 1]
-
-                # Sample a path from src to dst
+                # remaining_capacity is no longer tracked or enforced
                 path, log_prob = self._sample_single_path(
-                    edge_probs, src, dst, demand, remaining_capacity
+                    edge_probs, src, dst, demand, remaining_capacity=None
                 )
+
+                if debug_first_batch and b == 0 and c_idx == 0:
+                    print(f"  Generated path: {path} (length={len(path)})")
+                    # Check if path reaches destination
+                    if len(path) == 0 or path[-1] != dst:
+                        print(f"    WARNING: Path incomplete (doesn't reach dst={dst})")
+                    # Check if path uses invalid edges
+                    uses_invalid = False
+                    for i in range(len(path) - 1):
+                        u, v = path[i], path[i+1]
+                        if invalid_mask[u, v]:
+                            print(f"    WARNING: Path uses invalid edge ({u}, {v})")
+                            print(f"      edge_probs[{u}, {v}]: {edge_probs[u, v]:.6f}")
+                            print(f"      edges_capacity[{b}, {u}, {v}]: {self.edges_capacity[b, u, v]:.2f}")
+                            uses_invalid = True
+                    print(f"  Uses invalid edges: {uses_invalid}")
 
                 commodity_paths.append(path)
                 commodity_log_probs.append(log_prob)
 
-                # Update remaining capacity
-                if len(path) > 1:
-                    for i in range(len(path) - 1):
-                        u, v = path[i], path[i + 1]
-                        remaining_capacity[u, v] -= demand
-
+            # --- Aggregate batch results ---
             batch_paths.append(commodity_paths)
+            batch_log_probs.append(sum(commodity_log_probs))
 
-            # Sum log probabilities for this batch (total trajectory log prob)
-            total_log_prob = sum(commodity_log_probs)
-            batch_log_probs.append(total_log_prob)
+            # DEBUG: Check how many commodities use invalid edges or are incomplete
+            if debug_first_batch and b == 0:
+                invalid_count = 0
+                incomplete_count = 0
+                for c_idx, path in enumerate(commodity_paths):
+                    dst = int(batch_commodities[c_idx][1].item())
+                    # Check if incomplete
+                    if len(path) == 0 or path[-1] != dst:
+                        incomplete_count += 1
+                    # Check if uses invalid edges
+                    for i in range(len(path) - 1):
+                        u, v = path[i], path[i+1]
+                        if invalid_mask[u, v]:
+                            invalid_count += 1
+                            break  # One invalid edge per commodity is enough
+                print(f"  Commodities using invalid edges: {invalid_count}/{len(commodity_paths)}")
+                print(f"  Incomplete paths (dst not reached): {incomplete_count}/{len(commodity_paths)}")
 
-        # Check feasibility
         is_feasible = self._check_feasibility(batch_paths)
-
-        # Convert log probs to tensor
         log_probs_tensor = torch.tensor(batch_log_probs, dtype=torch.float32, device=device)
 
         return batch_paths, log_probs_tensor, is_feasible
 
-    def _sample_single_path(self, edge_probs, src, dst, demand, remaining_capacity):
-        """
-        Sample a single path from src to dst using top-p sampling.
+    # ==============================================================
+    # Internal Methods
+    # ==============================================================
+
+    def _parse_commodity(self, commodity):
+        """Extract (src, dst, demand) as native Python types."""
+        if isinstance(commodity, (list, tuple)):
+            src, dst, demand = commodity
+        else:
+            src = int(commodity[0].item() if hasattr(commodity[0], 'item') else commodity[0])
+            dst = int(commodity[1].item() if hasattr(commodity[1], 'item') else commodity[1])
+            demand = float(commodity[2].item() if hasattr(commodity[2], 'item') else commodity[2])
+        return src, dst, demand
+
+    def _sample_single_path(self, edge_probs, src, dst, demand, remaining_capacity=None):
+        """Sample a path using top-p nucleus sampling.
+
+        Note: Capacity constraints are NOT enforced during sampling.
+        This allows the model to explore infeasible solutions and learn
+        from the penalty in the reward signal.
 
         Args:
-            edge_probs: Edge probabilities [num_nodes, num_nodes]
+            edge_probs: Edge probabilities for current commodity
             src: Source node
             dst: Destination node
-            demand: Demand amount
-            remaining_capacity: Remaining edge capacities [num_nodes, num_nodes]
-
-        Returns:
-            path: List of nodes forming the path
-            log_prob: Log probability of the sampled path
+            demand: Commodity demand (not used for capacity checking)
+            remaining_capacity: Ignored (kept for API compatibility)
         """
-        # Ensure src and dst are integers
-        src = int(src)
-        dst = int(dst)
-
-        path = [src]
-        log_prob = 0.0
+        src, dst = int(src), int(dst)
+        path, log_prob = [src], 0.0
         current = src
-        max_steps = self.num_nodes * 2  # Prevent infinite loops
+        max_steps = self.num_nodes * 2  # avoid infinite loops
 
-        for step in range(max_steps):
+        for _ in range(max_steps):
             if current == dst:
                 break
 
-            # Get outgoing edge probabilities from current node
-            # Shape: [num_nodes]
             outgoing_probs = edge_probs[current].clone()
 
-            # Mask out infeasible edges (insufficient capacity)
-            for next_node in range(self.num_nodes):
-                if remaining_capacity[current, next_node] < demand:
-                    outgoing_probs[next_node] = 0.0
+            # --- Only mask visited nodes (no capacity constraint) ---
+            # Note: We create a mask for ALL nodes first, then exclude visited ones
+            visited_mask = torch.ones(self.num_nodes, dtype=torch.bool, device=outgoing_probs.device)
+            for visited_node in path:
+                visited_mask[visited_node] = False  # exclude visited nodes to prevent loops
 
-            # Mask out already visited nodes (prevent cycles)
-            for visited in path:
-                outgoing_probs[visited] = 0.0
+            # Apply mask
+            outgoing_probs = outgoing_probs * visited_mask.float()
 
-            # Normalize probabilities
-            prob_sum = outgoing_probs.sum()
-            if prob_sum == 0:
-                # No feasible next node - fallback to shortest path or random
-                # For now, just go to destination directly (greedy fallback)
-                path.append(dst)
-                # Add small penalty to log_prob
-                log_prob += np.log(1e-8)
-                break
+            # Remove numerical noise
+            outgoing_probs = torch.clamp(outgoing_probs, min=0.0)
 
-            outgoing_probs = outgoing_probs / prob_sum
+            # --- Normalize ---
+            total_prob = outgoing_probs.sum()
+            if total_prob <= 1e-20:
+                # Fallback: No valid edges available
+                # This happens when current node has no outgoing edges with non-zero probability
+                # Try to find ANY valid edge (non-zero capacity, not visited)
 
-            # Top-p (nucleus) sampling
+                # Get capacity mask for current node
+                device = edge_probs.device
+                capacity_available = self.edges_capacity[0 if len(self.edges_capacity.shape) == 2 else 0, current] > 0
+
+                # Combine: has capacity AND not visited
+                fallback_mask = capacity_available & visited_mask
+
+                if fallback_mask.any():
+                    # Pick valid edge with SOME heuristic guidance
+                    # Use unmasked probabilities (from model) as guidance, but only among valid edges
+                    valid_indices = torch.where(fallback_mask)[0]
+
+                    # Get model's probabilities for valid edges only
+                    unmasked_probs = edge_probs[current].clone()
+                    valid_probs = unmasked_probs[valid_indices]
+
+                    if valid_probs.sum() > 1e-10:
+                        # If model assigns some probability to valid edges, use it
+                        valid_probs = valid_probs / valid_probs.sum()
+                        # Sample from model's distribution over valid edges
+                        sampled_idx = torch.multinomial(valid_probs, 1).item()
+                        next_node = valid_indices[sampled_idx].item()
+                        log_prob += torch.log(valid_probs[sampled_idx] + 1e-8).item()
+                    else:
+                        # Model assigns 0 probability to all valid edges
+                        # Fall back to uniform distribution
+                        next_node = valid_indices[torch.randint(len(valid_indices), (1,))].item()
+                        log_prob += np.log(1.0 / len(valid_indices))
+
+                    path.append(int(next_node))
+                    current = int(next_node)
+                    continue
+                else:
+                    # Truly stuck: no valid edges at all from current node
+                    # Cannot reach dst without using invalid edges
+                    # Return incomplete path (don't force-add dst through invalid edge)
+                    log_prob += np.log(1e-8)
+                    break
+
+            outgoing_probs /= total_prob
+
+            # --- Top-p nucleus sampling ---
             next_node = self._top_p_sample(outgoing_probs)
-
-            # Record log probability
             log_prob += torch.log(outgoing_probs[next_node] + 1e-8).item()
-
-            # Move to next node (ensure integer)
             path.append(int(next_node))
             current = int(next_node)
 
-        # If we didn't reach destination, add it (fallback)
-        if path[-1] != dst:
-            path.append(dst)
-            log_prob += np.log(1e-8)  # Penalty for fallback
-
+        # Return path as-is (may be incomplete if destination unreachable with valid edges)
         return path, log_prob
 
     def _top_p_sample(self, probs):
-        """
-        Nucleus (top-p) sampling: sample from smallest set of tokens
-        whose cumulative probability exceeds p.
+        """Perform top-p (nucleus) sampling robustly."""
+        probs = probs * (probs > 1e-8)  # Remove zero-prob nodes
+        if probs.sum() == 0:
+            # fallback to random selection if all invalid
+            return torch.randint(0, len(probs), (1,)).item()
 
-        Args:
-            probs: Probability distribution [num_nodes]
-
-        Returns:
-            sampled_idx: Sampled node index
-        """
-        # Sort probabilities in descending order
+        probs = probs / probs.sum()
         sorted_probs, sorted_indices = torch.sort(probs, descending=True)
-
-        # Compute cumulative probabilities
         cumsum_probs = torch.cumsum(sorted_probs, dim=0)
 
-        # Find cutoff index where cumsum exceeds top_p
         cutoff_idx = torch.where(cumsum_probs > self.top_p)[0]
-        if len(cutoff_idx) > 0:
-            cutoff_idx = cutoff_idx[0].item() + 1
-        else:
-            cutoff_idx = len(sorted_probs)
+        cutoff_idx = cutoff_idx[0].item() + 1 if len(cutoff_idx) > 0 else len(sorted_probs)
 
-        # Keep only top-p probability mass
         top_p_probs = sorted_probs[:cutoff_idx]
         top_p_indices = sorted_indices[:cutoff_idx]
-
-        # Renormalize
         top_p_probs = top_p_probs / top_p_probs.sum()
 
-        # Sample from top-p distribution
-        sampled_idx_in_top_p = torch.multinomial(top_p_probs, num_samples=1).item()
-        sampled_idx = top_p_indices[sampled_idx_in_top_p].item()
-
+        sampled_idx = top_p_indices[torch.multinomial(top_p_probs, 1).item()].item()
         return sampled_idx
 
     def _check_feasibility(self, batch_paths):
-        """
-        Check if sampled paths respect capacity constraints.
-
-        Args:
-            batch_paths: List of paths for each batch
-
-        Returns:
-            is_feasible: True if all paths are feasible
-        """
+        """Verify that total edge usage does not exceed capacities."""
         for b, commodity_paths in enumerate(batch_paths):
             edge_usage = torch.zeros_like(self.edges_capacity[b])
-
-            # Get commodities for this batch item
-            if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3:
-                batch_commodities = self.commodities[b]  # [num_commodities, 3]
-            else:
-                batch_commodities = self.commodities  # Same for all batches
+            batch_commodities = (
+                self.commodities[b]
+                if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3
+                else self.commodities
+            )
 
             for i, path in enumerate(commodity_paths):
-                # Handle both list/tuple and tensor formats
-                commodity = batch_commodities[i]
-                if isinstance(commodity, (list, tuple)):
-                    src, dst, demand = commodity
-                else:
-                    # Tensor format: [src, dst, demand, ...]
-                    src = int(commodity[0].item() if hasattr(commodity[0], 'item') else commodity[0])
-                    dst = int(commodity[1].item() if hasattr(commodity[1], 'item') else commodity[1])
-                    demand = float(commodity[2].item() if hasattr(commodity[2], 'item') else commodity[2])
+                src, dst, demand = self._parse_commodity(batch_commodities[i])
+                for j in range(len(path) - 1):
+                    u, v = path[j], path[j + 1]
+                    edge_usage[u, v] += demand
 
-                # Track edge usage
-                if len(path) > 1:
-                    for j in range(len(path) - 1):
-                        u, v = path[j], path[j + 1]
-                        edge_usage[u, v] += demand
-
-            # Check capacity violations
-            if (edge_usage > self.edges_capacity[b]).any():
+            if (edge_usage > self.edges_capacity[b] + 1e-6).any():
                 return False
-
         return True

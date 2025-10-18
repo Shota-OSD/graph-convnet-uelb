@@ -126,10 +126,16 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     #print("bs_edges_summed: \n", bs_edges_summed[0])
     
     # compute the load factor
+    # If capacity is 0 and demand is 0, load factor is 0 (edge not used)
+    # If capacity is 0 and demand > 0, load factor is infinity (infeasible)
     load_factors = torch.where(
-        edges_capacity == 0,               # 条件: edges_capacity が 0 の場合
-        torch.tensor(0.0, device=device),  # true の場合の値: 0 を設定
-        bs_edges_summed.float() / edges_capacity.float()  # false の場合の値: 通常の割り算
+        edges_capacity == 0,
+        torch.where(
+            bs_edges_summed == 0,
+            torch.tensor(0.0, device=device),  # No demand on zero-capacity edge → 0
+            torch.tensor(float('inf'), device=device)  # Demand on zero-capacity edge → infeasible
+        ),
+        bs_edges_summed.float() / edges_capacity.float()  # Normal case
     )
     
     # compute the maximum load factor

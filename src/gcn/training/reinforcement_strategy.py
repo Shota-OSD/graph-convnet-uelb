@@ -49,7 +49,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         self.beam_search_type = config.get('rl_beam_search_type', 'standard')  # 'standard', 'unconstrained', etc.
 
         # Sampling configuration
-        self.use_sampling = config.get('rl_use_sampling', True)  # Use sampling during training (True) or beam search (False)
+        self.use_sampling = config.get('rl_use_sampling', True)  # Use top-p sampling for both training and evaluation (True) or beam search (False)
         self.sampling_temperature = config.get('rl_sampling_temperature', 1.0)  # Lower = more deterministic
         self.sampling_top_p = config.get('rl_sampling_top_p', 0.9)  # Nucleus sampling threshold
 
@@ -93,9 +93,10 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             mask_invalid_edges=self.mask_invalid_edges
         )
 
-        # Generate paths: use sampling for training (on-policy), beam search for evaluation
+        # Generate paths: use top-p sampling for training, beam search for evaluation
         if self.use_sampling and model.training:
-            # Probabilistic sampling (REINFORCE requires on-policy samples)
+            # Probabilistic sampling for training (REINFORCE requires on-policy samples)
+            # Note: top-p sampling does not guarantee feasible solutions
             sampler = PathSampler(
                 y_pred_edges=y_preds,
                 edges_capacity=x_edges_capacity,
@@ -108,7 +109,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             )
             pred_paths, path_log_probs, is_feasible = sampler.sample()
         else:
-            # Beam search for evaluation (deterministic, finds better solutions)
+            # Beam search for evaluation (guarantees feasible solutions)
             beam_search = BeamSearchFactory.create_algorithm(
                 self.beam_search_type,
                 y_pred_edges=y_preds,
@@ -134,6 +135,35 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             batch_commodities
         )
 
+        # DEBUG: Print load factors for first batch of each epoch
+        debug_enabled = False  # Set to True to enable debug output
+        if debug_enabled:
+            if not hasattr(self, '_debug_last_epoch'):
+                self._debug_last_epoch = -1
+                self._debug_batch_in_epoch = 0
+
+            # Reset batch counter at start of new epoch (detect by checking if batch counter wrapped)
+            if model.training:
+                self._debug_batch_in_epoch += 1
+                # Print for first batch of epoch or every 5 batches
+                if self._debug_batch_in_epoch == 1 or self._debug_batch_in_epoch % 5 == 0:
+                    print(f"\n=== Load Factor Debug (Batch {self._debug_batch_in_epoch}) ===")
+                    print(f"  Shape: {individual_load_factors.shape}")
+                    # Format mean properly
+                    mean_val = mean_maximum_load_factor.item() if isinstance(mean_maximum_load_factor, torch.Tensor) else mean_maximum_load_factor
+                    mean_str = f"{mean_val:.4f}" if not np.isinf(mean_val) else "inf"
+                    print(f"  Mean: {mean_str}")
+                    if individual_load_factors.numel() <= 20:  # Only print all values if batch size <= 20
+                        print(f"  Values: {individual_load_factors}")
+                    else:
+                        print(f"  First 5: {individual_load_factors[:5]}")
+                    if not torch.isinf(individual_load_factors).all():
+                        finite_vals = individual_load_factors[~torch.isinf(individual_load_factors)]
+                        if len(finite_vals) > 0:
+                            print(f"  Finite - Min: {finite_vals.min():.4f}, Max: {finite_vals.max():.4f}")
+                    print(f"  Contains inf: {torch.isinf(individual_load_factors).any()} ({torch.isinf(individual_load_factors).sum().item()}/{len(individual_load_factors)} samples)")
+                    print("=" * 50)
+
         # Design reward signal PER SAMPLE
         rewards = []
         for i in range(self.batch_size):
@@ -143,14 +173,47 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             if isinstance(load_factor_i, torch.Tensor):
                 load_factor_i = load_factor_i.item()
 
-            if self.reward_type == 'load_factor':
+            # Check if all paths reach their destinations
+            sample_paths = pred_paths[i]
+            sample_commodities = batch_commodities[i]
+            all_paths_complete = True
+            for path_idx, path in enumerate(sample_paths):
+                dst = int(sample_commodities[path_idx][1].item())
+                if len(path) == 0 or path[-1] != dst:
+                    all_paths_complete = False
+                    break
+
+            # Handle incomplete paths (destination not reached)
+            if not all_paths_complete:
+                # Severe penalty for incomplete paths (couldn't reach destination)
+                reward_i = -100.0
+            # Handle inf (paths using non-existent edges)
+            elif np.isinf(load_factor_i):
+                # Severe penalty for using non-existent edges
+                reward_i = -100.0
+            elif self.reward_type == 'load_factor':
                 # Reward = negative load factor (we want to minimize it)
                 if self.use_smooth_penalty:
-                    # Smooth penalty using softplus for constraint violation
-                    # softplus(x) = log(1 + exp(x)) ≈ max(0, x) but differentiable
-                    violation = load_factor_i - 1.0  # How much we exceed capacity
-                    penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
-                    reward_i = -load_factor_i - penalty
+                    # Smooth, graduated penalty system
+                    if load_factor_i == 0:
+                        # Empty or invalid path
+                        reward_i = -50.0
+                    elif load_factor_i > 10.0:
+                        # Extremely over capacity (likely using wrong edges)
+                        reward_i = -50.0
+                    elif load_factor_i > 2.0:
+                        # Severely over capacity
+                        violation = load_factor_i - 1.0
+                        penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
+                        reward_i = -load_factor_i - penalty
+                    elif load_factor_i > 1.0:
+                        # Slightly over capacity - smaller penalty
+                        violation = load_factor_i - 1.0
+                        penalty = violation * self.penalty_lambda  # Linear penalty instead of softplus
+                        reward_i = -load_factor_i - penalty
+                    else:
+                        # Feasible solution - just minimize load factor
+                        reward_i = -load_factor_i
                 else:
                     # Original discrete penalty
                     if load_factor_i > 1 or load_factor_i == 0:
@@ -159,6 +222,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                         reward_i = -load_factor_i
             elif self.reward_type == 'inverse_load_factor':
                 # Reward = inverse of load factor (higher is better)
+                # Note: inf is already handled above
                 if self.use_smooth_penalty:
                     if load_factor_i == 0:
                         reward_i = -10.0  # Still penalize zero (invalid solution)

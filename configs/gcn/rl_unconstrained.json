@@ -53,7 +53,7 @@
     "rl_baseline_momentum": 0.9,
     "rl_entropy_weight": 0.1,
 
-    "_comment_sampling": "=== Sampling Configuration (for correct REINFORCE) ===",
+    "_comment_sampling": "=== Sampling Configuration (top-p sampling for training, beam search for evaluation) ===",
     "rl_use_sampling": true,
     "rl_sampling_temperature": 1.0,
     "rl_sampling_top_p": 0.9,
