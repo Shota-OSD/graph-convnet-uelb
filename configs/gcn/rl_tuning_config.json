@@ -1,0 +1,137 @@
+{
+  "description": "Hyperparameter tuning configuration for GCN Reinforcement Learning",
+
+  "grid_search": {
+    "description": "Grid search configuration for RL-specific parameters",
+    "parameters": {
+      "learning_rate": [0.0001, 0.0005],
+      "hidden_dim": [32, 64],
+      "num_layers": [5, 10],
+      "rl_baseline_momentum": [0.85, 0.9, 0.95],
+      "rl_entropy_weight": [0.005, 0.01, 0.02],
+      "rl_beam_search_type": ["standard", "unconstrained"],
+      "max_epochs": [5, 10],
+      "batch_size": [10, 20, 30, 40],
+      "mlp_layers": [2, 3, 4]
+    }
+  },
+
+  "random_search": {
+    "description": "Random search configuration for RL hyperparameters",
+    "n_trials": 30,
+    "parameters": {
+      "learning_rate": {
+        "type": "float",
+        "min": 0.0001,
+        "max": 0.001,
+        "log_scale": true
+      },
+      "hidden_dim": {
+        "type": "choice",
+        "choices": [32, 64, 96, 128, 160, 192]
+      },
+      "num_layers": {
+        "type": "int",
+        "min": 5,
+        "max": 20
+      },
+      "dropout_rate": {
+        "type": "float",
+        "min": 0.2,
+        "max": 0.6,
+        "log_scale": false
+      },
+      "batch_size": {
+        "type": "choice",
+        "choices": [10, 20, 30, 40]
+      },
+      "beam_size": {
+        "type": "choice",
+        "choices": [5, 10, 15, 20]
+      },
+      "rl_baseline_momentum": {
+        "type": "float",
+        "min": 0.8,
+        "max": 0.99,
+        "log_scale": false
+      },
+      "rl_entropy_weight": {
+        "type": "float",
+        "min": 0.001,
+        "max": 0.05,
+        "log_scale": true
+      },
+      "rl_beam_search_type": {
+        "type": "choice",
+        "choices": ["standard", "unconstrained"]
+      },
+      "rl_sampling_temperature": {
+        "type": "float",
+        "min": 0.5,
+        "max": 2.0,
+        "log_scale": false
+      },
+      "rl_sampling_top_p": {
+        "type": "float",
+        "min": 0.8,
+        "max": 0.99,
+        "log_scale": false
+      },
+      "decay_rate": {
+        "type": "float",
+        "min": 1.0,
+        "max": 2.0,
+        "log_scale": false
+      },
+      "mlp_layers": {
+        "type": "choice",
+        "choices": [1, 2, 3]
+      },
+      "aggregation": {
+        "type": "choice",
+        "choices": ["mean", "sum"]
+      },
+      "max_epochs": {
+        "type": "choice",
+        "choices": [3, 5, 10, 15]
+      }
+    }
+  },
+
+  "evaluation": {
+    "primary_metric": "test_mean_load_factor",
+    "secondary_metrics": [
+      "val_mean_load_factor",
+      "test_infeasible_rate",
+      "val_infeasible_rate"
+    ],
+    "optimization_direction": "minimize"
+  },
+
+  "resource_constraints": {
+    "max_epochs_per_trial": 50,
+    "timeout_per_trial_minutes": 180,
+    "max_memory_gb": 8
+  },
+
+  "priority_parameters": {
+    "high_impact": [
+      "learning_rate",
+      "hidden_dim",
+      "num_layers",
+      "rl_entropy_weight",
+      "rl_baseline_momentum"
+    ],
+    "medium_impact": [
+      "batch_size",
+      "dropout_rate",
+      "beam_size",
+      "rl_beam_search_type"
+    ],
+    "low_impact": [
+      "decay_rate",
+      "mlp_layers",
+      "aggregation"
+    ]
+  }
+}

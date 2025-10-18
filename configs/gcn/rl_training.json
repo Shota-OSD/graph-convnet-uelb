@@ -52,6 +52,17 @@
     "rl_use_baseline": true,
     "rl_baseline_momentum": 0.9,
     "rl_entropy_weight": 0.01,
+
+    "_comment_sampling": "=== Sampling Configuration (for correct REINFORCE) ===",
+    "rl_use_sampling": true,
+    "rl_sampling_temperature": 1.0,
+    "rl_sampling_top_p": 0.9,
+    "rl_normalize_advantages": true,
+    "rl_use_smooth_penalty": true,
+    "rl_penalty_lambda": 5.0,
+    "rl_mask_invalid_edges": true,
+
+    "_comment_beam_search": "=== Beam Search Configuration (used during evaluation) ===",
     "rl_beam_search_type": "standard",
     "_beam_search_options": "standard, unconstrained, deterministic, greedy"
 }

@@ -8,14 +8,15 @@ Grid SearchとRandom Searchの2つの手法をサポートしています。
 ## ファイル構成
 
 ```
-src/tuning/
+src/gcn/tuning/
 ├── __init__.py
 └── hyperparameter_tuner.py      # チューニング実装クラス
 
-configs/
+configs/gcn/
 └── tuning_config.json           # チューニング設定
 
-tune_hyperparameters.py          # メイン実行スクリプト
+scripts/gcn/
+└── tune_hyperparameters.py      # メイン実行スクリプト
 ```
 
 ## 基本的な使用方法
@@ -24,23 +25,23 @@ tune_hyperparameters.py          # メイン実行スクリプト
 
 ```bash
 # 基本実行
-python tune_hyperparameters.py --search grid
+python scripts/gcn/tune_hyperparameters.py --search grid
 
 # 設定ファイル指定
-python tune_hyperparameters.py --search grid --config configs/default.json
+python scripts/gcn/tune_hyperparameters.py --search grid --config configs/gcn/default.json
 ```
 
 ### 2. Random Search実行
 
 ```bash
 # 基本実行（設定ファイルの試行回数で実行）
-python tune_hyperparameters.py --search random
+python scripts/gcn/tune_hyperparameters.py --search random
 
 # 試行回数を指定
-python tune_hyperparameters.py --search random --trials 50
+python scripts/gcn/tune_hyperparameters.py --search random --trials 50
 
 # 詳細出力
-python tune_hyperparameters.py --search random --trials 30
+python scripts/gcn/tune_hyperparameters.py --search random --trials 30
 ```
 
 ## チューニング設定のカスタマイズ
@@ -127,6 +128,12 @@ python tune_hyperparameters.py --search random --trials 30
 - `mlp_layers`: MLP層数
 - `aggregation`: 集約方法
 
+### RL特有のパラメータ（強化学習のみ）
+- `rl_reward_type`: 報酬タイプ（"load_factor"など）
+- `rl_baseline_momentum`: ベースライン更新の慣性（0.9推奨）
+- `rl_entropy_weight`: エントロピー正則化の重み（0.01推奨）
+- `rl_beam_search_type`: ビームサーチタイプ（"standard", "unconstrained"など）
+
 ## 結果の確認
 
 ### 結果ファイル
@@ -143,27 +150,34 @@ tuning_results/
 ### ベスト設定での実行
 ```bash
 # 最適化された設定で実行
-python main.py --config tuning_results/best_config_20241218_143022.json
+python scripts/gcn/train_gcn.py --config tuning_results/best_config_20241218_143022.json
 ```
 
 ## 評価指標
 
+### Supervised Learning（教師あり学習）
 - **主指標**: Test Approximation Rate（テスト近似率）
 - **副指標**:
   - Val Approximation Rate（検証近似率）
   - Test/Val Infeasible Rate（実行不可能率）
   - Mean Load Factor（平均負荷率）
 
+### Reinforcement Learning（強化学習）
+- **主指標**: Test Mean Load Factor（テスト平均負荷率）- 最小化
+- **副指標**:
+  - Val Mean Load Factor（検証平均負荷率）
+  - Test/Val Infeasible Rate（実行不可能率）
+
 ## 実行前の準備
 
 1. **データ生成**（必要に応じて）
 ```bash
-python generate_data.py
+python scripts/common/generate_data.py
 ```
 
 2. **設定ファイル確認**
-- `configs/default.json` - ベース設定
-- `configs/tuning_config.json` - チューニング設定
+- `configs/gcn/default.json` - ベース設定
+- `configs/gcn/tuning_config.json` - チューニング設定
 
 ## 注意事項
 

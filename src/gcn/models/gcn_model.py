@@ -42,7 +42,7 @@ class ResidualGatedGCNModel(nn.Module):
         self.mlp_edges = MLP(self.hidden_dim, self.voc_edges_out, self.mlp_layers)
         # self.mlp_nodes = MLP(self.hidden_dim, self.voc_nodes_out, self.mlp_layers)
 
-    def forward(self, x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges=None, edge_cw=None, compute_loss=True):
+    def forward(self, x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges=None, edge_cw=None, compute_loss=True, mask_invalid_edges=False):
         """
         Forward pass through the GCN model.
 
@@ -54,6 +54,7 @@ class ResidualGatedGCNModel(nn.Module):
             y_edges: Targets for edges (batch_size, num_edges, num_commodities) - optional
             edge_cw: Class weights for edges loss - optional
             compute_loss: Whether to compute loss (requires y_edges and edge_cw)
+            mask_invalid_edges: Whether to mask edges with zero capacity (for RL training)
 
         Returns:
             y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
@@ -80,6 +81,14 @@ class ResidualGatedGCNModel(nn.Module):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x C x H, B x V x V x C x H
         # MLP classifier
         y_pred_edges = self.mlp_edges(e)
+
+        # Mask invalid edges (zero capacity) for RL training
+        if mask_invalid_edges:
+            # Create mask for edges with zero capacity
+            # Shape: [batch_size, num_nodes, num_nodes, num_commodities]
+            invalid_mask = (x_edges_capacity.unsqueeze(-1) == 0).expand_as(y_pred_edges)
+            # Set logits for invalid edges to very negative value (will have ~0 probability after softmax)
+            y_pred_edges = y_pred_edges.masked_fill(invalid_mask, -1e9)
 
         # Optionally compute loss
         loss = None
