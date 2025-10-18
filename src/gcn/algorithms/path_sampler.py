@@ -60,20 +60,46 @@ class PathSampler:
         batch_log_probs = []
 
         for b in range(self.batch_size):
-            # Get edge probabilities for this batch item
-            # Shape: [num_nodes, num_nodes, num_classes]
+            # Get edge predictions for this batch item
+            # y_pred_edges shape can be:
+            # - [batch, nodes, nodes, classes] or
+            # - [batch, nodes, nodes, commodities, classes]
             edge_logits = self.y_pred_edges[b]
-
-            # Convert to probabilities (class 1 = "use this edge")
-            # Shape: [num_nodes, num_nodes]
-            edge_probs = F.softmax(edge_logits / self.temperature, dim=-1)[:, :, 1]
 
             commodity_paths = []
             commodity_log_probs = []
             remaining_capacity = self.edges_capacity[b].clone()
 
-            for commodity in self.commodities:
-                src, dst, demand = commodity
+            # Get commodities for this batch item
+            # commodities can be:
+            # 1. List of tuples/lists (same for all batches)
+            # 2. Tensor [batch_size, num_commodities, 3]
+            if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3:
+                batch_commodities = self.commodities[b]  # [num_commodities, 3]
+            else:
+                batch_commodities = self.commodities  # Same for all batches
+
+            for c_idx, commodity in enumerate(batch_commodities):
+                # Handle both list/tuple and tensor formats
+                if isinstance(commodity, (list, tuple)):
+                    src, dst, demand = commodity
+                else:
+                    # Tensor format: [src, dst, demand, ...]
+                    src = int(commodity[0].item() if hasattr(commodity[0], 'item') else commodity[0])
+                    dst = int(commodity[1].item() if hasattr(commodity[1], 'item') else commodity[1])
+                    demand = float(commodity[2].item() if hasattr(commodity[2], 'item') else commodity[2])
+
+                # Get edge probabilities for this commodity
+                if len(edge_logits.shape) == 4:
+                    # Shape: [num_nodes, num_nodes, commodities, classes]
+                    commodity_edge_logits = edge_logits[:, :, c_idx, :]
+                else:
+                    # Shape: [num_nodes, num_nodes, classes]
+                    commodity_edge_logits = edge_logits
+
+                # Convert to probabilities (class 1 = "use this edge")
+                # Shape: [num_nodes, num_nodes]
+                edge_probs = F.softmax(commodity_edge_logits / self.temperature, dim=-1)[:, :, 1]
 
                 # Sample a path from src to dst
                 path, log_prob = self._sample_single_path(
@@ -98,8 +124,8 @@ class PathSampler:
         # Check feasibility
         is_feasible = self._check_feasibility(batch_paths)
 
-        # Stack log probs into tensor
-        log_probs_tensor = torch.stack(batch_log_probs)
+        # Convert log probs to tensor
+        log_probs_tensor = torch.tensor(batch_log_probs, dtype=torch.float32, device=device)
 
         return batch_paths, log_probs_tensor, is_feasible
 
@@ -118,6 +144,10 @@ class PathSampler:
             path: List of nodes forming the path
             log_prob: Log probability of the sampled path
         """
+        # Ensure src and dst are integers
+        src = int(src)
+        dst = int(dst)
+
         path = [src]
         log_prob = 0.0
         current = src
@@ -158,9 +188,9 @@ class PathSampler:
             # Record log probability
             log_prob += torch.log(outgoing_probs[next_node] + 1e-8).item()
 
-            # Move to next node
-            path.append(next_node)
-            current = next_node
+            # Move to next node (ensure integer)
+            path.append(int(next_node))
+            current = int(next_node)
 
         # If we didn't reach destination, add it (fallback)
         if path[-1] != dst:
@@ -219,8 +249,22 @@ class PathSampler:
         for b, commodity_paths in enumerate(batch_paths):
             edge_usage = torch.zeros_like(self.edges_capacity[b])
 
+            # Get commodities for this batch item
+            if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3:
+                batch_commodities = self.commodities[b]  # [num_commodities, 3]
+            else:
+                batch_commodities = self.commodities  # Same for all batches
+
             for i, path in enumerate(commodity_paths):
-                src, dst, demand = self.commodities[i]
+                # Handle both list/tuple and tensor formats
+                commodity = batch_commodities[i]
+                if isinstance(commodity, (list, tuple)):
+                    src, dst, demand = commodity
+                else:
+                    # Tensor format: [src, dst, demand, ...]
+                    src = int(commodity[0].item() if hasattr(commodity[0], 'item') else commodity[0])
+                    dst = int(commodity[1].item() if hasattr(commodity[1], 'item') else commodity[1])
+                    demand = float(commodity[2].item() if hasattr(commodity[2], 'item') else commodity[2])
 
                 # Track edge usage
                 if len(path) > 1:
