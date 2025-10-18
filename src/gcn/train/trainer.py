@@ -363,7 +363,29 @@ class Trainer:
             metrics_logger.log_train_metrics(train_loss, train_err_edges, train_time)
 
             epoch_bar.write(f"\nEpoch {epoch+1}/{max_epochs}")
+<<<<<<< Updated upstream
             epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
+=======
+
+            # Display training metrics
+            if rl_metrics:
+                # RL training mode
+                epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Time: {train_time:.2f}s")
+                if 'reward' in rl_metrics:
+                    epoch_bar.write(f"  RL Metrics - Reward: {rl_metrics['reward']:.4f} (std: {rl_metrics.get('reward_std', 0):.4f}), "
+                                  f"Advantage: {rl_metrics.get('advantage', 0):.4f} (std: {rl_metrics.get('advantage_std', 0):.4f}), "
+                                  f"Entropy: {rl_metrics.get('entropy', 0):.4f}")
+                if 'load_factor' in rl_metrics:
+                    epoch_bar.write(f"  Load Factor: {rl_metrics['load_factor']:.4f}, Baseline: {rl_metrics.get('baseline', 0):.4f}")
+                if 'policy_loss' in rl_metrics:
+                    epoch_bar.write(f"  Policy Loss: {rl_metrics['policy_loss']:.4f}, Entropy Bonus: {rl_metrics.get('entropy_bonus', 0):.4f}")
+
+                # Log RL metrics to file
+                metrics_logger.log_rl_metrics(epoch, rl_metrics)
+            else:
+                # Supervised training mode
+                epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
+>>>>>>> Stashed changes
 
             # 検証
             if epoch % val_every == 0 or epoch == max_epochs - 1:
