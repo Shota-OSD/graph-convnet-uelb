@@ -12,6 +12,7 @@ import numpy as np
 
 from .base_strategy import BaseTrainingStrategy
 from ..algorithms.beamsearch_uelb import BeamsearchUELB, BeamSearchFactory
+from ..algorithms.path_sampler import PathSampler
 from ..models.model_utils import mean_feasible_load_factor
 
 
@@ -47,6 +48,21 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         # Beam search algorithm selection
         self.beam_search_type = config.get('rl_beam_search_type', 'standard')  # 'standard', 'unconstrained', etc.
 
+        # Sampling configuration
+        self.use_sampling = config.get('rl_use_sampling', True)  # Use sampling during training (True) or beam search (False)
+        self.sampling_temperature = config.get('rl_sampling_temperature', 1.0)  # Lower = more deterministic
+        self.sampling_top_p = config.get('rl_sampling_top_p', 0.9)  # Nucleus sampling threshold
+
+        # Advantage normalization for stability
+        self.normalize_advantages = config.get('rl_normalize_advantages', True)
+
+        # Smooth penalty for infeasible solutions
+        self.use_smooth_penalty = config.get('rl_use_smooth_penalty', True)
+        self.penalty_lambda = config.get('rl_penalty_lambda', 5.0)  # Penalty weight for constraint violation
+
+        # Invalid edge masking
+        self.mask_invalid_edges = config.get('rl_mask_invalid_edges', True)
+
         # Baseline for variance reduction
         self.reward_baseline = None
 
@@ -70,25 +86,43 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         batch_commodities = batch_data['batch_commodities']
 
         # Forward pass (get predictions without computing supervised loss)
+        # Mask invalid edges (zero capacity) to prevent sampling impossible paths
         y_preds, _ = model.forward(
             x_edges, x_commodities, x_edges_capacity, x_nodes,
-            y_edges=None, edge_cw=None, compute_loss=False
+            y_edges=None, edge_cw=None, compute_loss=False,
+            mask_invalid_edges=self.mask_invalid_edges
         )
 
-        # Use beam search to generate paths based on model predictions
-        # Select beam search algorithm based on configuration
-        beam_search = BeamSearchFactory.create_algorithm(
-            self.beam_search_type,
-            y_pred_edges=y_preds,
-            beam_size=self.beam_size,
-            batch_size=self.batch_size,
-            edges_capacity=x_edges_capacity,
-            commodities=batch_commodities,
-            dtypeFloat=torch.float,
-            dtypeLong=torch.long,
-            mode_strict=True
-        )
-        pred_paths, is_feasible = beam_search.search()
+        # Generate paths: use sampling for training (on-policy), beam search for evaluation
+        if self.use_sampling and model.training:
+            # Probabilistic sampling (REINFORCE requires on-policy samples)
+            sampler = PathSampler(
+                y_pred_edges=y_preds,
+                edges_capacity=x_edges_capacity,
+                commodities=batch_commodities,
+                num_samples=1,
+                temperature=self.sampling_temperature,
+                top_p=self.sampling_top_p,
+                dtypeFloat=torch.float,
+                dtypeLong=torch.long
+            )
+            pred_paths, path_log_probs, is_feasible = sampler.sample()
+        else:
+            # Beam search for evaluation (deterministic, finds better solutions)
+            beam_search = BeamSearchFactory.create_algorithm(
+                self.beam_search_type,
+                y_pred_edges=y_preds,
+                beam_size=self.beam_size,
+                batch_size=self.batch_size,
+                edges_capacity=x_edges_capacity,
+                commodities=batch_commodities,
+                dtypeFloat=torch.float,
+                dtypeLong=torch.long,
+                mode_strict=True
+            )
+            pred_paths, is_feasible = beam_search.search()
+            # For beam search, we don't have exact log probs, so use surrogate
+            path_log_probs = None
 
         # Compute maximum load factor (our optimization objective)
         mean_maximum_load_factor, individual_load_factors = mean_feasible_load_factor(
@@ -100,58 +134,107 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             batch_commodities
         )
 
-        # Design reward signal
-        if self.reward_type == 'load_factor':
-            # Reward = negative load factor (we want to minimize it)
-            # Clamp to avoid extreme values
-            if mean_maximum_load_factor > 1 or mean_maximum_load_factor == 0:
-                # Infeasible solution - large penalty
-                reward = -10.0
-            else:
-                reward = -mean_maximum_load_factor
-        elif self.reward_type == 'inverse_load_factor':
-            # Reward = inverse of load factor (higher is better)
-            if mean_maximum_load_factor > 1 or mean_maximum_load_factor == 0:
-                reward = -10.0
-            else:
-                reward = 1.0 / mean_maximum_load_factor
-        else:
-            raise ValueError(f"Unknown reward type: {self.reward_type}")
+        # Design reward signal PER SAMPLE
+        rewards = []
+        for i in range(self.batch_size):
+            load_factor_i = individual_load_factors[i] if i < len(individual_load_factors) else mean_maximum_load_factor
 
-        # Update baseline using moving average
+            if self.reward_type == 'load_factor':
+                # Reward = negative load factor (we want to minimize it)
+                if self.use_smooth_penalty:
+                    # Smooth penalty using softplus for constraint violation
+                    # softplus(x) = log(1 + exp(x)) ≈ max(0, x) but differentiable
+                    violation = load_factor_i - 1.0  # How much we exceed capacity
+                    penalty = F.softplus(torch.tensor(violation)).item() * self.penalty_lambda
+                    reward_i = -load_factor_i - penalty
+                else:
+                    # Original discrete penalty
+                    if load_factor_i > 1 or load_factor_i == 0:
+                        reward_i = -10.0  # Infeasible solution - large penalty
+                    else:
+                        reward_i = -load_factor_i
+            elif self.reward_type == 'inverse_load_factor':
+                # Reward = inverse of load factor (higher is better)
+                if self.use_smooth_penalty:
+                    if load_factor_i == 0:
+                        reward_i = -10.0  # Still penalize zero (invalid solution)
+                    else:
+                        violation = load_factor_i - 1.0
+                        penalty = F.softplus(torch.tensor(violation)).item() * self.penalty_lambda
+                        base_reward = 1.0 / load_factor_i if load_factor_i > 0 else -10.0
+                        reward_i = base_reward - penalty
+                else:
+                    # Original discrete penalty
+                    if load_factor_i > 1 or load_factor_i == 0:
+                        reward_i = -10.0
+                    else:
+                        reward_i = 1.0 / load_factor_i
+            else:
+                raise ValueError(f"Unknown reward type: {self.reward_type}")
+
+            rewards.append(reward_i)
+
+        # Convert to tensor
+        rewards = torch.tensor(rewards, dtype=torch.float32, device=y_preds.device)
+
+        # Update baseline using moving average PER SAMPLE
+        # Initialize baseline if needed
+        if self.reward_baseline is None:
+            self.reward_baseline = rewards.mean().item()
+
         if self.use_baseline:
-            if self.reward_baseline is None:
-                self.reward_baseline = reward
-            else:
-                self.reward_baseline = (
-                    self.baseline_momentum * self.reward_baseline +
-                    (1 - self.baseline_momentum) * reward
-                )
-            advantage = reward - self.reward_baseline
+            # Compute advantages per sample
+            advantages = rewards - self.reward_baseline
+
+            # Update baseline with batch mean
+            batch_mean_reward = rewards.mean().item()
+            self.reward_baseline = (
+                self.baseline_momentum * self.reward_baseline +
+                (1 - self.baseline_momentum) * batch_mean_reward
+            )
         else:
-            advantage = reward
+            advantages = rewards
 
-        # Compute policy gradient loss
-        # We need to compute log probabilities of selected actions
-        log_probs = F.log_softmax(y_preds, dim=-1)
+        # Normalize advantages for better gradient stability
+        # This reduces variance without changing the expected gradient
+        if self.normalize_advantages and self.batch_size > 1:
+            advantage_mean = advantages.mean()
+            advantage_std = advantages.std()
+            # Avoid division by zero
+            if advantage_std > 1e-8:
+                advantages = (advantages - advantage_mean) / (advantage_std + 1e-8)
 
-        # Extract log probabilities for the paths chosen by beam search
-        # This is a simplified version - full implementation would track exact action sequence
-        # For now, we compute average log prob across all predictions
-        policy_loss = -log_probs.mean() * advantage
+        # Compute policy gradient loss PER SAMPLE
+        if path_log_probs is not None and model.training:
+            # CORRECT REINFORCE: Use log probability of sampled trajectory
+            # L = -Σ_i [log π(τ_i) * (R_i - b)]
+            # where τ_i is the sampled trajectory for sample i
+            # Shape: path_log_probs [batch_size], advantages [batch_size]
+            per_sample_loss = -path_log_probs * advantages
+            policy_loss = per_sample_loss.mean()  # Average over batch
+        else:
+            # Fallback for beam search (not theoretically correct, but allows mixed training)
+            log_probs = F.log_softmax(y_preds, dim=-1)
+            # Use mean advantage for fallback
+            mean_advantage = advantages.mean() if isinstance(advantages, torch.Tensor) else advantages
+            policy_loss = -log_probs.mean() * mean_advantage
 
         # Add entropy bonus for exploration
         probs = F.softmax(y_preds, dim=-1)
-        entropy = -(probs * log_probs).sum(dim=-1).mean()
+        log_probs_for_entropy = F.log_softmax(y_preds, dim=-1)
+        entropy = -(probs * log_probs_for_entropy).sum(dim=-1).mean()
         entropy_bonus = -self.entropy_weight * entropy
 
         total_loss = policy_loss + entropy_bonus
 
-        # Store metrics
+        # Store metrics (use batch averages for logging)
+        mean_reward = rewards.mean().item()
+        mean_advantage = advantages.mean().item() if isinstance(advantages, torch.Tensor) else advantages
+
         metrics = {
             'mean_load_factor': mean_maximum_load_factor,
-            'reward': reward,
-            'advantage': advantage,
+            'reward': mean_reward,
+            'advantage': mean_advantage,
             'entropy': entropy.item(),
             'baseline': self.reward_baseline if self.reward_baseline else 0.0,
             'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0

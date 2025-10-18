@@ -65,6 +65,18 @@
         "type": "choice",
         "choices": ["standard", "unconstrained"]
       },
+      "rl_sampling_temperature": {
+        "type": "float",
+        "min": 0.5,
+        "max": 2.0,
+        "log_scale": false
+      },
+      "rl_sampling_top_p": {
+        "type": "float",
+        "min": 0.8,
+        "max": 0.99,
+        "log_scale": false
+      },
       "decay_rate": {
         "type": "float",
         "min": 1.0,
