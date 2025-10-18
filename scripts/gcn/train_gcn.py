@@ -67,7 +67,7 @@ def main():
 
     # トレーナーとエバリュエーターの初期化
     trainer = Trainer(config, dtypeFloat, dtypeLong)
-    evaluator = Evaluator(config, dtypeFloat, dtypeLong)
+    evaluator = Evaluator(config, dtypeFloat, dtypeLong, strategy=trainer.strategy)
     metrics_logger = MetricsLogger()
 
     # load_saved_modelがtrueの場合は評価のみ実行

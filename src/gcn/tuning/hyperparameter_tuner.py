@@ -79,7 +79,7 @@ class HyperparameterTuner:
 
             # トレーナーと評価器の初期化
             trainer = Trainer(config, dtypeFloat, dtypeLong)
-            evaluator = Evaluator(config, dtypeFloat, dtypeLong)
+            evaluator = Evaluator(config, dtypeFloat, dtypeLong, strategy=trainer.strategy)
             metrics_logger = MetricsLogger(self.results_dir)
 
             # 訓練実行
