@@ -1,17 +1,34 @@
 # Graph ConvNet UELB - Training Pipeline
 
-このリポジトリは、グラフニューラルネットワーク（GCN）を用いたUELB問題の学習・評価パイプラインを提供します。
+このリポジトリは、**GCN (Graph Convolutional Network)** と **RL-KSP (Reinforcement Learning with K-Shortest Paths)** の2つの手法を用いたUELB問題の学習・評価パイプラインを提供します。
+
+## 📋 目次
+- [必要条件](#必要条件)
+- [セットアップ](#セットアップ)
+- [プロジェクト構造](#プロジェクト構造)
+- [使い方](#使い方)
+  - [データ生成](#1-データ生成)
+  - [GCN実験](#2-gcn実験)
+  - [RL-KSP実験](#3-rl-ksp実験)
+- [設定ファイル](#設定ファイル)
+- [結果の確認](#結果の確認)
+- [トラブルシューティング](#トラブルシューティング)
+
+---
 
 ## 必要条件
-- Python 3.9以降
-- CUDA対応GPU（推奨）
-- Conda（MinicondaまたはAnaconda）
+
+- **Python 3.9以降**
+- **CUDA対応GPU**（推奨、CPUでも動作可能）
+- **Conda**（MinicondaまたはAnaconda）
+
+---
 
 ## セットアップ
 
 ### 1. Conda環境の作成とアクティベート
 
-```sh
+```bash
 # 環境の作成
 conda env create -f environment.yml
 
@@ -21,14 +38,57 @@ conda activate gcn-uelb-env
 
 ### 2. 環境の確認
 
-```sh
+```bash
 # 環境が正しく作成されたか確認
 conda list
 ```
 
 ### 3. 設定ファイルの編集
 
-設定ファイル（例: `configs/default2.json`）を編集して、学習条件やデータパスを調整します。
+設定ファイル（例: `configs/gcn/default2.json`）を編集して、学習条件やデータパスを調整します。
+
+---
+
+## プロジェクト構造
+
+```
+graph-convnet-uelb/
+│
+├── src/
+│   ├── common/              # 共通モジュール（両手法で共有）
+│   │   ├── data_management/ # データ読み込み・生成
+│   │   ├── graph/           # グラフ処理
+│   │   ├── config/          # 設定管理
+│   │   └── visualization/   # 可視化
+│   │
+│   ├── gcn/                 # GCN手法専用
+│   │   ├── models/          # GCNモデル
+│   │   ├── algorithms/      # ビームサーチ
+│   │   ├── train/           # トレーナー・評価器
+│   │   └── tuning/          # ハイパーパラメータ調整
+│   │
+│   └── rl_ksp/              # RL-KSP手法専用
+│       ├── environment/     # RL環境
+│       ├── models/          # DQNモデル
+│       ├── train/           # RLトレーナー
+│       └── tuning/          # ハイパーパラメータ調整
+│
+├── configs/
+│   ├── gcn/                 # GCN用設定ファイル
+│   └── rl_ksp/              # RL-KSP用設定ファイル
+│
+├── scripts/
+│   ├── gcn/                 # GCN実行スクリプト
+│   ├── rl_ksp/              # RL-KSP実行スクリプト
+│   └── common/              # 共通スクリプト
+│
+├── data/                    # データセット（生成後に作成）
+├── saved_models/            # 保存モデル
+├── results/                 # 実験結果
+└── logs/                    # ログファイル
+```
+
+---
 
 ## 使い方
 
@@ -36,140 +96,265 @@ conda list
 
 まず、学習・評価用のデータセットを生成します：
 
-```sh
+```bash
 # デフォルト設定でデータ生成
-python generate_data.py
+python scripts/common/generate_data.py --config configs/gcn/default2.json
 
 # 特定の設定ファイルでデータ生成
-python generate_data.py --config configs/nsfnet_15_commodities.json
+python scripts/common/generate_data.py --config configs/gcn/nsfnet_15_commodities.json
 
 # 特定のモードのみ生成
-python generate_data.py --config configs/nsfnet_15_commodities.json --modes train val
+python scripts/common/generate_data.py --config configs/gcn/nsfnet_15_commodities.json --modes train val
 
 # 確認なしで強制実行
-python generate_data.py --config configs/nsfnet_15_commodities.json --force
+python scripts/common/generate_data.py --config configs/gcn/nsfnet_15_commodities.json --force
 
-# 既存データの削除のみ
-python generate_data.py --clean-only
+# データのみ削除（再生成しない）
+python scripts/common/generate_data.py --clean-only
 ```
 
-### 2. 学習・評価の実行
+**実行後**、以下のディレクトリが作成されます：
+- `data/train_data/` - 学習データ
+- `data/val_data/` - 検証データ
+- `data/test_data/` - テストデータ
 
-データ生成後、モデルの学習と評価を実行します：
+---
 
-```sh
-# GCNモード（デフォルト）
-python main.py --config configs/nsfnet_15_commodities.json
+### 2. GCN実験
 
-# 強化学習モード
-python main.py --config configs/nsfnet_15_commodities_rl.json --mode rl
+#### 基本的な学習+テスト（一括実行）
+
+```bash
+# デフォルト設定で実行
+python scripts/gcn/train_gcn.py --config configs/gcn/default2.json
+
+# NSFNetトポロジー、10品種
+python scripts/gcn/train_gcn.py --config configs/gcn/nsfnet_10_commodities.json
+
+# NSFNetトポロジー、20品種
+python scripts/gcn/train_gcn.py --config configs/gcn/nsfnet_20_commodities.json
 ```
 
-- データが存在しない場合は、適切なエラーメッセージとともにデータ生成コマンドが表示されます
-- ログやモデルの重みは`saved_models/`ディレクトリに保存されます
+#### 保存済みモデルを読み込んで評価のみ
 
-### 3. モデルの保存・再利用機能
-
-#### 新規トレーニング（モデル保存あり）
-```sh
-python main.py --config configs/with_model_saving.json
+```bash
+python scripts/gcn/train_gcn.py --config configs/gcn/load_saved_model.json
 ```
 
-#### 保存済みモデルの再利用
-```sh
-# 最新のモデルを自動読み込み
-python main.py --config configs/load_saved_model.json
-
-# 特定のエポックのモデルを指定読み込み
-python main.py --config configs/load_specific_epoch.json
+#### 実行フロー
+```
+1. 設定ファイル読み込み
+2. データセット読み込み
+3. GCNモデル初期化
+4. 学習実行（複数エポック）
+   ├─ 各エポックで検証実行
+   └─ ベストモデル保存
+5. テスト実行（最終評価）
+6. 結果保存（logs/, results/）
 ```
 
-#### モデル保存の設定オプション
+---
 
-設定ファイルに以下のオプションを追加することで、モデルの保存・読み込み動作をカスタマイズできます：
+### 3. RL-KSP実験
+
+#### 基本的な学習+テスト（一括実行）
+
+```bash
+# デフォルト設定で実行
+python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/rl_config.json
+
+# NSFNetトポロジー、10品種
+python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/nsfnet_10_commodities_rl.json
+
+# NSFNetトポロジー、20品種
+python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/nsfnet_20_commodities_rl.json
+```
+
+#### 実行フロー
+```
+1. 設定ファイル読み込み
+2. データセット読み込み
+3. RL環境・DQNモデル初期化
+4. 学習実行（複数エピソード）
+   └─ ε-greedy方策で経路探索
+5. テスト実行（学習済みモデルで評価）
+6. 結果保存（logs/, results/）
+```
+
+---
+
+## 設定ファイル
+
+### GCN用設定ファイル（`configs/gcn/`）
+
+| ファイル | 説明 |
+|---------|------|
+| `default.json` | デフォルト設定 |
+| `default2.json` | 代替デフォルト設定 |
+| `nsfnet_10_commodities.json` | NSFNet 10品種 |
+| `nsfnet_15_commodities.json` | NSFNet 15品種 |
+| `nsfnet_20_commodities.json` | NSFNet 20品種 |
+| `nsfnet_25_commodities.json` | NSFNet 25品種 |
+| `tuning_config.json` | ハイパーパラメータ調整用 |
+| `load_saved_model.json` | 保存済みモデル読み込み |
+| `with_model_saving.json` | モデル保存設定 |
+
+### RL-KSP用設定ファイル（`configs/rl_ksp/`）
+
+| ファイル | 説明 |
+|---------|------|
+| `rl_config.json` | RLデフォルト設定 |
+| `nsfnet_5_commodities_rl.json` | NSFNet 5品種（RL） |
+| `nsfnet_10_commodities_rl.json` | NSFNet 10品種（RL） |
+| `nsfnet_15_commodities_rl.json` | NSFNet 15品種（RL） |
+| `nsfnet_20_commodities_rl.json` | NSFNet 20品種（RL） |
+| `rl_load_saved_model.json` | RL保存済みモデル読み込み |
+| `rl_with_model_saving.json` | RLモデル保存設定 |
+
+---
+
+## 結果の確認
+
+### 学習ログ
+
+学習中の進捗は標準出力に表示されます：
+
+```
+GCN例:
+epoch:01  execution time:12.34s  lr:1.00e-03  loss:0.1234
+          mean_maximum_load_factor:0.567  gt_load_factor:0.456
+          approximation_rate:80.45  infeasible_rate:5.2
+
+RL-KSP例:
+Episode 10/100, Total Reward: -0.0589, Loss: 0.0001,
+                Epsilon: 0.2936, Time: 0.39s
+```
+
+### 保存されるファイル
+
+- **モデル**: `saved_models/gcn/` または `saved_models/rl_ksp/`
+- **ログ**: `logs/training_results_YYYYMMDD_HHMMSS.txt`
+- **メトリクス**: `logs/training_results_YYYYMMDD_HHMMSS.pkl`
+- **結果**: `results/` ディレクトリ
+
+### 結果の集計
+
+複数実験の平均値を計算：
+
+```bash
+python scripts/common/calculate_averages.py
+```
+
+---
+
+## トラブルシューティング
+
+### ImportError が発生する場合
+
+プロジェクトルートから実行していることを確認してください：
+
+```bash
+# 正しい実行方法
+cd /path/to/graph-convnet-uelb
+python scripts/gcn/train_gcn.py --config configs/gcn/default2.json
+
+# 間違った実行方法（これはエラーになります）
+cd /path/to/graph-convnet-uelb/scripts/gcn
+python train_gcn.py --config ../../configs/gcn/default2.json
+```
+
+### データが見つからない場合
+
+データを生成してください：
+
+```bash
+python scripts/common/generate_data.py --config configs/gcn/default2.json
+```
+
+### GPU/CUDAエラーが発生する場合
+
+設定ファイルで `use_gpu: false` を指定してCPUモードで実行：
 
 ```json
 {
-  "models_dir": "./saved_models",        // モデル保存ディレクトリ
-  "save_model": true,                    // モデル保存の有効/無効
-  "save_every_epoch": true,              // 毎エポックでモデル保存
-  "load_saved_model": true,              // 起動時に保存済みモデルを読み込み
-  "load_model_epoch": 5,                 // 特定エポックのモデルを読み込み（省略時は最新版）
-  "cleanup_old_models": true             // 古いモデルファイルの自動削除
+  "use_gpu": false,
+  ...
 }
 ```
 
-#### モデル選択の仕組み
+### メモリ不足エラー
 
-- **自動識別**: モデル構造の設定（`hidden_dim`, `num_layers`等）から生成されるハッシュで同一構造のモデルのみ読み込み
-- **ファイル形式**: 
-  - 最新版: `model_{hash}_latest.pt`
-  - エポック別: `model_{hash}_epoch_{番号}.pt`
-- **選択ロジック**:
-  - `load_model_epoch`**未指定** → 最新版(`latest.pt`)を自動選択
-  - `load_model_epoch: 5` → エポック5のモデル(`epoch_5.pt`)を選択
-- **利用可能なモデル表示**: 指定したモデルが見つからない場合、利用可能なモデル一覧を自動表示
+バッチサイズを小さくしてください：
 
-### Jupyter Notebook版の実行
-
-```sh
-jupyter notebook main.ipynb
+```json
+{
+  "batch_size": 20,  // デフォルトより小さく
+  ...
+}
 ```
 
-### 4. 設定のカスタマイズ
-- 各設定ファイルを編集することで、エポック数やバッチサイズ、学習率などを変更できます。
-- GPUの指定は`gpu_id`で行います。
+---
 
-#### 利用可能な設定ファイル
+## ハイパーパラメータ調整
 
-**Commodities別設定:**
-- `configs/nsfnet_5_commodities.json`: 5コモディティ設定
-- `configs/nsfnet_10_commodities.json`: 10コモディティ設定
-- `configs/nsfnet_15_commodities.json`: 15コモディティ設定
-- `configs/nsfnet_20_commodities.json`: 20コモディティ設定
-- `configs/nsfnet_25_commodities.json`: 25コモディティ設定
+（将来実装予定）
 
-**強化学習設定:**
-- `configs/nsfnet_*_commodities_rl.json`: 各種コモディティ数対応の強化学習設定
+```bash
+# GCN用
+python scripts/gcn/tune_gcn.py --config configs/gcn/tuning_config.json
 
-**その他:**
-- `configs/default2.json`: 基本設定（モデル保存なし）
-- `configs/with_model_saving.json`: モデル保存機能を有効化
-- `configs/load_saved_model.json`: 保存済みモデルの最新版を読み込み
-- `configs/load_specific_epoch.json`: 特定エポックのモデルを読み込み
-
-### 環境の管理
-
-```sh
-# 環境の非アクティベート
-conda deactivate
-
-# 環境の削除（必要に応じて）
-conda env remove -n gcn-uelb-env
-
-# 環境の更新
-conda env update -f environment.yml
+# RL-KSP用
+python scripts/rl_ksp/tune_rl_ksp.py --config configs/rl_ksp/tuning_config.json
 ```
 
-### 実行例
+---
 
-```sh
-# 1. データ生成
-python generate_data.py --config configs/nsfnet_15_commodities.json
+## 開発者向け情報
 
-# 2. GCNトレーニング
-python main.py --config configs/nsfnet_15_commodities.json --mode gcn
+### 新しいモジュールを追加する場合
 
-# 3. 強化学習トレーニング
-python main.py --config configs/nsfnet_15_commodities_rl.json --mode rl
+- **GCN用**: `src/gcn/` 以下に追加
+- **RL-KSP用**: `src/rl_ksp/` 以下に追加
+- **共通**: `src/common/` 以下に追加
+
+### インポートの書き方
+
+```python
+# 絶対インポートを使用（相対インポートは使用しない）
+from src.gcn.models.gcn_model import ResidualGatedGCNModel
+from src.common.data_management.dataset_reader import DatasetReader
+from src.rl_ksp.models.dqn_model import DQNModel
 ```
 
-### 参考
-- **データ生成**: `generate_data.py` - データセット生成専用スクリプト
-- **メインスクリプト**: `main.py` - 学習・評価パイプライン
-- **コード詳細**: `src/`ディレクトリ内の各ファイル
-- **プロジェクト構造**: `README_REFACTORED.md`
-- **Notebook版**: `main.ipynb`
+---
+
+## リファクタリング履歴
+
+2025-10-16にプロジェクト構造を大幅にリファクタリングしました。
+
+詳細は以下のドキュメントを参照：
+- `RESTRUCTURE_PLAN.md` - リファクタリング計画
+- `RESTRUCTURE_COMPLETE.md` - 完了報告
+
+### 旧ファイルについて
+
+旧構造のファイルは `.backup_old_structure/` にバックアップされています。
+
+---
 
 ## ライセンス
-本リポジトリのコードは研究目的での利用を想定しています。
+
+（ライセンス情報をここに記載）
+
+---
+
+## お問い合わせ
+
+（連絡先情報をここに記載）
+
+---
+
+## 更新履歴
+
+- **2025-10-16**: プロジェクト構造リファクタリング（GCN/RL-KSP分離）
+- **2025-XX-XX**: 初版リリース
