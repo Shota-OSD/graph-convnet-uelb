@@ -85,6 +85,12 @@ class Trainer:
         running_load_factor = 0.0
         current_baseline = None
 
+        # Track all individual values for proper std calculation
+        all_rewards = []
+        all_advantages = []
+        all_entropies = []
+        all_load_factors = []
+
         start_epoch = time.time()
 
         # Reset strategy metrics for new epoch
@@ -119,27 +125,61 @@ class Trainer:
             # Track RL-specific metrics if available
             if 'reward' in metrics:
                 running_reward += batch_size * metrics['reward']
+                # Collect individual values if available
+                if 'reward_individual' in metrics:
+                    all_rewards.extend(metrics['reward_individual'])
             if 'advantage' in metrics:
                 running_advantage += batch_size * metrics['advantage']
+                if 'advantage_individual' in metrics:
+                    all_advantages.extend(metrics['advantage_individual'])
             if 'entropy' in metrics:
                 running_entropy += batch_size * metrics['entropy']
+                if 'entropy_individual' in metrics:
+                    all_entropies.extend(metrics['entropy_individual'])
             if 'mean_load_factor' in metrics:
                 running_load_factor += batch_size * metrics['mean_load_factor']
+                if 'load_factor_individual' in metrics:
+                    all_load_factors.extend(metrics['load_factor_individual'])
             if 'baseline' in metrics:
                 current_baseline = metrics['baseline']
 
         loss = running_loss / running_nb_data
         err_edges = running_err_edges / running_nb_data if running_nb_data > 0 else 0.0
 
-        # Compute RL metrics averages
+        # Compute RL metrics averages and stds
         rl_metrics = {}
         if running_reward != 0.0:
+            import numpy as np
             rl_metrics['reward'] = running_reward / running_nb_data
             rl_metrics['advantage'] = running_advantage / running_nb_data
             rl_metrics['entropy'] = running_entropy / running_nb_data
             rl_metrics['load_factor'] = running_load_factor / running_nb_data
             rl_metrics['baseline'] = current_baseline if current_baseline is not None else 0.0
 
+            # Compute standard deviations from collected individual values
+            if len(all_rewards) > 0:
+                rl_metrics['reward_std'] = float(np.std(all_rewards))
+            else:
+                rl_metrics['reward_std'] = 0.0
+
+            if len(all_advantages) > 0:
+                rl_metrics['advantage_std'] = float(np.std(all_advantages))
+            else:
+                rl_metrics['advantage_std'] = 0.0
+
+            if len(all_entropies) > 0:
+                rl_metrics['entropy_std'] = float(np.std(all_entropies))
+            else:
+                rl_metrics['entropy_std'] = 0.0
+
+            if len(all_load_factors) > 0:
+                rl_metrics['load_factor_std'] = float(np.std(all_load_factors))
+            else:
+                rl_metrics['load_factor_std'] = 0.0
+
+        # Ensure model is back in training mode after epoch
+        self.net.train()
+        
         return time.time()-start_epoch, loss, err_edges, rl_metrics
     
     def get_model(self):
@@ -415,6 +455,8 @@ class Trainer:
 
             # 検証
             if epoch % val_every == 0 or epoch == max_epochs - 1:
+                # Ensure model is in eval mode and use the current updated model
+                self.net.eval()
                 val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='val'
                 )
@@ -430,6 +472,8 @@ class Trainer:
 
             # テスト
             if epoch % test_every == 0 or epoch == max_epochs - 1:
+                # Ensure model is in eval mode and use the current updated model
+                self.net.eval()
                 test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='test'
                 )
