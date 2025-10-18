@@ -20,7 +20,14 @@ class MetricsLogger:
         self.test_time_list = []
         self.total_train_time = 0.0
         self.total_test_time = 0.0
-        
+
+        # RL-specific metrics
+        self.rl_reward_list = []
+        self.rl_advantage_list = []
+        self.rl_entropy_list = []
+        self.rl_load_factor_list = []
+        self.rl_baseline_list = []
+
         self.save_dir = save_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
@@ -47,6 +54,27 @@ class MetricsLogger:
         if test_time is not None:
             self.test_time_list.append(test_time)
             self.total_test_time += test_time
+
+    def log_rl_metrics(self, epoch: int, rl_metrics: dict):
+        """RL特有のメトリクスを記録"""
+        self.rl_reward_list.append(rl_metrics.get('reward', 0.0))
+        self.rl_advantage_list.append(rl_metrics.get('advantage', 0.0))
+        self.rl_entropy_list.append(rl_metrics.get('entropy', 0.0))
+        self.rl_load_factor_list.append(rl_metrics.get('load_factor', 0.0))
+        self.rl_baseline_list.append(rl_metrics.get('baseline', 0.0))
+
+        # CSV形式でも保存
+        csv_filename = os.path.join(self.save_dir, f"rl_gcn_metrics_{self.timestamp}.csv")
+        file_exists = os.path.exists(csv_filename)
+
+        with open(csv_filename, 'a', encoding='utf-8') as f:
+            if not file_exists:
+                # ヘッダー行
+                f.write("epoch,reward,advantage,entropy,load_factor,baseline\n")
+            # データ行
+            f.write(f"{epoch},{rl_metrics.get('reward', 0.0):.6f},{rl_metrics.get('advantage', 0.0):.6f},"
+                   f"{rl_metrics.get('entropy', 0.0):.6f},{rl_metrics.get('load_factor', 0.0):.6f},"
+                   f"{rl_metrics.get('baseline', 0.0):.6f}\n")
     
     def get_final_metrics(self) -> dict:
         """最終メトリクスを取得"""

@@ -77,6 +77,14 @@ class Trainer:
         running_loss = 0.0
         running_err_edges = 0.0
         running_nb_data = 0
+
+        # RL-specific metrics
+        running_reward = 0.0
+        running_advantage = 0.0
+        running_entropy = 0.0
+        running_load_factor = 0.0
+        current_baseline = None
+
         start_epoch = time.time()
 
         # Reset strategy metrics for new epoch
@@ -108,9 +116,31 @@ class Trainer:
             if 'edge_error' in metrics:
                 running_err_edges += batch_size * metrics['edge_error']
 
+            # Track RL-specific metrics if available
+            if 'reward' in metrics:
+                running_reward += batch_size * metrics['reward']
+            if 'advantage' in metrics:
+                running_advantage += batch_size * metrics['advantage']
+            if 'entropy' in metrics:
+                running_entropy += batch_size * metrics['entropy']
+            if 'mean_load_factor' in metrics:
+                running_load_factor += batch_size * metrics['mean_load_factor']
+            if 'baseline' in metrics:
+                current_baseline = metrics['baseline']
+
         loss = running_loss / running_nb_data
         err_edges = running_err_edges / running_nb_data if running_nb_data > 0 else 0.0
-        return time.time()-start_epoch, loss, err_edges
+
+        # Compute RL metrics averages
+        rl_metrics = {}
+        if running_reward != 0.0:
+            rl_metrics['reward'] = running_reward / running_nb_data
+            rl_metrics['advantage'] = running_advantage / running_nb_data
+            rl_metrics['entropy'] = running_entropy / running_nb_data
+            rl_metrics['load_factor'] = running_load_factor / running_nb_data
+            rl_metrics['baseline'] = current_baseline if current_baseline is not None else 0.0
+
+        return time.time()-start_epoch, loss, err_edges, rl_metrics
     
     def get_model(self):
         """モデルを取得"""
@@ -359,11 +389,25 @@ class Trainer:
 
         for epoch in epoch_bar:
             # トレーニング
-            train_time, train_loss, train_err_edges = self.train_one_epoch(epoch_bar)
+            train_time, train_loss, train_err_edges, rl_metrics = self.train_one_epoch(epoch_bar)
             metrics_logger.log_train_metrics(train_loss, train_err_edges, train_time)
 
             epoch_bar.write(f"\nEpoch {epoch+1}/{max_epochs}")
-            epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
+
+            # Display training metrics
+            if rl_metrics:
+                # RL training mode
+                epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Time: {train_time:.2f}s")
+                if 'reward' in rl_metrics:
+                    epoch_bar.write(f"  RL Metrics - Reward: {rl_metrics['reward']:.4f}, Advantage: {rl_metrics.get('advantage', 0):.4f}, Entropy: {rl_metrics.get('entropy', 0):.4f}")
+                if 'load_factor' in rl_metrics:
+                    epoch_bar.write(f"  Load Factor: {rl_metrics['load_factor']:.4f}, Baseline: {rl_metrics.get('baseline', 0):.4f}")
+
+                # Log RL metrics to file
+                metrics_logger.log_rl_metrics(epoch, rl_metrics)
+            else:
+                # Supervised training mode
+                epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
 
             # 検証
             if epoch % val_every == 0 or epoch == max_epochs - 1:

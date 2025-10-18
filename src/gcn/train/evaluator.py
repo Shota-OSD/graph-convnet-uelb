@@ -10,12 +10,13 @@ from src.gcn.models.model_utils import edge_error, mean_feasible_load_factor
 
 class Evaluator:
     """評価を担当するクラス"""
-    
-    def __init__(self, config, dtypeFloat, dtypeLong):
+
+    def __init__(self, config, dtypeFloat, dtypeLong, strategy=None):
         self.config = config
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
-    
+        self.strategy = strategy  # Training strategy (for RL support)
+
     def evaluate(self, net, master_bar, mode='test'):
         """モデルを評価"""
         net.eval()
@@ -57,19 +58,31 @@ class Evaluator:
                 batch_commodities = batch_commodities.to(device)
                 x_commodities = x_commodities.to(device)
                 
-                if type(edge_cw) != torch.Tensor:
-                    edge_labels = y_edges.cpu().numpy().flatten()
-                    edge_cw = compute_class_weight("balanced", classes=np.unique(edge_labels), y=edge_labels)
-                
-                y_preds, loss = net.forward(x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges, edge_cw)
-                loss = loss.mean()
-                # エッジエラーは計算するが使用しない（テストでは負荷率を重視）
-                _, _ = edge_error(y_preds, y_edges, x_edges)
-                
-                beam_search = BeamsearchUELB(
-                    y_preds, self.config.beam_size, batch_size, x_edges_capacity, batch_commodities, torch.float, torch.long, mode_strict=True)
-                pred_paths, is_feasible = beam_search.search()
-                mean_maximum_load_factor, _ = mean_feasible_load_factor(batch_size, self.config.num_commodities, self.config.num_nodes, pred_paths, x_edges_capacity, batch_commodities)
+                # Use strategy for evaluation if available (RL support)
+                if self.strategy is not None:
+                    # Prepare batch data
+                    batch_data = self.strategy.prepare_batch_data(batch, device)
+
+                    # Compute loss using strategy (will use beam search for RL in eval mode)
+                    loss, metrics = self.strategy.compute_loss(net, batch_data, device)
+
+                    # Extract load factor from metrics
+                    mean_maximum_load_factor = metrics.get('mean_load_factor', 0.0)
+                else:
+                    # Original supervised learning evaluation
+                    if type(edge_cw) != torch.Tensor:
+                        edge_labels = y_edges.cpu().numpy().flatten()
+                        edge_cw = compute_class_weight("balanced", classes=np.unique(edge_labels), y=edge_labels)
+
+                    y_preds, loss = net.forward(x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges, edge_cw)
+                    loss = loss.mean()
+                    # エッジエラーは計算するが使用しない（テストでは負荷率を重視）
+                    _, _ = edge_error(y_preds, y_edges, x_edges)
+
+                    beam_search = BeamsearchUELB(
+                        y_preds, self.config.beam_size, batch_size, x_edges_capacity, batch_commodities, torch.float, torch.long, mode_strict=True)
+                    pred_paths, is_feasible = beam_search.search()
+                    mean_maximum_load_factor, _ = mean_feasible_load_factor(batch_size, self.config.num_commodities, self.config.num_nodes, pred_paths, x_edges_capacity, batch_commodities)
                 
                 if mean_maximum_load_factor > 1:
                     mean_maximum_load_factor = 0
