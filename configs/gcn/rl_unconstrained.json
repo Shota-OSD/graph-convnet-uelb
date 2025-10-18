@@ -42,7 +42,7 @@
     "batch_size": 20,
     "accumulation_steps": 1,
 
-    "learning_rate": 0.0001,
+    "learning_rate": 0.001,
     "decay_rate": 1.5,
     "dropout_rate": 0.2,
 
@@ -51,13 +51,13 @@
     "rl_reward_type": "load_factor",
     "rl_use_baseline": true,
     "rl_baseline_momentum": 0.9,
-    "rl_entropy_weight": 0.01,
+    "rl_entropy_weight": 0.1,
 
     "_comment_sampling": "=== Sampling Configuration (for correct REINFORCE) ===",
     "rl_use_sampling": true,
     "rl_sampling_temperature": 1.0,
     "rl_sampling_top_p": 0.9,
-    "rl_normalize_advantages": true,
+    "rl_normalize_advantages": false,
     "rl_use_smooth_penalty": true,
     "rl_penalty_lambda": 5.0,
     "rl_mask_invalid_edges": true,

@@ -145,7 +145,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                     # Smooth penalty using softplus for constraint violation
                     # softplus(x) = log(1 + exp(x)) ≈ max(0, x) but differentiable
                     violation = load_factor_i - 1.0  # How much we exceed capacity
-                    penalty = F.softplus(torch.tensor(violation)).item() * self.penalty_lambda
+                    penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
                     reward_i = -load_factor_i - penalty
                 else:
                     # Original discrete penalty
@@ -160,7 +160,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                         reward_i = -10.0  # Still penalize zero (invalid solution)
                     else:
                         violation = load_factor_i - 1.0
-                        penalty = F.softplus(torch.tensor(violation)).item() * self.penalty_lambda
+                        penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
                         base_reward = 1.0 / load_factor_i if load_factor_i > 0 else -10.0
                         reward_i = base_reward - penalty
                 else:
