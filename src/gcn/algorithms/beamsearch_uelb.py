@@ -375,13 +375,90 @@ class GreedyBeamSearch(BeamSearchAlgorithm):
         return [[0,1,2,3,4,5,6,7,8,9] for _ in range(num_commodities)]
 
 
+class UnconstrainedBeamSearch(BeamSearchAlgorithm):
+    """容量制約なしのビームサーチアルゴリズム"""
+
+    def _search_single_batch(self, batch: int) -> Tuple[List[List[int]], List[List[int]], bool]:
+        """容量制約なしのビームサーチによる単一バッチ検索
+
+        Note: 容量制約を無視するため、常にパスが見つかる想定。
+        is_feasibleは常にTrueを返すが、実際の実行可能性は
+        後で最大負荷率で判定される。
+        """
+        batch_y_pred_edges = self.y[batch]
+        commodities = self.commodities[batch]
+
+        node_orders = []
+        commodity_paths = []
+
+        for index, commodity in enumerate(commodities):
+            source_node = commodity[0].item()
+            target_node = commodity[1].item()
+
+            # 容量制約なしのビームサーチによるパス探索
+            node_order, best_path = self._unconstrained_beam_search_for_commodity(
+                self.edges_capacity[batch], batch_y_pred_edges[:, :, index],
+                source_node, target_node
+            )
+
+            node_orders.append(node_order)
+            commodity_paths.append(best_path)
+
+        # 容量制約を無視するため、is_feasibleは常にTrue
+        # 実際の実行可能性は最大負荷率で後で判定
+        return node_orders, commodity_paths, True
+
+    def _unconstrained_beam_search_for_commodity(self, edges_capacity, y_commodities, source, target):
+        """容量制約なしのビームサーチによるパス探索"""
+        beam_queue = [(source, [source], 0)]
+        best_paths = []
+
+        while beam_queue:
+            # ビームサイズでフィルタリング
+            beam_queue = sorted(beam_queue, key=lambda x: x[2], reverse=True)[:self.beam_size]
+
+            next_beam_queue = []
+            for current_node, path, current_score in beam_queue:
+                if current_node == target:
+                    best_paths.append((path, current_score))
+                    continue
+
+                for next_node in range(edges_capacity.shape[0]):
+                    # ループ検出のみ（容量チェックなし）
+                    if next_node in path:
+                        continue
+                    # エッジが存在するかチェック（容量>0）
+                    if edges_capacity[current_node, next_node].item() == 0:
+                        continue
+
+                    flow_probability = y_commodities[current_node, next_node]
+                    new_score = current_score + flow_probability
+                    new_path = path + [next_node]
+
+                    # 容量制約なしで追加
+                    next_beam_queue.append((next_node, new_path, new_score))
+
+            beam_queue = next_beam_queue
+
+        if not best_paths:
+            node_order = [0] * edges_capacity.shape[0]
+            return node_order, []
+
+        best_paths = sorted(best_paths, key=lambda x: x[1], reverse=True)
+        node_order = [0] * edges_capacity.shape[0]
+        for idx, node in enumerate(best_paths[0][0]):
+            node_order[node] = idx + 1
+        return node_order, best_paths[0][0]
+
+
 class BeamSearchFactory:
     """ビームサーチアルゴリズムのファクトリークラス"""
-    
+
     ALGORITHMS = {
         'standard': StandardBeamSearch,
         'deterministic': DeterministicBeamSearch,
-        'greedy': GreedyBeamSearch
+        'greedy': GreedyBeamSearch,
+        'unconstrained': UnconstrainedBeamSearch
     }
     
     @classmethod
