@@ -2,8 +2,8 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 
-from models.gcn_layers import ResidualGatedGCNLayer, MLP
-from utils.model_utils import *
+from .gcn_layers import ResidualGatedGCNLayer, MLP
+from .model_utils import *
 
 class ResidualGatedGCNModel(nn.Module):
     """Residual Gated GCN Model for outputting predictions as edge adjacency matrices.
@@ -20,7 +20,7 @@ class ResidualGatedGCNModel(nn.Module):
         # Define net parameters
         self.num_nodes = config.num_nodes
         self.num_commodities = config.num_commodities
-        self.voc_nodes_in = config['voc_nodes_in']
+        self.voc_nodes_in = config.num_commodities * 3
         self.voc_nodes_out = config['num_nodes']  # config['voc_nodes_out']
         self.voc_edges_in = config['voc_edges_in']
         self.voc_edges_out = config['voc_edges_out']
@@ -81,6 +81,8 @@ class ResidualGatedGCNModel(nn.Module):
 
         # Compute loss
         edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
+        # Move edge_cw to the same device as y_pred_edges
+        edge_cw = edge_cw.to(y_pred_edges.device)
         #edge_cw = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
         loss = loss_edges(y_pred_edges, y_edges, edge_cw)
             
