@@ -363,9 +363,6 @@ class Trainer:
             metrics_logger.log_train_metrics(train_loss, train_err_edges, train_time)
 
             epoch_bar.write(f"\nEpoch {epoch+1}/{max_epochs}")
-<<<<<<< Updated upstream
-            epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
-=======
 
             # Display training metrics
             if rl_metrics:
@@ -385,7 +382,6 @@ class Trainer:
             else:
                 # Supervised training mode
                 epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Edge Error: {train_err_edges:.2f}%, Time: {train_time:.2f}s")
->>>>>>> Stashed changes
 
             # 検証
             if epoch % val_every == 0 or epoch == max_epochs - 1:
