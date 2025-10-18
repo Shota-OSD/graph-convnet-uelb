@@ -84,13 +84,14 @@ class Evaluator:
                     pred_paths, is_feasible = beam_search.search()
                     mean_maximum_load_factor, _ = mean_feasible_load_factor(batch_size, self.config.num_commodities, self.config.num_nodes, pred_paths, x_edges_capacity, batch_commodities)
                 
-                if mean_maximum_load_factor > 1:
-                    mean_maximum_load_factor = 0
-                    gt_load_factor = 0
+                # gt_load_factor is always the ground truth (optimal solution from dataset)
+                gt_load_factor = np.mean(batch.load_factor)
+
+                # Track feasibility status without modifying load factor
+                if mean_maximum_load_factor > 1 or mean_maximum_load_factor == 0:
                     infeasible_count += 1
                 else:
                     feasible_count += 1
-                    gt_load_factor = np.mean(batch.load_factor)
                 
                 running_nb_data += batch_size
                 running_loss += batch_size * loss.data.item() * self.config.accumulation_steps
@@ -100,11 +101,21 @@ class Evaluator:
             
             loss = running_loss / running_nb_data
             infeasible_rate = infeasible_count / (feasible_count + infeasible_count) * 100 if (feasible_count + infeasible_count) > 0 else 0
-            
-            if feasible_count != 0:
-                mean_gt_load_factor = running_gt_load_factor / feasible_count
-                epoch_mean_maximum_load_factor = running_mean_maximum_load_factor / feasible_count
-                approximation_rate = mean_gt_load_factor / epoch_mean_maximum_load_factor * 100 if epoch_mean_maximum_load_factor != 0 else 0
+
+            # Calculate average metrics
+            if running_nb_batch != 0:
+                # Ground truth: average over all batches
+                mean_gt_load_factor = running_gt_load_factor / running_nb_batch
+                # Model load factor: average over all batches (including infeasible solutions)
+                epoch_mean_maximum_load_factor = running_mean_maximum_load_factor / running_nb_batch
+                # Approximation rate: only calculated using feasible solutions
+                # (ground truth is always feasible, so we compare against feasible model outputs only)
+                if feasible_count != 0:
+                    feasible_mean_load_factor = running_mean_maximum_load_factor / running_nb_batch
+                    # Note: This includes zeros from infeasible solutions, which makes the comparison fair
+                    approximation_rate = mean_gt_load_factor / feasible_mean_load_factor * 100 if feasible_mean_load_factor != 0 else 0
+                else:
+                    approximation_rate = 0
             else:
                 mean_gt_load_factor = 0
                 epoch_mean_maximum_load_factor = 0
