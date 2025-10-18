@@ -200,8 +200,12 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         if self.normalize_advantages and self.batch_size > 1:
             advantage_mean = advantages.mean()
             advantage_std = advantages.std()
-            # Avoid division by zero
-            if advantage_std > 1e-8:
+
+            # DEBUG: Check if advantages have variance
+            if advantage_std < 1e-8:
+                # No variance in advantages - skip normalization to preserve signal
+                pass
+            else:
                 advantages = (advantages - advantage_mean) / (advantage_std + 1e-8)
 
         # Compute policy gradient loss PER SAMPLE
@@ -229,15 +233,21 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
 
         # Store metrics (use batch averages for logging)
         mean_reward = rewards.mean().item()
+        reward_std = rewards.std().item() if isinstance(rewards, torch.Tensor) else 0.0
         mean_advantage = advantages.mean().item() if isinstance(advantages, torch.Tensor) else advantages
+        advantage_std = advantages.std().item() if isinstance(advantages, torch.Tensor) else 0.0
 
         metrics = {
             'mean_load_factor': mean_maximum_load_factor,
             'reward': mean_reward,
+            'reward_std': reward_std,
             'advantage': mean_advantage,
+            'advantage_std': advantage_std,
             'entropy': entropy.item(),
             'baseline': self.reward_baseline if self.reward_baseline else 0.0,
-            'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0
+            'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0,
+            'policy_loss': policy_loss.item(),
+            'entropy_bonus': entropy_bonus.item()
         }
 
         return total_loss, metrics

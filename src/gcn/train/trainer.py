@@ -399,9 +399,13 @@ class Trainer:
                 # RL training mode
                 epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Time: {train_time:.2f}s")
                 if 'reward' in rl_metrics:
-                    epoch_bar.write(f"  RL Metrics - Reward: {rl_metrics['reward']:.4f}, Advantage: {rl_metrics.get('advantage', 0):.4f}, Entropy: {rl_metrics.get('entropy', 0):.4f}")
+                    epoch_bar.write(f"  RL Metrics - Reward: {rl_metrics['reward']:.4f} (std: {rl_metrics.get('reward_std', 0):.4f}), "
+                                  f"Advantage: {rl_metrics.get('advantage', 0):.4f} (std: {rl_metrics.get('advantage_std', 0):.4f}), "
+                                  f"Entropy: {rl_metrics.get('entropy', 0):.4f}")
                 if 'load_factor' in rl_metrics:
                     epoch_bar.write(f"  Load Factor: {rl_metrics['load_factor']:.4f}, Baseline: {rl_metrics.get('baseline', 0):.4f}")
+                if 'policy_loss' in rl_metrics:
+                    epoch_bar.write(f"  Policy Loss: {rl_metrics['policy_loss']:.4f}, Entropy Bonus: {rl_metrics.get('entropy_bonus', 0):.4f}")
 
                 # Log RL metrics to file
                 metrics_logger.log_rl_metrics(epoch, rl_metrics)
