@@ -67,6 +67,12 @@ class ResidualGatedGCNModel(nn.Module):
         """
         # Features embedding
         x_edges_capacity_expanded = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
+
+        # Handle x_commodities shape: should be [batch_size, num_commodities]
+        # If it's [batch_size, num_commodities, 3] (with src/dst/demand), take only demand
+        if len(x_commodities.shape) == 3:
+            x_commodities = x_commodities[:, :, 2]  # Extract demand column
+
         x_commodities_expanded = x_commodities.unsqueeze(1).expand(-1, self.num_nodes, -1)
 
         x_embedded = self.nodes_embedding(x_nodes)
@@ -85,8 +91,12 @@ class ResidualGatedGCNModel(nn.Module):
         # Mask invalid edges (zero capacity) for RL training
         if mask_invalid_edges:
             # Create mask for edges with zero capacity
-            # Shape: [batch_size, num_nodes, num_nodes, num_commodities]
-            invalid_mask = (x_edges_capacity.unsqueeze(-1) == 0).expand_as(y_pred_edges)
+            # y_pred_edges shape: [batch_size, num_nodes, num_nodes, num_commodities, num_classes]
+            # x_edges_capacity shape: [batch_size, num_nodes, num_nodes]
+            # Expand to match y_pred_edges dimensions
+            invalid_mask = (x_edges_capacity.unsqueeze(-1).unsqueeze(-1) == 0)
+            # Broadcast across commodities and classes dimensions
+            invalid_mask = invalid_mask.expand(-1, -1, -1, self.num_commodities, self.voc_edges_out)
             # Set logits for invalid edges to very negative value (will have ~0 probability after softmax)
             y_pred_edges = y_pred_edges.masked_fill(invalid_mask, -1e9)
 
