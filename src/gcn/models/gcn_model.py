@@ -42,21 +42,23 @@ class ResidualGatedGCNModel(nn.Module):
         self.mlp_edges = MLP(self.hidden_dim, self.voc_edges_out, self.mlp_layers)
         # self.mlp_nodes = MLP(self.hidden_dim, self.voc_nodes_out, self.mlp_layers)
 
-    def forward(self, x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges, edge_cw):
+    def forward(self, x_edges, x_commodities, x_edges_capacity, x_nodes, y_edges=None, edge_cw=None, compute_loss=True):
         """
+        Forward pass through the GCN model.
+
         Args:
             x_edges: Input edge adjacency matrix (batch_size, num_nodes, num_nodes)
             x_commodities: Input edge adjacency matrix (batch_size, num_commodities)
             x_edges_capacity: Input edge capacity matrix (batch_size, num_nodes, num_nodes)
             x_nodes: Input node with commodity information (batch_size, num_nodes, num_commodities)
-            y_edges: Targets for edges (batch_size, num_edges, num_commodities)
-            edge_cw: Class weights for edges loss
+            y_edges: Targets for edges (batch_size, num_edges, num_commodities) - optional
+            edge_cw: Class weights for edges loss - optional
+            compute_loss: Whether to compute loss (requires y_edges and edge_cw)
 
         Returns:
             y_pred_edges: Predictions for edges (batch_size, num_nodes, num_nodes, num_commodities)
-            # y_pred_nodes: Predictions for nodes (batch_size, num_nodes)
-            loss: Value of loss function
-        
+            loss: Value of loss function (None if compute_loss=False)
+
         # Nomalize node and edge capacity
         x_edges_capacity_min = x_edges_capacity.min()
         x_edges_capacity_max = x_edges_capacity.max()
@@ -65,13 +67,13 @@ class ResidualGatedGCNModel(nn.Module):
         # Features embedding
         x_edges_capacity_expanded = x_edges_capacity.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
         x_commodities_expanded = x_commodities.unsqueeze(1).expand(-1, self.num_nodes, -1)
-        
+
         x_embedded = self.nodes_embedding(x_nodes)
         c = self.commodities_embedding(x_commodities_expanded.unsqueeze(-1))
         e = self.edges_values_embedding(x_edges_capacity_expanded.unsqueeze(4))
-        
+
         x_aggregate = x_embedded.mean(dim=2).unsqueeze(2).expand(-1, -1, self.num_commodities, -1)
-        
+
         x = torch.cat((x_aggregate, c), 3)
         # GCN layers
         for layer in range(self.num_layers):
@@ -79,11 +81,15 @@ class ResidualGatedGCNModel(nn.Module):
         # MLP classifier
         y_pred_edges = self.mlp_edges(e)
 
-        # Compute loss
-        edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
-        # Move edge_cw to the same device as y_pred_edges
-        edge_cw = edge_cw.to(y_pred_edges.device)
-        #edge_cw = x_edges.unsqueeze(-1).expand(-1, -1, -1, self.num_commodities)
-        loss = loss_edges(y_pred_edges, y_edges, edge_cw)
-            
+        # Optionally compute loss
+        loss = None
+        if compute_loss:
+            if y_edges is None or edge_cw is None:
+                raise ValueError("y_edges and edge_cw required when compute_loss=True")
+
+            edge_cw = torch.tensor(edge_cw, dtype=self.dtypeFloat)  # Convert to tensors
+            # Move edge_cw to the same device as y_pred_edges
+            edge_cw = edge_cw.to(y_pred_edges.device)
+            loss = loss_edges(y_pred_edges, y_edges, edge_cw)
+
         return y_pred_edges, loss
