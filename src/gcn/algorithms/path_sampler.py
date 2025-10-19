@@ -143,10 +143,13 @@ class PathSampler:
                 )
 
                 if debug_first_batch and b == 0 and c_idx == 0:
-                    print(f"  Generated path: {path} (length={len(path)})")
+                    path_length = len(path) - 1 if len(path) > 1 else 0  # Number of edges
+                    print(f"  Generated path: {path} (nodes={len(path)}, edges={path_length})")
                     # Check if path reaches destination
                     if len(path) == 0 or path[-1] != dst:
                         print(f"    WARNING: Path incomplete (doesn't reach dst={dst})")
+                    elif len(path) == 1:
+                        print(f"    WARNING: Zero-length path (src == dst = {src})")
                     # Check if path uses invalid edges
                     uses_invalid = False
                     for i in range(len(path) - 1):
@@ -217,11 +220,12 @@ class PathSampler:
             remaining_capacity: Ignored (kept for API compatibility)
         """
         src, dst = int(src), int(dst)
+
         path, log_prob = [src], 0.0
         current = src
         max_steps = self.num_nodes * 2  # avoid infinite loops
 
-        for _ in range(max_steps):
+        for step_idx in range(max_steps):
             if current == dst:
                 break
 
@@ -241,6 +245,7 @@ class PathSampler:
 
             # --- Normalize ---
             total_prob = outgoing_probs.sum()
+
             if total_prob <= 1e-20:
                 # Fallback: No valid edges available
                 # This happens when current node has no outgoing edges with non-zero probability

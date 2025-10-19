@@ -91,6 +91,14 @@ class Trainer:
         all_entropies = []
         all_load_factors = []
 
+        # Track path quality metrics
+        all_complete_paths_rate = []
+        all_finite_solution_rate = []
+        all_avg_finite_load_factor = []
+        all_avg_path_length = []
+        all_commodity_success_rate = []
+        all_capacity_violation_rate = []
+
         start_epoch = time.time()
 
         # Reset strategy metrics for new epoch
@@ -143,6 +151,20 @@ class Trainer:
             if 'baseline' in metrics:
                 current_baseline = metrics['baseline']
 
+            # Track path quality metrics
+            if 'complete_paths_rate' in metrics:
+                all_complete_paths_rate.append(metrics['complete_paths_rate'])
+            if 'finite_solution_rate' in metrics:
+                all_finite_solution_rate.append(metrics['finite_solution_rate'])
+            if 'avg_finite_load_factor' in metrics:
+                all_avg_finite_load_factor.append(metrics['avg_finite_load_factor'])
+            if 'avg_path_length' in metrics:
+                all_avg_path_length.append(metrics['avg_path_length'])
+            if 'commodity_success_rate' in metrics:
+                all_commodity_success_rate.append(metrics['commodity_success_rate'])
+            if 'capacity_violation_rate' in metrics:
+                all_capacity_violation_rate.append(metrics['capacity_violation_rate'])
+
         loss = running_loss / running_nb_data
         err_edges = running_err_edges / running_nb_data if running_nb_data > 0 else 0.0
 
@@ -176,6 +198,20 @@ class Trainer:
                 rl_metrics['load_factor_std'] = float(np.std(all_load_factors))
             else:
                 rl_metrics['load_factor_std'] = 0.0
+
+            # Add path quality metrics (averaged across batches)
+            if len(all_complete_paths_rate) > 0:
+                rl_metrics['complete_paths_rate'] = float(np.mean(all_complete_paths_rate))
+            if len(all_finite_solution_rate) > 0:
+                rl_metrics['finite_solution_rate'] = float(np.mean(all_finite_solution_rate))
+            if len(all_avg_finite_load_factor) > 0:
+                rl_metrics['avg_finite_load_factor'] = float(np.mean(all_avg_finite_load_factor))
+            if len(all_avg_path_length) > 0:
+                rl_metrics['avg_path_length'] = float(np.mean(all_avg_path_length))
+            if len(all_commodity_success_rate) > 0:
+                rl_metrics['commodity_success_rate'] = float(np.mean(all_commodity_success_rate))
+            if len(all_capacity_violation_rate) > 0:
+                rl_metrics['capacity_violation_rate'] = float(np.mean(all_capacity_violation_rate))
 
         # Ensure model is back in training mode after epoch
         self.net.train()

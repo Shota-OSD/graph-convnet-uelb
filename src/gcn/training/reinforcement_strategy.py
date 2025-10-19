@@ -136,7 +136,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         )
 
         # DEBUG: Print load factors for first batch of each epoch
-        debug_enabled = False  # Set to True to enable debug output
+        debug_enabled = False  # Set to True to enable debug output for load factors
         if debug_enabled:
             if not hasattr(self, '_debug_last_epoch'):
                 self._debug_last_epoch = -1
@@ -173,9 +173,31 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         finite_load_factors = []
         capacity_violations = 0
 
+        # DEBUG: Check first sample's paths
+        debug_metrics = False  # Set to True to enable debug output for metrics calculation
+        if debug_metrics and model.training:
+            if not hasattr(self, '_debug_metrics_printed'):
+                self._debug_metrics_printed = True
+                print(f"\n=== Metrics Calculation Debug ===")
+                print(f"  pred_paths type: {type(pred_paths)}")
+                print(f"  pred_paths length: {len(pred_paths)}")
+                if len(pred_paths) > 0:
+                    print(f"  pred_paths[0] (first sample): {pred_paths[0]}")
+                    print(f"  Number of paths in first sample: {len(pred_paths[0])}")
+                    for idx, p in enumerate(pred_paths[0]):
+                        print(f"    Path {idx}: {p} (nodes={len(p)}, edges={max(0, len(p)-1)})")
+                print("=" * 50)
+
         for i in range(self.batch_size):
             sample_paths = pred_paths[i]
             sample_commodities = batch_commodities[i]
+
+            if debug_metrics and model.training and i == 0:
+                if not hasattr(self, '_debug_path_count_printed'):
+                    self._debug_path_count_printed = True
+                    print(f"\n=== Path Counting Debug (Sample 0) ===")
+                    print(f"  Number of paths: {len(sample_paths)}")
+                    print(f"  Number of commodities: {len(sample_commodities)}")
 
             for path_idx, path in enumerate(sample_paths):
                 total_commodities += 1
@@ -185,9 +207,17 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                 if len(path) > 0 and path[-1] == dst:
                     complete_commodities += 1
 
-                # Track path length
-                total_path_length += len(path)
+                # Track path length (number of edges, not nodes)
+                # Path length = number of edges = len(path) - 1
+                path_edge_count = max(0, len(path) - 1)
+                total_path_length += path_edge_count
                 path_count += 1
+
+                if debug_metrics and model.training and i == 0 and path_idx < 3:
+                    if not hasattr(self, f'_debug_path_{path_idx}_printed'):
+                        setattr(self, f'_debug_path_{path_idx}_printed', True)
+                        print(f"  Path {path_idx}: {path}")
+                        print(f"    dst={dst}, complete={len(path) > 0 and path[-1] == dst}, edges={path_edge_count}")
 
             # Check if sample has finite load factor
             load_factor_i = individual_load_factors[i] if i < len(individual_load_factors) else mean_maximum_load_factor
@@ -207,6 +237,18 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         avg_path_length = (total_path_length / path_count) if path_count > 0 else 0.0
         commodity_success_rate = (complete_commodities / total_commodities * 100) if total_commodities > 0 else 0.0
         capacity_violation_rate = (capacity_violations / finite_solutions * 100) if finite_solutions > 0 else 0.0
+
+        if debug_metrics and model.training:
+            if not hasattr(self, '_debug_metrics_calc_printed'):
+                self._debug_metrics_calc_printed = True
+                print(f"\n=== Metrics Calculation Results ===")
+                print(f"  total_commodities: {total_commodities}")
+                print(f"  complete_commodities: {complete_commodities}")
+                print(f"  total_path_length: {total_path_length}")
+                print(f"  path_count: {path_count}")
+                print(f"  avg_path_length: {avg_path_length:.2f}")
+                print(f"  complete_paths_rate: {complete_paths_rate:.2f}%")
+                print("=" * 50)
 
         # Design reward signal PER SAMPLE
         rewards = []
