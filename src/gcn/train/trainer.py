@@ -446,6 +446,14 @@ class Trainer:
                     epoch_bar.write(f"  Load Factor: {rl_metrics['load_factor']:.4f}, Baseline: {rl_metrics.get('baseline', 0):.4f}")
                 if 'policy_loss' in rl_metrics:
                     epoch_bar.write(f"  Policy Loss: {rl_metrics['policy_loss']:.4f}, Entropy Bonus: {rl_metrics.get('entropy_bonus', 0):.4f}")
+                # Show path quality metrics
+                if 'complete_paths_rate' in rl_metrics:
+                    epoch_bar.write(f"  Path Quality - Complete: {rl_metrics['complete_paths_rate']:.1f}%, "
+                                  f"Finite Solutions: {rl_metrics['finite_solution_rate']:.1f}%, "
+                                  f"Avg Path Length: {rl_metrics.get('avg_path_length', 0):.1f}")
+                if 'avg_finite_load_factor' in rl_metrics and rl_metrics.get('finite_solution_rate', 0) > 0:
+                    epoch_bar.write(f"  Finite Solutions - Avg Load Factor: {rl_metrics['avg_finite_load_factor']:.4f}, "
+                                  f"Capacity Violations: {rl_metrics.get('capacity_violation_rate', 0):.1f}%")
 
                 # Log RL metrics to file
                 metrics_logger.log_rl_metrics(epoch, rl_metrics)

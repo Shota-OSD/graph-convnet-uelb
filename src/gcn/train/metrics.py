@@ -21,12 +21,20 @@ class MetricsLogger:
         self.total_train_time = 0.0
         self.total_test_time = 0.0
 
-        # RL-specific metrics
+        # RL-specific metrics (existing)
         self.rl_reward_list = []
         self.rl_advantage_list = []
         self.rl_entropy_list = []
         self.rl_load_factor_list = []
         self.rl_baseline_list = []
+
+        # RL-specific metrics (new - path quality)
+        self.rl_complete_paths_rate_list = []  # パス完成率
+        self.rl_finite_solution_rate_list = []  # 有限解の割合
+        self.rl_avg_finite_load_factor_list = []  # 有限解の平均負荷率
+        self.rl_avg_path_length_list = []  # 平均パス長
+        self.rl_commodity_success_rate_list = []  # コモディティ成功率
+        self.rl_capacity_violation_rate_list = []  # 容量違反率
 
         self.save_dir = save_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -57,25 +65,39 @@ class MetricsLogger:
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
+        # Existing metrics
         self.rl_reward_list.append(rl_metrics.get('reward', 0.0))
         self.rl_advantage_list.append(rl_metrics.get('advantage', 0.0))
         self.rl_entropy_list.append(rl_metrics.get('entropy', 0.0))
         self.rl_load_factor_list.append(rl_metrics.get('load_factor', 0.0))
         self.rl_baseline_list.append(rl_metrics.get('baseline', 0.0))
 
-        # CSV形式でも保存
+        # New path quality metrics
+        self.rl_complete_paths_rate_list.append(rl_metrics.get('complete_paths_rate', 0.0))
+        self.rl_finite_solution_rate_list.append(rl_metrics.get('finite_solution_rate', 0.0))
+        self.rl_avg_finite_load_factor_list.append(rl_metrics.get('avg_finite_load_factor', 0.0))
+        self.rl_avg_path_length_list.append(rl_metrics.get('avg_path_length', 0.0))
+        self.rl_commodity_success_rate_list.append(rl_metrics.get('commodity_success_rate', 0.0))
+        self.rl_capacity_violation_rate_list.append(rl_metrics.get('capacity_violation_rate', 0.0))
+
+        # CSV形式でも保存（拡張版）
         csv_filename = os.path.join(self.save_dir, f"rl_gcn_metrics_{self.timestamp}.csv")
         file_exists = os.path.exists(csv_filename)
 
         with open(csv_filename, 'a', encoding='utf-8') as f:
             if not file_exists:
-                # ヘッダー行
-                f.write("epoch,reward,reward_std,advantage,advantage_std,entropy,load_factor,load_factor_std,baseline\n")
-            # データ行
-            f.write(f"{epoch},{rl_metrics.get('reward', 0.0):.6f},{rl_metrics.get('reward_std', 0.0):.6f},"
-                   f"{rl_metrics.get('advantage', 0.0):.6f},{rl_metrics.get('advantage_std', 0.0):.6f},"
-                   f"{rl_metrics.get('entropy', 0.0):.6f},{rl_metrics.get('load_factor', 0.0):.6f},"
-                   f"{rl_metrics.get('load_factor_std', 0.0):.6f},{rl_metrics.get('baseline', 0.0):.6f}\n")
+                # ヘッダー行（拡張）
+                f.write("epoch,reward,reward_std,advantage,advantage_std,entropy,load_factor,load_factor_std,baseline,")
+                f.write("complete_paths_rate,finite_solution_rate,avg_finite_load_factor,avg_path_length,")
+                f.write("commodity_success_rate,capacity_violation_rate\n")
+            # データ行（拡張）
+            f.write(f"{epoch},{rl_metrics.get('reward', 0.0):.6f},{rl_metrics.get('reward_std', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('advantage', 0.0):.6f},{rl_metrics.get('advantage_std', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('entropy', 0.0):.6f},{rl_metrics.get('load_factor', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('load_factor_std', 0.0):.6f},{rl_metrics.get('baseline', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('complete_paths_rate', 0.0):.6f},{rl_metrics.get('finite_solution_rate', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('avg_finite_load_factor', 0.0):.6f},{rl_metrics.get('avg_path_length', 0.0):.6f},")
+            f.write(f"{rl_metrics.get('commodity_success_rate', 0.0):.6f},{rl_metrics.get('capacity_violation_rate', 0.0):.6f}\n")
     
     def get_final_metrics(self) -> dict:
         """最終メトリクスを取得"""

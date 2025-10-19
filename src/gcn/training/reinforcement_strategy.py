@@ -164,6 +164,50 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                     print(f"  Contains inf: {torch.isinf(individual_load_factors).any()} ({torch.isinf(individual_load_factors).sum().item()}/{len(individual_load_factors)} samples)")
                     print("=" * 50)
 
+        # Calculate path quality metrics BEFORE designing rewards
+        total_commodities = 0
+        complete_commodities = 0
+        total_path_length = 0
+        path_count = 0
+        finite_solutions = 0
+        finite_load_factors = []
+        capacity_violations = 0
+
+        for i in range(self.batch_size):
+            sample_paths = pred_paths[i]
+            sample_commodities = batch_commodities[i]
+
+            for path_idx, path in enumerate(sample_paths):
+                total_commodities += 1
+                dst = int(sample_commodities[path_idx][1].item())
+
+                # Check if path is complete
+                if len(path) > 0 and path[-1] == dst:
+                    complete_commodities += 1
+
+                # Track path length
+                total_path_length += len(path)
+                path_count += 1
+
+            # Check if sample has finite load factor
+            load_factor_i = individual_load_factors[i] if i < len(individual_load_factors) else mean_maximum_load_factor
+            if isinstance(load_factor_i, torch.Tensor):
+                load_factor_i = load_factor_i.item()
+
+            if not np.isinf(load_factor_i) and load_factor_i > 0:
+                finite_solutions += 1
+                finite_load_factors.append(load_factor_i)
+                if load_factor_i > 1.0:
+                    capacity_violations += 1
+
+        # Calculate rates
+        complete_paths_rate = (complete_commodities / total_commodities * 100) if total_commodities > 0 else 0.0
+        finite_solution_rate = (finite_solutions / self.batch_size * 100) if self.batch_size > 0 else 0.0
+        avg_finite_load_factor = np.mean(finite_load_factors) if len(finite_load_factors) > 0 else 0.0
+        avg_path_length = (total_path_length / path_count) if path_count > 0 else 0.0
+        commodity_success_rate = (complete_commodities / total_commodities * 100) if total_commodities > 0 else 0.0
+        capacity_violation_rate = (capacity_violations / finite_solutions * 100) if finite_solutions > 0 else 0.0
+
         # Design reward signal PER SAMPLE
         rewards = []
         for i in range(self.batch_size):
@@ -324,7 +368,14 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             # Add individual values for proper epoch-level std calculation
             'reward_individual': rewards_list,
             'advantage_individual': advantages_list,
-            'load_factor_individual': load_factors_list
+            'load_factor_individual': load_factors_list,
+            # Add new path quality metrics
+            'complete_paths_rate': complete_paths_rate,
+            'finite_solution_rate': finite_solution_rate,
+            'avg_finite_load_factor': avg_finite_load_factor,
+            'avg_path_length': avg_path_length,
+            'commodity_success_rate': commodity_success_rate,
+            'capacity_violation_rate': capacity_violation_rate
         }
 
         return total_loss, metrics
