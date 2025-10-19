@@ -210,36 +210,88 @@ class MetricsLogger:
             f.write(f"  Test Time per Data: {time_per_data['test_time_per_data']:.4f}s\n")
             f.write(f"  Total Training Samples: {time_per_data['total_train_samples']}\n")
             f.write(f"  Total Test Samples: {time_per_data['total_test_samples']}\n")
-            
+
+            # RL-specific metrics summary (if available)
+            if self.rl_complete_paths_rate_list:
+                f.write("\nRL-SPECIFIC METRICS (FINAL EPOCH):\n")
+                f.write(f"  Complete Paths Rate: {self.rl_complete_paths_rate_list[-1]:.2f}%\n")
+                f.write(f"  Finite Solution Rate: {self.rl_finite_solution_rate_list[-1]:.2f}%\n")
+                if self.rl_avg_finite_load_factor_list[-1] > 0:
+                    f.write(f"  Avg Finite Load Factor: {self.rl_avg_finite_load_factor_list[-1]:.4f}\n")
+                f.write(f"  Avg Path Length: {self.rl_avg_path_length_list[-1]:.2f}\n")
+                f.write(f"  Commodity Success Rate: {self.rl_commodity_success_rate_list[-1]:.2f}%\n")
+                if self.rl_finite_solution_rate_list[-1] > 0:
+                    f.write(f"  Capacity Violation Rate: {self.rl_capacity_violation_rate_list[-1]:.2f}%\n")
+
             f.write("\n" + "="*50 + "\n")
             f.write("DETAILED RESULTS\n")
             f.write("="*50 + "\n")
-            
+
             # エポックごとの詳細結果
             f.write(f"{'Epoch':<6} {'Train Loss':<12} {'Edge Error':<12} {'Train Time':<12} {'Val Approx':<12} {'Test Approx':<12}\n")
             f.write("-" * 72 + "\n")
-            
+
             max_epochs = len(self.train_loss_list)
             for epoch in range(max_epochs):
                 train_loss = self.train_loss_list[epoch]
                 edge_error = self.train_err_edges_list[epoch]
                 train_time = self.train_time_list[epoch] if epoch < len(self.train_time_list) else 0.0
-                
+
                 # 検証とテストの近似率（該当するエポックのみ）
                 val_approx = "N/A"
                 test_approx = "N/A"
-                
+
                 # 検証近似率の取得（簡略化）
                 if epoch < len(self.val_approximation_rate_list):
                     val_approx = f"{self.val_approximation_rate_list[epoch]:.2f}%"
-                
+
                 # テスト近似率の取得（簡略化）
                 if epoch < len(self.test_approximation_rate_list):
                     test_approx = f"{self.test_approximation_rate_list[epoch]:.2f}%"
-                
+
                 f.write(f"{epoch+1:<6} {train_loss:<12.4f} {edge_error:<12.2f} {train_time:<12.2f} {val_approx:<12} {test_approx:<12}\n")
-            
+
             f.write("-" * 72 + "\n")
+
+            # RL詳細メトリクス（全エポック）
+            if self.rl_reward_list:
+                f.write("\n" + "="*50 + "\n")
+                f.write("RL TRAINING METRICS (PER EPOCH)\n")
+                f.write("="*50 + "\n")
+                f.write(f"{'Epoch':<6} {'Reward':<10} {'Adv':<10} {'Entropy':<10} {'Complete%':<12} {'Finite%':<10} {'AvgPath':<10}\n")
+                f.write("-" * 72 + "\n")
+
+                for epoch in range(len(self.rl_reward_list)):
+                    reward = self.rl_reward_list[epoch]
+                    advantage = self.rl_advantage_list[epoch] if epoch < len(self.rl_advantage_list) else 0.0
+                    entropy = self.rl_entropy_list[epoch] if epoch < len(self.rl_entropy_list) else 0.0
+                    complete_rate = self.rl_complete_paths_rate_list[epoch] if epoch < len(self.rl_complete_paths_rate_list) else 0.0
+                    finite_rate = self.rl_finite_solution_rate_list[epoch] if epoch < len(self.rl_finite_solution_rate_list) else 0.0
+                    avg_path = self.rl_avg_path_length_list[epoch] if epoch < len(self.rl_avg_path_length_list) else 0.0
+
+                    f.write(f"{epoch+1:<6} {reward:<10.4f} {advantage:<10.4f} {entropy:<10.4f} {complete_rate:<12.2f} {finite_rate:<10.2f} {avg_path:<10.2f}\n")
+
+                f.write("-" * 72 + "\n")
+
+                # 追加の詳細メトリクス
+                f.write("\n" + "="*50 + "\n")
+                f.write("RL SOLUTION QUALITY METRICS (PER EPOCH)\n")
+                f.write("="*50 + "\n")
+                f.write(f"{'Epoch':<6} {'Load Factor':<15} {'Baseline':<12} {'Finite LF':<15} {'Cap Viol%':<12}\n")
+                f.write("-" * 72 + "\n")
+
+                for epoch in range(len(self.rl_load_factor_list)):
+                    load_factor = self.rl_load_factor_list[epoch]
+                    baseline = self.rl_baseline_list[epoch] if epoch < len(self.rl_baseline_list) else 0.0
+                    finite_lf = self.rl_avg_finite_load_factor_list[epoch] if epoch < len(self.rl_avg_finite_load_factor_list) else 0.0
+                    cap_viol = self.rl_capacity_violation_rate_list[epoch] if epoch < len(self.rl_capacity_violation_rate_list) else 0.0
+
+                    lf_str = f"{load_factor:.4f}" if not np.isinf(load_factor) else "inf"
+                    finite_lf_str = f"{finite_lf:.4f}" if finite_lf > 0 else "N/A"
+
+                    f.write(f"{epoch+1:<6} {lf_str:<15} {baseline:<12.4f} {finite_lf_str:<15} {cap_viol:<12.2f}\n")
+
+                f.write("-" * 72 + "\n")
         
         print(f"Results saved to Text: {txt_filename}")
         
