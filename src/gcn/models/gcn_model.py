@@ -87,16 +87,25 @@ class ResidualGatedGCNModel(nn.Module):
             x, e = self.gcn_layers[layer](x.contiguous(), e.contiguous())  # B x V x C x H, B x V x V x C x H
         # MLP classifier
         y_pred_edges = self.mlp_edges(e)
+        # y_pred_edges shape: [batch_size, num_nodes, num_nodes, num_commodities, voc_edges_out]
+
+        # UPDATED 2025-10-19: Squeeze out voc_edges_out dimension if it's 1 (edge scores)
+        if self.voc_edges_out == 1:
+            y_pred_edges = y_pred_edges.squeeze(-1)  # [B, V, V, C]
 
         # Mask invalid edges (zero capacity) for RL training
         if mask_invalid_edges:
             # Create mask for edges with zero capacity
-            # y_pred_edges shape: [batch_size, num_nodes, num_nodes, num_commodities, num_classes]
             # x_edges_capacity shape: [batch_size, num_nodes, num_nodes]
             # Expand to match y_pred_edges dimensions
-            invalid_mask = (x_edges_capacity.unsqueeze(-1).unsqueeze(-1) == 0)
-            # Broadcast across commodities and classes dimensions
-            invalid_mask = invalid_mask.expand(-1, -1, -1, self.num_commodities, self.voc_edges_out)
+            if self.voc_edges_out == 1:
+                # New format: [batch, nodes, nodes, commodities]
+                invalid_mask = (x_edges_capacity.unsqueeze(-1) == 0)
+                invalid_mask = invalid_mask.expand(-1, -1, -1, self.num_commodities)
+            else:
+                # Old format: [batch, nodes, nodes, commodities, 2]
+                invalid_mask = (x_edges_capacity.unsqueeze(-1).unsqueeze(-1) == 0)
+                invalid_mask = invalid_mask.expand(-1, -1, -1, self.num_commodities, self.voc_edges_out)
             # Set logits for invalid edges to very negative value (will have ~0 probability after softmax)
             y_pred_edges = y_pred_edges.masked_fill(invalid_mask, -1e9)
 
