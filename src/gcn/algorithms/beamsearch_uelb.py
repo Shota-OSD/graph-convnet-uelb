@@ -7,11 +7,17 @@ import time
 class BeamSearchAlgorithm(ABC):
     """ビームサーチアルゴリズムの抽象基底クラス"""
     
-    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities, 
+    def __init__(self, y_pred_edges, beam_size, batch_size, edges_capacity, commodities,
                  dtypeFloat, dtypeLong, mode_strict=False, max_iter=5):
         # 共通の初期化処理
-        y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x C x voc_edges
-        y = y[:, :, :, :, 1]  # B x V x V
+        # UPDATED 2025-10-19: Support new format (voc_edges_out=1)
+        if len(y_pred_edges.shape) == 5:
+            # Old format: [B, V, V, C, voc_edges_out=2]
+            y = F.log_softmax(y_pred_edges, dim=4)  # B x V x V x C x voc_edges
+            y = y[:, :, :, :, 1]  # B x V x V x C
+        else:
+            # New format: [B, V, V, C] - edge scores
+            y = F.log_softmax(y_pred_edges, dim=2)  # B x V x V x C (softmax over next nodes)
         y[y == 0] = -1e-20  # Set 0s (i.e. log(1)s) to very small negative number
         
         self.y = y

@@ -27,7 +27,8 @@
     "voc_nodes_in": 30,
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
-    "voc_edges_out": 2,
+    "voc_edges_out": 1,
+    "_comment_voc": "voc_edges_out=1 for RL (edge scores), =2 for supervised (binary classification)",
 
     "beam_size": 10,
     "hidden_dim": 64,
@@ -35,7 +36,7 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 10,
+    "max_epochs": 100,
     "val_every": 3,
     "test_every": 3,
 
@@ -50,13 +51,15 @@
     "training_strategy": "reinforcement",
     "rl_reward_type": "load_factor",
     "rl_use_baseline": true,
-    "rl_baseline_momentum": 0.9,
-    "rl_entropy_weight": 0.1,
+    "rl_baseline_momentum": 0.85,
+    "rl_entropy_weight": 0.5,
 
     "_comment_sampling": "=== Sampling Configuration (top-p sampling for training, beam search for evaluation) ===",
     "rl_use_sampling": true,
     "rl_sampling_temperature": 1.0,
-    "rl_sampling_top_p": 0.9,
+    "rl_min_temperature": 0.5,
+    "rl_temperature_decay": 0.05,
+    "rl_sampling_top_p": 0.95,
     "rl_normalize_advantages": false,
     "rl_use_smooth_penalty": true,
     "rl_penalty_lambda": 5.0,

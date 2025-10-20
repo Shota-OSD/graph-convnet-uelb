@@ -464,6 +464,10 @@ class Trainer:
         epoch_bar = master_bar(range(max_epochs))
 
         for epoch in epoch_bar:
+            # Set epoch for temperature scheduling (if using RL strategy)
+            if hasattr(self.strategy, 'set_epoch'):
+                self.strategy.set_epoch(epoch)
+
             # トレーニング
             train_time, train_loss, train_err_edges, rl_metrics = self.train_one_epoch(epoch_bar)
             metrics_logger.log_train_metrics(train_loss, train_err_edges, train_time)
@@ -475,9 +479,10 @@ class Trainer:
                 # RL training mode
                 epoch_bar.write(f"Train - Loss: {train_loss:.4f}, Time: {train_time:.2f}s")
                 if 'reward' in rl_metrics:
+                    temp_str = f", Temp: {rl_metrics['temperature']:.2f}" if 'temperature' in rl_metrics else ""
                     epoch_bar.write(f"  RL Metrics - Reward: {rl_metrics['reward']:.4f} (std: {rl_metrics.get('reward_std', 0):.4f}), "
                                   f"Advantage: {rl_metrics.get('advantage', 0):.4f} (std: {rl_metrics.get('advantage_std', 0):.4f}), "
-                                  f"Entropy: {rl_metrics.get('entropy', 0):.4f}")
+                                  f"Entropy: {rl_metrics.get('entropy', 0):.4f}{temp_str}")
                 if 'load_factor' in rl_metrics:
                     epoch_bar.write(f"  Load Factor: {rl_metrics['load_factor']:.4f}, Baseline: {rl_metrics.get('baseline', 0):.4f}")
                 if 'policy_loss' in rl_metrics:

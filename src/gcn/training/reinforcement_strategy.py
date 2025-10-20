@@ -66,6 +66,26 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         # Baseline for variance reduction
         self.reward_baseline = None
 
+        # Temperature scheduling parameters
+        self.initial_temperature = config.get('rl_sampling_temperature', 1.0)
+        self.min_temperature = config.get('rl_min_temperature', 0.5)
+        self.temperature_decay = config.get('rl_temperature_decay', 0.05)
+        self.current_epoch = 0
+        self.max_epochs = config.get('max_epochs', 10)
+
+    def set_epoch(self, epoch):
+        """Set current epoch for temperature scheduling."""
+        self.current_epoch = epoch
+
+    def get_current_temperature(self):
+        """Calculate temperature based on current epoch (linear decay)."""
+        # Linear decay: T = max(T_min, T_initial - epoch * decay)
+        temperature = max(
+            self.min_temperature,
+            self.initial_temperature - self.current_epoch * self.temperature_decay
+        )
+        return temperature
+
     def compute_loss(self, model, batch_data, device=None):
         """
         Compute policy gradient loss using load factor as reward.
@@ -97,12 +117,16 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         if self.use_sampling and model.training:
             # Probabilistic sampling for training (REINFORCE requires on-policy samples)
             # Note: top-p sampling does not guarantee feasible solutions
+
+            # Use temperature scheduling: start high (exploration), gradually decrease (exploitation)
+            current_temp = self.get_current_temperature()
+
             sampler = PathSampler(
                 y_pred_edges=y_preds,
                 edges_capacity=x_edges_capacity,
                 commodities=batch_commodities,
                 num_samples=1,
-                temperature=self.sampling_temperature,
+                temperature=current_temp,  # Use scheduled temperature
                 top_p=self.sampling_top_p,
                 dtypeFloat=torch.float,
                 dtypeLong=torch.long
@@ -269,60 +293,34 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                     all_paths_complete = False
                     break
 
+            # IMPROVED REWARD DESIGN (2025-10-19)
+            # Based on analysis: moderate reward span (~20), positive rewards for valid solutions
+
             # Handle incomplete paths (destination not reached)
             if not all_paths_complete:
-                # Severe penalty for incomplete paths (couldn't reach destination)
-                reward_i = -100.0
-            # Handle inf (paths using non-existent edges)
+                # Count how many paths are incomplete
+                num_incomplete = sum(1 for path_idx, path in enumerate(sample_paths)
+                                    if len(path) == 0 or path[-1] != int(sample_commodities[path_idx][1].item()))
+                # Graduated penalty based on severity (UPDATED 2025-10-19: softer penalties)
+                if num_incomplete <= 1:
+                    reward_i = -2.0  # Only one path failed - mild penalty
+                elif num_incomplete <= 2:
+                    reward_i = -5.0  # Two paths failed - moderate penalty
+                else:
+                    reward_i = -10.0  # Multiple paths failed - severe penalty
+            # Handle inf (paths using non-existent edges but all complete)
             elif np.isinf(load_factor_i):
-                # Severe penalty for using non-existent edges
-                reward_i = -100.0
+                # Paths are complete but use invalid edges
+                reward_i = -5.0  # Less severe than incomplete paths
             elif self.reward_type == 'load_factor':
-                # Reward = negative load factor (we want to minimize it)
-                if self.use_smooth_penalty:
-                    # Smooth, graduated penalty system
-                    if load_factor_i == 0:
-                        # Empty or invalid path
-                        reward_i = -50.0
-                    elif load_factor_i > 10.0:
-                        # Extremely over capacity (likely using wrong edges)
-                        reward_i = -50.0
-                    elif load_factor_i > 2.0:
-                        # Severely over capacity
-                        violation = load_factor_i - 1.0
-                        penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
-                        reward_i = -load_factor_i - penalty
-                    elif load_factor_i > 1.0:
-                        # Slightly over capacity - smaller penalty
-                        violation = load_factor_i - 1.0
-                        penalty = violation * self.penalty_lambda  # Linear penalty instead of softplus
-                        reward_i = -load_factor_i - penalty
-                    else:
-                        # Feasible solution - just minimize load factor
-                        reward_i = -load_factor_i
+                # Valid solution with finite load factor
+                # Reward range: 7~10 for feasible, 1~5 for infeasible
+                if load_factor_i <= 1.0:
+                    # Feasible solution - positive reward
+                    reward_i = 10.0 - load_factor_i * 3.0  # 7.0 ~ 10.0
                 else:
-                    # Original discrete penalty
-                    if load_factor_i > 1 or load_factor_i == 0:
-                        reward_i = -10.0  # Infeasible solution - large penalty
-                    else:
-                        reward_i = -load_factor_i
-            elif self.reward_type == 'inverse_load_factor':
-                # Reward = inverse of load factor (higher is better)
-                # Note: inf is already handled above
-                if self.use_smooth_penalty:
-                    if load_factor_i == 0:
-                        reward_i = -10.0  # Still penalize zero (invalid solution)
-                    else:
-                        violation = load_factor_i - 1.0
-                        penalty = F.softplus(torch.tensor(violation, dtype=torch.float32)).item() * self.penalty_lambda
-                        base_reward = 1.0 / load_factor_i if load_factor_i > 0 else -10.0
-                        reward_i = base_reward - penalty
-                else:
-                    # Original discrete penalty
-                    if load_factor_i > 1 or load_factor_i == 0:
-                        reward_i = -10.0
-                    else:
-                        reward_i = 1.0 / load_factor_i
+                    # Capacity exceeded - still some reward to encourage valid paths
+                    reward_i = 5.0 - load_factor_i * 2.0  # Decreases as violation increases
             else:
                 raise ValueError(f"Unknown reward type: {self.reward_type}")
 
@@ -378,9 +376,30 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             policy_loss = -log_probs.mean() * mean_advantage
 
         # Add entropy bonus for exploration
-        probs = F.softmax(y_preds, dim=-1)
-        log_probs_for_entropy = F.log_softmax(y_preds, dim=-1)
-        entropy = -(probs * log_probs_for_entropy).sum(dim=-1).mean()
+        # UPDATED 2025-10-19: Calculate entropy over next-node selection distribution
+        # y_preds shape: [batch, nodes_from, nodes_to, commodities]
+        # Entropy measures diversity of next-node choices (14 options per source node)
+
+        if model.training and self.use_sampling:
+            current_temp = self.get_current_temperature()
+            # Compute next-node selection probabilities (dim=2: which next node to choose)
+            probs = F.softmax(y_preds / current_temp, dim=2)
+            log_probs_for_entropy = F.log_softmax(y_preds / current_temp, dim=2)
+        else:
+            # No temperature scaling for evaluation
+            probs = F.softmax(y_preds, dim=2)
+            log_probs_for_entropy = F.log_softmax(y_preds, dim=2)
+
+        # Entropy: sum over next-node choices (dim=2), average over batch/source/commodities
+        entropy = -(probs * log_probs_for_entropy).sum(dim=2).mean()
+
+        # DEBUG: Check entropy calculation (disabled after investigation)
+        # Root cause found: Model converging to deterministic policy (entropy_weight too low)
+        # if not hasattr(self, '_entropy_debug_printed'):
+        #     self._entropy_debug_printed = True
+        #     print(f"\n=== Entropy Calculation Debug ===")
+        #     print(f"  final entropy: {entropy.item():.6f}")
+
         entropy_bonus = -self.entropy_weight * entropy
 
         total_loss = policy_loss + entropy_bonus
@@ -417,7 +436,9 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             'avg_finite_load_factor': avg_finite_load_factor,
             'avg_path_length': avg_path_length,
             'commodity_success_rate': commodity_success_rate,
-            'capacity_violation_rate': capacity_violation_rate
+            'capacity_violation_rate': capacity_violation_rate,
+            # Add temperature for monitoring
+            'temperature': self.get_current_temperature()
         }
 
         return total_loss, metrics

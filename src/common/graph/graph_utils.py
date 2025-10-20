@@ -107,24 +107,55 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
     # 改行なしでテンソル全体を出力するオプション
     torch.set_printoptions(linewidth=200)
 
+    # DEBUG flag
+    debug_enabled = False
+    debug_first_batch = debug_enabled and (not hasattr(mean_feasible_load_factor, '_debug_printed'))
+    if debug_first_batch:
+        mean_feasible_load_factor._debug_printed = True
+
     # comvert node order to edge
+    zero_cap_edges_found = []
     for batch_idx, batch in enumerate(pred_paths):
         for path_idx, path in enumerate(batch):
             # obtain the path from the node order
             for node_idx in range(len(path) - 1):
-                bs_edges[batch_idx, path[node_idx], path[node_idx + 1], path_idx] = 1
-    
+                u, v = path[node_idx], path[node_idx + 1]
+                bs_edges[batch_idx, u, v, path_idx] = 1
+
+                # DEBUG: Check if edge has zero capacity (check ALL paths in first batch)
+                if debug_first_batch and batch_idx == 0:
+                    cap = edges_capacity[batch_idx, u, v].item() if hasattr(edges_capacity[batch_idx, u, v], 'item') else edges_capacity[batch_idx, u, v]
+                    if cap == 0:
+                        zero_cap_edges_found.append((path_idx, u, v, path))
+
+    if debug_first_batch and zero_cap_edges_found:
+        print(f"\n!!! WARNING: Found {len(zero_cap_edges_found)} zero-capacity edges used in paths !!!")
+        for path_idx, u, v, path in zero_cap_edges_found[:5]:  # Show first 5
+            print(f"  Path {path_idx}: Edge ({u}, {v}), Full path: {path}")
+
     # multiple edge capacity by demand
     demands = commodities[:, :, 2].view(num_batch, 1, 1, num_flow)
     bs_edges_demand = bs_edges * demands
-    
+
     # sum the demand on the edges
       # 改行なしでテンソル全体を出力するオプション
     torch.set_printoptions(linewidth=200)
 
     bs_edges_summed = bs_edges_demand.sum(dim=-1)
-    #print("bs_edges_summed: \n", bs_edges_summed[0])
-    
+
+    if debug_first_batch:
+        print(f"\n=== Load Factor Calculation Debug ===")
+        print(f"  bs_edges_summed[0] nonzero entries: {(bs_edges_summed[0] > 0).sum().item()}")
+        print(f"  edges_capacity[0] zero entries: {(edges_capacity[0] == 0).sum().item()}")
+        # Find edges with demand on zero capacity
+        zero_cap_with_demand = (edges_capacity[0] == 0) & (bs_edges_summed[0] > 0)
+        if zero_cap_with_demand.any():
+            print(f"  !!! Found {zero_cap_with_demand.sum().item()} edges with demand on zero capacity !!!")
+            indices = torch.where(zero_cap_with_demand)
+            for i in range(min(5, len(indices[0]))):
+                u, v = indices[0][i].item(), indices[1][i].item()
+                print(f"    Edge ({u}, {v}): capacity=0, demand={bs_edges_summed[0, u, v].item()}")
+
     # compute the load factor
     # If capacity is 0 and demand is 0, load factor is 0 (edge not used)
     # If capacity is 0 and demand > 0, load factor is infinity (infeasible)
@@ -132,19 +163,31 @@ def mean_feasible_load_factor(num_batch, num_flow, num_node, pred_paths, edges_c
         edges_capacity == 0,
         torch.where(
             bs_edges_summed == 0,
-            torch.tensor(0.0, device=device),  # No demand on zero-capacity edge → 0
-            torch.tensor(float('inf'), device=device)  # Demand on zero-capacity edge → infeasible
+            torch.zeros_like(bs_edges_summed, dtype=torch.float),  # No demand on zero-capacity edge → 0
+            torch.full_like(bs_edges_summed, float('inf'), dtype=torch.float)  # Demand on zero-capacity edge → infeasible
         ),
         bs_edges_summed.float() / edges_capacity.float()  # Normal case
     )
     
     # compute the maximum load factor
     max_values_per_data = load_factors.max(dim=1).values.max(dim=1).values
-    #print("max_values_per_batch: ", max_values_per_batch)
-    
+
+    if debug_first_batch:
+        print(f"  Load factors statistics for batch 0:")
+        print(f"    Min: {load_factors[0].min().item()}")
+        print(f"    Max: {load_factors[0].max().item()}")
+        print(f"    Number of inf values: {torch.isinf(load_factors[0]).sum().item()}")
+        print(f"    Number of nonzero values: {(load_factors[0] > 0).sum().item()}")
+        # Check if there are any finite nonzero load factors
+        finite_nonzero = (load_factors[0] > 0) & (~torch.isinf(load_factors[0]))
+        print(f"    Number of finite nonzero values: {finite_nonzero.sum().item()}")
+        if finite_nonzero.any():
+            print(f"    Max finite load factor: {load_factors[0][finite_nonzero].max().item():.4f}")
+        print(f"  Max load factor per sample (first 5): {max_values_per_data[:5]}")
+
     # compute the mean maximum load factor
     result = max_values_per_data.float().mean()
-    
+
     return result, max_values_per_data
 
 def compute_load_factor(edges_target, edges_capacity, commodities):

@@ -69,6 +69,8 @@ class PathSampler:
             print(f"  edges_capacity shape: {self.edges_capacity.shape}")
 
         for b in range(self.batch_size):
+            # Store batch index for later use in _sample_single_path
+            self._current_batch_idx = b
             edge_logits = self.y_pred_edges[b]
 
             # --- Global mask for physically non-existent edges ---
@@ -90,21 +92,19 @@ class PathSampler:
                     if outgoing == 0 or incoming == 0:
                         num_isolated_nodes += 1
                 print(f"  Isolated/dead-end nodes: {num_isolated_nodes}/{self.num_nodes}")
-            if len(edge_logits.shape) == 4:
-                edge_logits = edge_logits.masked_fill(invalid_mask.unsqueeze(-1).unsqueeze(-1), -1e20)
-            else:
-                edge_logits = edge_logits.masked_fill(invalid_mask.unsqueeze(-1), -1e20)
+
+            # --- Apply invalid edge mask to logits ---
+            # edge_logits shape: [nodes_from, nodes_to, commodities]
+            # Mask out invalid edges (zero capacity or self-loops)
+            edge_logits = edge_logits.masked_fill(invalid_mask.unsqueeze(-1), -1e20)
 
             # --- Convert logits to edge probabilities ---
-            if len(edge_logits.shape) == 4:
-                edge_probs_all = F.softmax(edge_logits / self.temperature, dim=-1)[:, :, :, 1]
-                # Ensure zero-capacity edges have exactly zero probability
-                # Broadcast invalid_mask to match [nodes, nodes, commodities]
-                edge_probs_all = edge_probs_all * (~invalid_mask).unsqueeze(-1).float()
-            else:
-                edge_probs_all = F.softmax(edge_logits / self.temperature, dim=-1)[:, :, 1]
-                # Ensure zero-capacity edges have exactly zero probability
-                edge_probs_all = edge_probs_all * (~invalid_mask).float()
+            # UPDATED 2025-10-19: Compute next-node selection probabilities
+            # dim=1 is the "to_node" dimension (14 choices for next node from current node)
+            edge_probs_all = F.softmax(edge_logits / self.temperature, dim=1)
+
+            # Ensure zero-capacity edges have exactly zero probability
+            edge_probs_all = edge_probs_all * (~invalid_mask).unsqueeze(-1).float()
 
             if debug_first_batch and b == 0:
                 print(f"  edge_probs_all shape: {edge_probs_all.shape}")
@@ -251,9 +251,13 @@ class PathSampler:
                 # This happens when current node has no outgoing edges with non-zero probability
                 # Try to find ANY valid edge (non-zero capacity, not visited)
 
-                # Get capacity mask for current node
+                # Get capacity mask for current node (use correct batch index)
                 device = edge_probs.device
-                capacity_available = self.edges_capacity[0 if len(self.edges_capacity.shape) == 2 else 0, current] > 0
+                batch_idx = self._current_batch_idx if hasattr(self, '_current_batch_idx') else 0
+                if len(self.edges_capacity.shape) == 2:
+                    capacity_available = self.edges_capacity[current] > 0
+                else:
+                    capacity_available = self.edges_capacity[batch_idx, current] > 0
 
                 # Combine: has capacity AND not visited
                 fallback_mask = capacity_available & visited_mask
