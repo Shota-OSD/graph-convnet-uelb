@@ -13,6 +13,7 @@ from src.common.data_management.dataset_reader import DatasetReader
 from src.gcn.models.model_utils import edge_error, update_learning_rate
 from src.gcn.training.supervised_strategy import SupervisedLearningStrategy
 from src.gcn.training.reinforcement_strategy import ReinforcementLearningStrategy
+from src.gcn.utils.model_converter import load_pretrained_supervised_model
 
 class Trainer:
     """トレーニングを担当するクラス"""
@@ -42,20 +43,50 @@ class Trainer:
             loaded_net, loaded_optimizer = self._try_load_saved_model()
             if loaded_net is not None:
                 return loaded_net, loaded_optimizer
-        
+
         net = nn.DataParallel(ResidualGatedGCNModel(self.config, self.dtypeFloat, self.dtypeLong))
-        
+
         # GPU使用設定を確認
         use_gpu = self.config.get('use_gpu', True)
+        device = None
         if use_gpu and torch.cuda.is_available():
             net.cuda()
+            device = torch.device('cuda')
             print("Model moved to GPU")
         else:
+            device = torch.device('cpu')
             print("Model using CPU")
-            
+
+        # Check if we need to load pretrained supervised model for RL fine-tuning
+        if self.config.get('load_pretrained_model', False):
+            pretrained_path = self.config.get('pretrained_model_path')
+            convert_supervised = self.config.get('convert_supervised_to_rl', False)
+
+            if pretrained_path and convert_supervised:
+                print("\n" + "="*70)
+                print("LOADING PRE-TRAINED SUPERVISED MODEL FOR RL FINE-TUNING")
+                print("="*70)
+                # Load and convert supervised model to RL model
+                net.module = load_pretrained_supervised_model(
+                    net.module,
+                    pretrained_path,
+                    device=device,
+                    verbose=True
+                )
+                print("Pre-trained model loaded and converted successfully!")
+                print("="*70 + "\n")
+            elif pretrained_path:
+                print(f"\nLoading pre-trained model from: {pretrained_path}")
+                checkpoint = torch.load(pretrained_path, map_location=device)
+                if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                    net.module.load_state_dict(checkpoint['model_state_dict'])
+                else:
+                    net.module.load_state_dict(checkpoint)
+                print("Pre-trained model loaded successfully!\n")
+
         nb_param = sum(np.prod(list(param.data.size())) for param in net.parameters())
         optimizer = torch.optim.Adam(net.parameters(), lr=self.config.learning_rate)
-        
+
         # モデル情報の出力をコメントアウト
         # print('Number of parameters:', nb_param)
         # print(optimizer)

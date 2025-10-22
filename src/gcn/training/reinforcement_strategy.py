@@ -73,6 +73,12 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         self.current_epoch = 0
         self.max_epochs = config.get('max_epochs', 10)
 
+        # Entropy epsilon (epsilon-greedy style uniform mixing over valid next nodes)
+        self.entropy_epsilon = config.get('rl_entropy_epsilon', 0.05)
+
+        # Use trajectory entropy instead of grid entropy
+        self.use_trajectory_entropy = config.get('rl_use_trajectory_entropy', True)
+
     def set_epoch(self, epoch):
         """Set current epoch for temperature scheduling."""
         self.current_epoch = epoch
@@ -128,10 +134,11 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                 num_samples=1,
                 temperature=current_temp,  # Use scheduled temperature
                 top_p=self.sampling_top_p,
+                entropy_epsilon=self.entropy_epsilon,
                 dtypeFloat=torch.float,
                 dtypeLong=torch.long
             )
-            pred_paths, path_log_probs, is_feasible = sampler.sample()
+            pred_paths, path_log_probs, is_feasible, stepwise_entropies = sampler.sample()
         else:
             # Beam search for evaluation (guarantees feasible solutions)
             beam_search = BeamSearchFactory.create_algorithm(
@@ -148,6 +155,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             pred_paths, is_feasible = beam_search.search()
             # For beam search, we don't have exact log probs, so use surrogate
             path_log_probs = None
+            stepwise_entropies = None
 
         # Compute maximum load factor (our optimization objective)
         mean_maximum_load_factor, individual_load_factors = mean_feasible_load_factor(
@@ -293,21 +301,21 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                     all_paths_complete = False
                     break
 
-            # IMPROVED REWARD DESIGN (2025-10-19)
-            # Based on analysis: moderate reward span (~20), positive rewards for valid solutions
+            # IMPROVED REWARD DESIGN (2025-10-22)
+            # Based on analysis: moderate penalties (1.5x) to encourage complete paths
 
             # Handle incomplete paths (destination not reached)
             if not all_paths_complete:
                 # Count how many paths are incomplete
                 num_incomplete = sum(1 for path_idx, path in enumerate(sample_paths)
                                     if len(path) == 0 or path[-1] != int(sample_commodities[path_idx][1].item()))
-                # Graduated penalty based on severity (UPDATED 2025-10-19: softer penalties)
+                # Graduated penalty based on severity (REVERTED: original penalties with Reachability Mask guarantee)
                 if num_incomplete <= 1:
                     reward_i = -2.0  # Only one path failed - mild penalty
                 elif num_incomplete <= 2:
                     reward_i = -5.0  # Two paths failed - moderate penalty
                 else:
-                    reward_i = -10.0  # Multiple paths failed - severe penalty
+                    reward_i = -10.0  # Multiple paths failed - strong penalty
             # Handle inf (paths using non-existent edges but all complete)
             elif np.isinf(load_factor_i):
                 # Paths are complete but use invalid edges
@@ -361,7 +369,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                 advantages = (advantages - advantage_mean) / (advantage_std + 1e-8)
 
         # Compute policy gradient loss PER SAMPLE
-        if path_log_probs is not None and model.training:
+        if path_log_probs is not None and model.training and path_log_probs.requires_grad:
             # CORRECT REINFORCE: Use log probability of sampled trajectory
             # L = -Σ_i [log π(τ_i) * (R_i - b)]
             # where τ_i is the sampled trajectory for sample i
@@ -369,7 +377,8 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             per_sample_loss = -path_log_probs * advantages
             policy_loss = per_sample_loss.mean()  # Average over batch
         else:
-            # Fallback for beam search (not theoretically correct, but allows mixed training)
+            # Fallback: Use surrogate loss based on model outputs
+            # This is an approximation but maintains gradient flow
             log_probs = F.log_softmax(y_preds, dim=-1)
             # Use mean advantage for fallback
             mean_advantage = advantages.mean() if isinstance(advantages, torch.Tensor) else advantages
@@ -390,17 +399,37 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             probs = F.softmax(y_preds, dim=2)
             log_probs_for_entropy = F.log_softmax(y_preds, dim=2)
 
-        # Entropy: sum over next-node choices (dim=2), average over batch/source/commodities
-        entropy = -(probs * log_probs_for_entropy).sum(dim=2).mean()
+        # Entropy over next-node choices (dim=2). Use only rows with >=2 viable options.
+        row_entropy = -(probs * log_probs_for_entropy).sum(dim=2)  # [B, V, C]
+        multi_choice_mask = (probs > 1e-8).sum(dim=2) >= 2  # [B, V, C]
+        if multi_choice_mask.any():
+            entropy_grid = row_entropy[multi_choice_mask].mean()
+        else:
+            entropy_grid = row_entropy.mean()
 
-        # DEBUG: Check entropy calculation (disabled after investigation)
-        # Root cause found: Model converging to deterministic policy (entropy_weight too low)
-        # if not hasattr(self, '_entropy_debug_printed'):
-        #     self._entropy_debug_printed = True
-        #     print(f"\n=== Entropy Calculation Debug ===")
-        #     print(f"  final entropy: {entropy.item():.6f}")
+        # Trajectory entropy from sampler (average across all steps/commodities/batch)
+        if stepwise_entropies is not None:
+            flat_steps = []
+            for per_batch in stepwise_entropies:
+                for per_commodity in per_batch:
+                    flat_steps.extend(per_commodity)
+            if len(flat_steps) > 0:
+                traj_entropy = torch.tensor(flat_steps, device=y_preds.device, dtype=torch.float32).mean()
+            else:
+                traj_entropy = torch.tensor(0.0, device=y_preds.device)
+        else:
+            traj_entropy = torch.tensor(0.0, device=y_preds.device)
 
-        entropy_bonus = -self.entropy_weight * entropy
+        # Always use grid entropy for gradient computation (connected to y_preds)
+        # Trajectory entropy is tracked as a metric but cannot be used for gradients
+        # since it's computed from sampled discrete actions
+        entropy_bonus = -self.entropy_weight * entropy_grid
+
+        # For monitoring purposes
+        if self.use_trajectory_entropy and stepwise_entropies is not None and len(flat_steps) > 0:
+            entropy_for_bonus = traj_entropy  # Log trajectory entropy
+        else:
+            entropy_for_bonus = entropy_grid  # Log grid entropy
 
         total_loss = policy_loss + entropy_bonus
 
@@ -421,7 +450,9 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             'reward_std': reward_std,
             'advantage': mean_advantage,
             'advantage_std': advantage_std,
-            'entropy': entropy.item(),
+            'entropy': entropy_grid.item(),
+            'traj_entropy': traj_entropy.item(),
+            'entropy_used': entropy_for_bonus.item(),
             'baseline': self.reward_baseline if self.reward_baseline else 0.0,
             'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0,
             'policy_loss': policy_loss.item(),

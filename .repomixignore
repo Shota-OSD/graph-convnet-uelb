@@ -1,6 +1,8 @@
 **/data/
 **/logs/
 **/results/
+**/saved_models/
+**/beamsearch_results/
 configs/events.out.tfevents.*
 **/__pycache__/
 **/*.pyc
@@ -10,4 +12,3 @@ __MACOSX/
 *.DS_Store
 ._*
 main.ipynb
-**/saved_models/
