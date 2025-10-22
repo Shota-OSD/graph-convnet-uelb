@@ -1,5 +1,5 @@
 {
-    "expt_name": "gcn_rl_unconstrained",
+    "expt_name": "rl_finetuning",
     "gpu_id": "0",
     "use_gpu": true,
 
@@ -12,9 +12,9 @@
     "solver_type": "pulp",
     "graph_model": "random",
 
-    "num_train_data": 100,
-    "num_test_data": 20,
-    "num_val_data": 20,
+    "num_train_data": 3200,
+    "num_test_data": 100,
+    "num_val_data": 100,
     "num_nodes": 14,
     "num_commodities": 5,
     "sample_size": 5,
@@ -28,7 +28,7 @@
     "voc_nodes_out": 2,
     "voc_edges_in": 3,
     "voc_edges_out": 1,
-    "_comment_voc": "voc_edges_out=1 for RL (edge scores), =2 for supervised (binary classification)",
+    "_comment_voc": "voc_edges_out=1 for RL (edge scores). Will be initialized from supervised model (voc_edges_out=2) using logit difference",
 
     "beam_size": 10,
     "hidden_dim": 64,
@@ -36,9 +36,9 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 100,
-    "val_every": 5,
-    "test_every": 5,
+    "max_epochs": 35,
+    "val_every": 3,
+    "test_every": 3,
 
     "batch_size": 20,
     "accumulation_steps": 1,
@@ -47,16 +47,16 @@
     "decay_rate": 1.5,
     "dropout_rate": 0.2,
 
-    "_comment": "=== Training Strategy Configuration ===",
+    "_comment_strategy": "=== Training Strategy: Reinforcement Learning Fine-tuning ===",
     "training_strategy": "reinforcement",
     "rl_reward_type": "load_factor",
     "rl_use_baseline": true,
     "rl_baseline_momentum": 0.95,
-    "rl_entropy_weight": 0.15,
+    "rl_entropy_weight": 0.1,
     "rl_use_trajectory_entropy": true,
     "rl_entropy_epsilon": 0.05,
 
-    "_comment_sampling": "=== Sampling Configuration (top-p sampling for training, beam search for evaluation) ===",
+    "_comment_sampling": "=== Sampling Configuration ===",
     "rl_use_sampling": true,
     "rl_sampling_temperature": 1.5,
     "rl_min_temperature": 0.8,
@@ -67,7 +67,13 @@
     "rl_penalty_lambda": 5.0,
     "rl_mask_invalid_edges": true,
 
-    "_comment_beam_search": "=== Beam Search Configuration (used during evaluation) ===",
+    "_comment_beam_search": "=== Beam Search Configuration ===",
     "rl_beam_search_type": "unconstrained",
-    "_beam_search_note": "unconstrained = no capacity constraints during path search"
+    "_beam_search_note": "unconstrained = no capacity constraints during path search",
+
+    "_comment_pretrained": "=== Pre-trained Model Loading ===",
+    "load_pretrained_model": true,
+    "pretrained_model_path": "saved_models/supervised_pretrained.pt",
+    "convert_supervised_to_rl": true,
+    "_conversion_note": "Convert voc_edges_out=2 (supervised) to voc_edges_out=1 (RL) using logit difference method"
 }

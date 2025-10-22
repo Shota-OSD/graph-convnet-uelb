@@ -6,6 +6,7 @@ for Reinforcement Learning (REINFORCE algorithm).
 import torch
 import torch.nn.functional as F
 import numpy as np
+from collections import deque
 
 
 class PathSampler:
@@ -18,7 +19,7 @@ class PathSampler:
     """
 
     def __init__(self, y_pred_edges, edges_capacity, commodities,
-                 num_samples=1, temperature=1.0, top_p=0.8,
+                 num_samples=1, temperature=1.0, top_p=0.8, entropy_epsilon: float = 0.0,
                  dtypeFloat=torch.float, dtypeLong=torch.long):
         """
         Args:
@@ -37,11 +38,15 @@ class PathSampler:
         self.num_samples = num_samples
         self.temperature = temperature
         self.top_p = top_p
+        self.entropy_epsilon = float(entropy_epsilon) if entropy_epsilon is not None else 0.0
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
 
         self.batch_size = y_pred_edges.shape[0]
         self.num_nodes = y_pred_edges.shape[1]
+
+        # Precompute reachability matrix for each batch
+        self.reachability = self._precompute_reachability()
 
     def sample(self):
         """
@@ -58,6 +63,7 @@ class PathSampler:
         """
         device = self.y_pred_edges.device
         batch_paths, batch_log_probs = [], []
+        batch_stepwise_entropies = []  # List[List[List[float]]] per batch -> per commodity -> per step
 
         # DEBUG: Print shapes for first batch only
         debug_enabled = False  # Set to True to enable debug output
@@ -114,6 +120,7 @@ class PathSampler:
 
             # --- Commodity processing ---
             commodity_paths, commodity_log_probs = [], []
+            commodity_step_entropies = []
 
             batch_commodities = (
                 self.commodities[b] if isinstance(self.commodities, torch.Tensor) and len(self.commodities.shape) == 3
@@ -138,7 +145,7 @@ class PathSampler:
                     print(f"  invalid_mask[{src}, {dst}]: {invalid_mask[src, dst]}")
 
                 # remaining_capacity is no longer tracked or enforced
-                path, log_prob = self._sample_single_path(
+                path, log_prob, step_entropies = self._sample_single_path(
                     edge_probs, src, dst, demand, remaining_capacity=None
                 )
 
@@ -163,10 +170,12 @@ class PathSampler:
 
                 commodity_paths.append(path)
                 commodity_log_probs.append(log_prob)
+                commodity_step_entropies.append(step_entropies)
 
             # --- Aggregate batch results ---
             batch_paths.append(commodity_paths)
             batch_log_probs.append(sum(commodity_log_probs))
+            batch_stepwise_entropies.append(commodity_step_entropies)
 
             # DEBUG: Check how many commodities use invalid edges or are incomplete
             if debug_first_batch and b == 0:
@@ -189,11 +198,53 @@ class PathSampler:
         is_feasible = self._check_feasibility(batch_paths)
         log_probs_tensor = torch.tensor(batch_log_probs, dtype=torch.float32, device=device)
 
-        return batch_paths, log_probs_tensor, is_feasible
+        return batch_paths, log_probs_tensor, is_feasible, batch_stepwise_entropies
 
     # ==============================================================
     # Internal Methods
     # ==============================================================
+
+    def _precompute_reachability(self):
+        """
+        Precompute reachability matrix for all node pairs in each batch.
+
+        Returns:
+            reachability: [batch_size, num_nodes, num_nodes] boolean tensor
+                         reachability[b][i][j] = True if node j is reachable from node i in batch b
+        """
+        device = self.edges_capacity.device
+        reachability = torch.zeros(
+            (self.batch_size, self.num_nodes, self.num_nodes),
+            dtype=torch.bool,
+            device=device
+        )
+
+        for b in range(self.batch_size):
+            # Build adjacency list from capacity matrix
+            # edge exists if capacity > 0
+            adj_list = [[] for _ in range(self.num_nodes)]
+            for i in range(self.num_nodes):
+                for j in range(self.num_nodes):
+                    # PyTorch scalar comparison works directly
+                    if self.edges_capacity[b, i, j] > 0 and i != j:
+                        adj_list[i].append(j)
+
+            # BFS from each source node
+            for src in range(self.num_nodes):
+                # Use deque for efficient BFS (O(1) popleft vs O(n) pop(0))
+                queue = deque([src])
+                visited = set([src])
+                reachability[b, src, src] = True
+
+                while queue:
+                    current = queue.popleft()
+                    for neighbor in adj_list[current]:
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            reachability[b, src, neighbor] = True
+                            queue.append(neighbor)
+
+        return reachability
 
     def _parse_commodity(self, commodity):
         """Extract (src, dst, demand) as native Python types."""
@@ -222,6 +273,7 @@ class PathSampler:
         src, dst = int(src), int(dst)
 
         path, log_prob = [src], 0.0
+        step_entropies: list = []
         current = src
         max_steps = self.num_nodes * 2  # avoid infinite loops
 
@@ -231,14 +283,25 @@ class PathSampler:
 
             outgoing_probs = edge_probs[current].clone()
 
-            # --- Only mask visited nodes (no capacity constraint) ---
-            # Note: We create a mask for ALL nodes first, then exclude visited ones
+            # --- Apply Reachability Mask + Visited Mask ---
+            # Get batch index
+            batch_idx = self._current_batch_idx if hasattr(self, '_current_batch_idx') else 0
+
+            # Create combined mask: not visited AND reachable to destination
             visited_mask = torch.ones(self.num_nodes, dtype=torch.bool, device=outgoing_probs.device)
             for visited_node in path:
-                visited_mask[visited_node] = False  # exclude visited nodes to prevent loops
+                visited_mask[int(visited_node)] = False  # exclude visited nodes to prevent loops
+
+            # Reachability mask: only nodes that can reach the destination
+            # Ensure dst is Python int for indexing
+            dst_idx = int(dst)
+            reachable_mask = self.reachability[batch_idx, :, dst_idx]  # [num_nodes]
+
+            # Combined mask: not visited AND reachable
+            combined_mask = visited_mask & reachable_mask
 
             # Apply mask
-            outgoing_probs = outgoing_probs * visited_mask.float()
+            outgoing_probs = outgoing_probs * combined_mask.float()
 
             # Remove numerical noise
             outgoing_probs = torch.clamp(outgoing_probs, min=0.0)
@@ -247,20 +310,18 @@ class PathSampler:
             total_prob = outgoing_probs.sum()
 
             if total_prob <= 1e-20:
-                # Fallback: No valid edges available
-                # This happens when current node has no outgoing edges with non-zero probability
-                # Try to find ANY valid edge (non-zero capacity, not visited)
-
-                # Get capacity mask for current node (use correct batch index)
+                # Fallback: No valid edges available with reachability constraint
+                # Try to find edges that are: has capacity AND not visited AND reachable
                 device = edge_probs.device
                 batch_idx = self._current_batch_idx if hasattr(self, '_current_batch_idx') else 0
+
                 if len(self.edges_capacity.shape) == 2:
                     capacity_available = self.edges_capacity[current] > 0
                 else:
                     capacity_available = self.edges_capacity[batch_idx, current] > 0
 
-                # Combine: has capacity AND not visited
-                fallback_mask = capacity_available & visited_mask
+                # Combine: has capacity AND not visited AND reachable
+                fallback_mask = capacity_available & combined_mask
 
                 if fallback_mask.any():
                     # Pick valid edge with SOME heuristic guidance
@@ -296,6 +357,27 @@ class PathSampler:
 
             outgoing_probs /= total_prob
 
+            # --- Epsilon mixture with uniform over valid, non-visited next nodes (ε-greedy over valid set) ---
+            eps = self.entropy_epsilon
+            if eps > 0.0:
+                # Capacity-available mask for current row (respect batch index)
+                batch_idx = self._current_batch_idx if hasattr(self, '_current_batch_idx') else 0
+                if len(self.edges_capacity.shape) == 2:
+                    capacity_available = self.edges_capacity[current] > 0
+                else:
+                    capacity_available = self.edges_capacity[batch_idx, current] > 0
+                # Valid and not-visited AND reachable to destination
+                valid_support = capacity_available & combined_mask
+                if valid_support.any():
+                    uniform = valid_support.float()
+                    uniform = uniform / (uniform.sum() + 1e-8)
+                    outgoing_probs = (1.0 - eps) * outgoing_probs + eps * uniform
+                    outgoing_probs = outgoing_probs / (outgoing_probs.sum() + 1e-8)
+
+            # --- Record step entropy before sampling ---
+            step_entropy = -(outgoing_probs * torch.log(outgoing_probs + 1e-8)).sum().item()
+            step_entropies.append(step_entropy)
+
             # --- Top-p nucleus sampling ---
             next_node = self._top_p_sample(outgoing_probs)
             log_prob += torch.log(outgoing_probs[next_node] + 1e-8).item()
@@ -303,7 +385,7 @@ class PathSampler:
             current = int(next_node)
 
         # Return path as-is (may be incomplete if destination unreachable with valid edges)
-        return path, log_prob
+        return path, log_prob, step_entropies
 
     def _top_p_sample(self, probs):
         """Perform top-p (nucleus) sampling robustly."""
