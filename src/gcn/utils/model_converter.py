@@ -6,7 +6,6 @@ reinforcement learning models (voc_edges_out=1) using logit difference method.
 """
 
 import torch
-import torch.nn as nn
 from collections import OrderedDict
 
 
@@ -31,32 +30,39 @@ def convert_supervised_to_rl(supervised_state_dict, verbose=True):
     converted_layers = []
 
     for key, value in supervised_state_dict.items():
+        # Remove DataParallel "module." prefix if present
+        clean_key = key.replace('module.', '') if key.startswith('module.') else key
+
         # Check if this is the final MLP layer for edge classification
-        if 'mlp_edges' in key and 'fc_out' in key:
-            if 'weight' in key:
+        # Support both old (fc_out) and new (output_layer) naming
+        is_final_layer = ('mlp_edges' in clean_key and
+                         ('fc_out' in clean_key or 'output_layer' in clean_key))
+
+        if is_final_layer:
+            if 'weight' in clean_key:
                 # Shape: [2, hidden_dim] for supervised
                 if value.shape[0] == 2:
                     # Compute W1 - W0 (class1 - class0)
                     new_weight = value[1:2, :] - value[0:1, :]  # [1, hidden_dim]
-                    rl_state_dict[key] = new_weight
-                    converted_layers.append(f"{key}: {value.shape} -> {new_weight.shape}")
+                    rl_state_dict[clean_key] = new_weight
+                    converted_layers.append(f"{clean_key}: {value.shape} -> {new_weight.shape}")
                 else:
                     # Not a binary classification layer, copy as-is
-                    rl_state_dict[key] = value
+                    rl_state_dict[clean_key] = value
 
-            elif 'bias' in key:
+            elif 'bias' in clean_key:
                 # Shape: [2] for supervised
                 if value.shape[0] == 2:
                     # Compute b1 - b0
                     new_bias = value[1:2] - value[0:1]  # [1]
-                    rl_state_dict[key] = new_bias
-                    converted_layers.append(f"{key}: {value.shape} -> {new_bias.shape}")
+                    rl_state_dict[clean_key] = new_bias
+                    converted_layers.append(f"{clean_key}: {value.shape} -> {new_bias.shape}")
                 else:
                     # Not a binary classification layer, copy as-is
-                    rl_state_dict[key] = value
+                    rl_state_dict[clean_key] = value
         else:
             # All other layers are compatible, copy as-is
-            rl_state_dict[key] = value
+            rl_state_dict[clean_key] = value
 
     if verbose:
         print("\n" + "="*70)

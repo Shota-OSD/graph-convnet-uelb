@@ -12,9 +12,9 @@
     "solver_type": "pulp",
     "graph_model": "random",
 
-    "num_train_data": 3200,
-    "num_test_data": 100,
-    "num_val_data": 100,
+    "num_train_data": 100,
+    "num_test_data": 20,
+    "num_val_data": 20,
     "num_nodes": 14,
     "num_commodities": 5,
     "sample_size": 5,
@@ -36,7 +36,7 @@
     "mlp_layers": 2,
     "aggregation": "mean",
 
-    "max_epochs": 35,
+    "max_epochs": 15,
     "val_every": 3,
     "test_every": 3,
 
@@ -73,7 +73,7 @@
 
     "_comment_pretrained": "=== Pre-trained Model Loading ===",
     "load_pretrained_model": true,
-    "pretrained_model_path": "saved_models/supervised_pretrained.pt",
+    "pretrained_model_path": "saved_models/model_82250eaf_latest.pt",
     "convert_supervised_to_rl": true,
     "_conversion_note": "Convert voc_edges_out=2 (supervised) to voc_edges_out=1 (RL) using logit difference method"
 }

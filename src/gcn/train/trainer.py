@@ -39,10 +39,11 @@ class Trainer:
     def _instantiate_model(self):
         """モデルとオプティマイザーを初期化"""
         # 既存の保存済みモデルをチェック
-        if self.config.get('load_saved_model', False):
-            loaded_net, loaded_optimizer = self._try_load_saved_model()
-            if loaded_net is not None:
-                return loaded_net, loaded_optimizer
+        # TEMPORARY: Commented out to force new model creation for testing reward function changes
+        # if self.config.get('load_saved_model', False):
+        #     loaded_net, loaded_optimizer = self._try_load_saved_model()
+        #     if loaded_net is not None:
+        #         return loaded_net, loaded_optimizer
 
         net = nn.DataParallel(ResidualGatedGCNModel(self.config, self.dtypeFloat, self.dtypeLong))
 
@@ -276,14 +277,17 @@ class Trainer:
             'hidden_dim', 'num_layers', 'mlp_layers', 'node_dim',
             'voc_nodes_out', 'voc_edges_in', 'voc_edges_out',
             'aggregation', 'dropout_rate', 'beam_size',
-            
+
             # データ関連
             'num_commodities', 'capacity_lower', 'capacity_higher',
             'demand_lower', 'demand_higher', 'num_nodes', 'sample_size',
-            
+
             # 学習関連
             'learning_rate', 'batch_size', 'max_epochs', 'decay_rate',
-            
+
+            # RL戦略関連（報酬関数のバージョン管理）
+            'training_strategy', 'reward_function_version',
+
             # その他の重要な設定
             'solver_type', 'graph_model', 'expt_name'
         ]
@@ -540,7 +544,7 @@ class Trainer:
                 val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='val'
                 )
-                metrics_logger.log_val_metrics(val_approximation_rate, val_time)
+                metrics_logger.log_val_metrics(val_approximation_rate, val_time, epoch=epoch)
 
                 epoch_bar.write('v: ' + metrics_to_str(epoch, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
 
@@ -557,7 +561,7 @@ class Trainer:
                 test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='test'
                 )
-                metrics_logger.log_test_metrics(test_approximation_rate, test_time)
+                metrics_logger.log_test_metrics(test_approximation_rate, test_time, epoch=epoch)
 
                 epoch_bar.write('T: ' + metrics_to_str(epoch, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
 

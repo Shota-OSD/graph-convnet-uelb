@@ -1,5 +1,5 @@
 {
-    "expt_name": "supervised_pretraining",
+    "expt_name": "supervised_pretraining_large",
     "gpu_id": "0",
     "use_gpu": true,
 
@@ -12,9 +12,9 @@
     "solver_type": "pulp",
     "graph_model": "random",
 
-    "num_train_data": 1000,
-    "num_test_data": 200,
-    "num_val_data": 200,
+    "num_train_data": 3200,
+    "num_test_data": 320,
+    "num_val_data": 320,
     "num_nodes": 14,
     "num_commodities": 5,
     "sample_size": 5,
@@ -36,9 +36,9 @@
     "mlp_layers": 3,
     "aggregation": "mean",
 
-    "max_epochs": 50,
-    "val_every": 3,
-    "test_every": 3,
+    "max_epochs": 100,
+    "val_every": 5,
+    "test_every": 5,
 
     "batch_size": 32,
     "accumulation_steps": 1,
@@ -49,5 +49,5 @@
 
     "_comment_strategy": "=== Training Strategy: Supervised Learning ===",
     "training_strategy": "supervised",
-    "_comment_supervised": "Use ground truth labels from optimal solver (PuLP) for pre-training"
+    "_comment_supervised": "Use ground truth labels from optimal solver (PuLP) for pre-training. Large scale config with 3200 training samples."
 }

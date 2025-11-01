@@ -143,35 +143,41 @@ def main():
             print("\n✗ Supervised pre-training failed. Aborting.")
             return 1
 
-        # Check if model was saved
-        if not check_pretrained_model_exists(args.pretrained_model):
-            print("\n⚠ Warning: Pre-trained model not found at expected location.")
-            print(f"Expected: {args.pretrained_model}")
-            print("\nPlease ensure the supervised training config saves the model correctly.")
-
-            # Look for latest model in saved_models directory
-            saved_models_dir = os.path.join(project_root, 'saved_models')
-            if os.path.exists(saved_models_dir):
-                models = [f for f in os.listdir(saved_models_dir) if f.endswith('.pt')]
-                if models:
-                    latest_model = max(models, key=lambda f: os.path.getmtime(
-                        os.path.join(saved_models_dir, f)
-                    ))
-                    print(f"\nLatest model found: {latest_model}")
-                    response = input(f"Use this model for Phase 2? [y/N]: ")
-                    if response.lower() == 'y':
-                        args.pretrained_model = os.path.join(saved_models_dir, latest_model)
-                    else:
-                        return 1
-                else:
-                    return 1
+        # Automatically find the latest supervised model (just trained)
+        saved_models_dir = os.path.join(project_root, 'saved_models')
+        if os.path.exists(saved_models_dir):
+            models = [f for f in os.listdir(saved_models_dir) if f.endswith('.pt')]
+            if models:
+                # Get the latest model by modification time (most recently saved)
+                latest_model = max(models, key=lambda f: os.path.getmtime(
+                    os.path.join(saved_models_dir, f)
+                ))
+                args.pretrained_model = os.path.join(saved_models_dir, latest_model)
+                print(f"\n✓ Automatically using latest supervised model: {latest_model}")
             else:
+                print("\n✗ No model files found in saved_models directory.")
                 return 1
+        else:
+            print("\n✗ saved_models directory does not exist.")
+            return 1
 
     else:
         print("\n⏭  Skipping supervised pre-training (using existing model)")
-        if not check_pretrained_model_exists(args.pretrained_model):
-            print("\n✗ Pre-trained model not found. Cannot proceed with RL fine-tuning.")
+        # When skipping Phase 1, automatically find the latest model
+        saved_models_dir = os.path.join(project_root, 'saved_models')
+        if os.path.exists(saved_models_dir):
+            models = [f for f in os.listdir(saved_models_dir) if f.endswith('.pt')]
+            if models:
+                latest_model = max(models, key=lambda f: os.path.getmtime(
+                    os.path.join(saved_models_dir, f)
+                ))
+                args.pretrained_model = os.path.join(saved_models_dir, latest_model)
+                print(f"✓ Automatically using latest model: {latest_model}")
+            else:
+                print("\n✗ No model files found in saved_models directory.")
+                return 1
+        else:
+            print("\n✗ saved_models directory does not exist.")
             return 1
 
     # Phase 2: RL Fine-tuning
