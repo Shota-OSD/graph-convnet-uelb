@@ -62,7 +62,8 @@ class PathSampler:
             is_feasible: whether all flows respect capacity constraints (checked post-hoc)
         """
         device = self.y_pred_edges.device
-        batch_paths, batch_log_probs = [], []
+        batch_paths = []
+        batch_log_probs = []  # Keep as tensors, not float
         batch_stepwise_entropies = []  # List[List[List[float]]] per batch -> per commodity -> per step
 
         # DEBUG: Print shapes for first batch only
@@ -119,7 +120,8 @@ class PathSampler:
                 print("=" * 50)
 
             # --- Commodity processing ---
-            commodity_paths, commodity_log_probs = [], []
+            commodity_paths = []
+            commodity_log_probs = []  # Keep as tensors, not float
             commodity_step_entropies = []
 
             batch_commodities = (
@@ -174,7 +176,13 @@ class PathSampler:
 
             # --- Aggregate batch results ---
             batch_paths.append(commodity_paths)
-            batch_log_probs.append(sum(commodity_log_probs))
+            # Sum log_probs as tensors to maintain gradient connection
+            total_log_prob = (
+                torch.stack(commodity_log_probs).sum()
+                if commodity_log_probs
+                else torch.zeros(1, device=device, dtype=self.y_pred_edges.dtype).squeeze(0)
+            )
+            batch_log_probs.append(total_log_prob)
             batch_stepwise_entropies.append(commodity_step_entropies)
 
             # DEBUG: Check how many commodities use invalid edges or are incomplete
@@ -196,7 +204,12 @@ class PathSampler:
                 print(f"  Incomplete paths (dst not reached): {incomplete_count}/{len(commodity_paths)}")
 
         is_feasible = self._check_feasibility(batch_paths)
-        log_probs_tensor = torch.tensor(batch_log_probs, dtype=torch.float32, device=device)
+        # Stack batch log probs (already tensors) to maintain gradient
+        log_probs_tensor = (
+            torch.stack(batch_log_probs)
+            if batch_log_probs
+            else torch.empty(0, device=device, dtype=self.y_pred_edges.dtype)
+        )
 
         return batch_paths, log_probs_tensor, is_feasible, batch_stepwise_entropies
 
@@ -272,7 +285,8 @@ class PathSampler:
         """
         src, dst = int(src), int(dst)
 
-        path, log_prob = [src], 0.0
+        path = [src]
+        log_prob = torch.zeros(1, device=edge_probs.device, dtype=edge_probs.dtype).squeeze(0)  # Keep as tensor
         step_entropies: list = []
         current = src
         max_steps = self.num_nodes * 2  # avoid infinite loops
@@ -338,12 +352,14 @@ class PathSampler:
                         # Sample from model's distribution over valid edges
                         sampled_idx = torch.multinomial(valid_probs, 1).item()
                         next_node = valid_indices[sampled_idx].item()
-                        log_prob += torch.log(valid_probs[sampled_idx] + 1e-8).item()
+                        # Keep log_prob as tensor for gradient tracking
+                        log_prob = log_prob + torch.log(valid_probs[sampled_idx] + 1e-8)
                     else:
                         # Model assigns 0 probability to all valid edges
                         # Fall back to uniform distribution
                         next_node = valid_indices[torch.randint(len(valid_indices), (1,))].item()
-                        log_prob += np.log(1.0 / len(valid_indices))
+                        # Convert numpy log to tensor
+                        log_prob = log_prob + torch.tensor(np.log(1.0 / len(valid_indices)), device=log_prob.device, dtype=log_prob.dtype)
 
                     path.append(int(next_node))
                     current = int(next_node)
@@ -352,7 +368,7 @@ class PathSampler:
                     # Truly stuck: no valid edges at all from current node
                     # Cannot reach dst without using invalid edges
                     # Return incomplete path (don't force-add dst through invalid edge)
-                    log_prob += np.log(1e-8)
+                    log_prob = log_prob + torch.tensor(np.log(1e-8), device=log_prob.device, dtype=log_prob.dtype)
                     break
 
             outgoing_probs /= total_prob
@@ -380,7 +396,8 @@ class PathSampler:
 
             # --- Top-p nucleus sampling ---
             next_node = self._top_p_sample(outgoing_probs)
-            log_prob += torch.log(outgoing_probs[next_node] + 1e-8).item()
+            # Keep log_prob as tensor for gradient tracking
+            log_prob = log_prob + torch.log(outgoing_probs[next_node] + 1e-8)
             path.append(int(next_node))
             current = int(next_node)
 

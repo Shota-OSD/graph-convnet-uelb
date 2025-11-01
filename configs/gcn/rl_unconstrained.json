@@ -2,6 +2,7 @@
     "expt_name": "gcn_rl_unconstrained",
     "gpu_id": "0",
     "use_gpu": true,
+    "load_saved_model": false,
 
     "graph_filepath": "./data/graph.gml",
     "edge_numbering_filepath": "./data/edge_numbering_file.csv",
@@ -49,6 +50,7 @@
     "_comment": "=== Training Strategy Configuration ===",
     "training_strategy": "reinforcement",
     "rl_reward_type": "load_factor",
+    "reward_function_version": "continuous_v1",
     "rl_use_baseline": true,
     "rl_baseline_momentum": 0.85,
     "rl_entropy_weight": 0.5,

@@ -79,6 +79,24 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         # Use trajectory entropy instead of grid entropy
         self.use_trajectory_entropy = config.get('rl_use_trajectory_entropy', True)
 
+        # Debug logging controls
+        self.debug_logging = config.get('rl_debug_logging', True)
+        self.debug_log_frequency = config.get('rl_debug_log_frequency', 20)
+        self.grad_log_frequency = config.get('rl_grad_log_frequency', 50)
+        self.grad_zero_threshold = config.get('rl_grad_zero_threshold', 1e-8)
+        self.debug_log_max_samples = config.get('rl_debug_log_max_samples', 5)
+
+        # Gradient explosion detection
+        self.detect_grad_explosion = config.get('rl_detect_grad_explosion', True)
+        self.grad_explosion_threshold = config.get('rl_grad_explosion_threshold', 10.0)
+        self.grad_norm_history = []  # Track gradient norms over time
+        self.grad_norm_history_size = config.get('rl_grad_norm_history_size', 100)
+        self.grad_clip_max_norm = config.get('rl_grad_clip_max_norm', 1.0)  # Gradient clipping threshold
+
+        # Internal counters for logging cadence
+        self._debug_batch_index = 0
+        self._grad_step_index = 0
+
     def set_epoch(self, epoch):
         """Set current epoch for temperature scheduling."""
         self.current_epoch = epoch
@@ -105,6 +123,12 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             loss: Policy gradient loss
             metrics: Dictionary with 'mean_load_factor', 'reward', 'entropy'
         """
+        # Store model reference for gradient debugging
+        if hasattr(model, 'module'):
+            self._last_model_ref = model.module  # Unwrap DataParallel
+        else:
+            self._last_model_ref = model
+
         x_edges = batch_data['x_edges']
         x_commodities = batch_data['x_commodities']
         x_edges_capacity = batch_data['x_edges_capacity']
@@ -139,6 +163,19 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                 dtypeLong=torch.long
             )
             pred_paths, path_log_probs, is_feasible, stepwise_entropies = sampler.sample()
+
+            # DEBUG: Check why fallback is used
+            if self.debug_logging and self._debug_batch_index % max(1, self.debug_log_frequency) == 0:
+                print(f"[RL-SAMPLER-DEBUG] After sampling:")
+                print(f"  path_log_probs is None: {path_log_probs is None}")
+                print(f"  model.training: {model.training}")
+                if path_log_probs is not None:
+                    print(f"  path_log_probs.requires_grad: {path_log_probs.requires_grad}")
+                    print(f"  path_log_probs.shape: {path_log_probs.shape}")
+                    print(f"  path_log_probs dtype: {path_log_probs.dtype}")
+                    print(f"  path_log_probs device: {path_log_probs.device}")
+                else:
+                    print(f"  WARNING: path_log_probs is None - this will trigger fallback mode!")
         else:
             # Beam search for evaluation (guarantees feasible solutions)
             beam_search = BeamSearchFactory.create_algorithm(
@@ -304,31 +341,36 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             # IMPROVED REWARD DESIGN (2025-10-22)
             # Based on analysis: moderate penalties (1.5x) to encourage complete paths
 
+            # IMPROVED REWARD DESIGN (2025-10-22) - Continuous reward function
+            # Target range: -2.0 ~ +2.0 with continuous gradient
+
             # Handle incomplete paths (destination not reached)
             if not all_paths_complete:
                 # Count how many paths are incomplete
                 num_incomplete = sum(1 for path_idx, path in enumerate(sample_paths)
                                     if len(path) == 0 or path[-1] != int(sample_commodities[path_idx][1].item()))
-                # Graduated penalty based on severity (REVERTED: original penalties with Reachability Mask guarantee)
+                # Graduated penalty based on severity
                 if num_incomplete <= 1:
-                    reward_i = -2.0  # Only one path failed - mild penalty
+                    reward_i = -0.5  # Only one path failed - mild penalty
                 elif num_incomplete <= 2:
-                    reward_i = -5.0  # Two paths failed - moderate penalty
+                    reward_i = -1.0  # Two paths failed - moderate penalty
                 else:
-                    reward_i = -10.0  # Multiple paths failed - strong penalty
+                    reward_i = -2.0  # Multiple paths failed - strong penalty
             # Handle inf (paths using non-existent edges but all complete)
             elif np.isinf(load_factor_i):
                 # Paths are complete but use invalid edges
-                reward_i = -5.0  # Less severe than incomplete paths
+                reward_i = -1.0  # Less severe than incomplete paths
             elif self.reward_type == 'load_factor':
                 # Valid solution with finite load factor
-                # Reward range: 7~10 for feasible, 1~5 for infeasible
-                if load_factor_i <= 1.0:
-                    # Feasible solution - positive reward
-                    reward_i = 10.0 - load_factor_i * 3.0  # 7.0 ~ 10.0
-                else:
-                    # Capacity exceeded - still some reward to encourage valid paths
-                    reward_i = 5.0 - load_factor_i * 2.0  # Decreases as violation increases
+                # Continuous reward function: reward = 2.0 - 2.0 * load_factor
+                # load_factor = 0.0  -> reward = +2.0 (best)
+                # load_factor = 1.0  -> reward =  0.0 (feasible boundary)
+                # load_factor = 2.0  -> reward = -2.0 (capacity violation)
+                # This ensures C1 continuity at load_factor = 1.0
+                reward_i = 2.0 - 2.0 * load_factor_i
+
+                # Clamp to [-2.0, +2.0] for extreme cases
+                reward_i = max(-2.0, min(2.0, reward_i))
             else:
                 raise ValueError(f"Unknown reward type: {self.reward_type}")
 
@@ -336,11 +378,14 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
 
         # Convert to tensor
         rewards = torch.tensor(rewards, dtype=torch.float32, device=y_preds.device)
+        rewards_detached = rewards.detach()
 
         # Update baseline using moving average PER SAMPLE
         # Initialize baseline if needed
         if self.reward_baseline is None:
             self.reward_baseline = rewards.mean().item()
+
+        baseline_before_update = self.reward_baseline
 
         if self.use_baseline:
             # Compute advantages per sample
@@ -354,6 +399,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             )
         else:
             advantages = rewards
+        adv_before_normalization = advantages.detach().clone()
 
         # Normalize advantages for better gradient stability
         # This reduces variance without changing the expected gradient
@@ -367,15 +413,30 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
                 pass
             else:
                 advantages = (advantages - advantage_mean) / (advantage_std + 1e-8)
+        adv_after_normalization = advantages.detach().clone()
 
         # Compute policy gradient loss PER SAMPLE
-        if path_log_probs is not None and model.training and path_log_probs.requires_grad:
+        # Record if using fallback mode BEFORE computing loss
+        using_fallback_mode = not (path_log_probs is not None and model.training and path_log_probs.requires_grad)
+
+        if not using_fallback_mode:
             # CORRECT REINFORCE: Use log probability of sampled trajectory
             # L = -Σ_i [log π(τ_i) * (R_i - b)]
             # where τ_i is the sampled trajectory for sample i
             # Shape: path_log_probs [batch_size], advantages [batch_size]
             per_sample_loss = -path_log_probs * advantages
             policy_loss = per_sample_loss.mean()  # Average over batch
+
+            # Debug: Check gradient flow
+            if self.debug_logging and self._debug_batch_index % max(1, self.debug_log_frequency) == 0:
+                print(f"[RL-LOSS-DEBUG] USING REINFORCE LOSS (correct)")
+                print(f"[RL-LOSS-DEBUG] path_log_probs: requires_grad={path_log_probs.requires_grad}, "
+                      f"mean={path_log_probs.mean().item():.4f}, std={path_log_probs.std().item():.4f}")
+                print(f"[RL-LOSS-DEBUG] advantages: mean={advantages.mean().item():.4f}, "
+                      f"std={advantages.std().item():.4f}")
+                print(f"[RL-LOSS-DEBUG] per_sample_loss: mean={per_sample_loss.mean().item():.4f}, "
+                      f"std={per_sample_loss.std().item():.4f}")
+                print(f"[RL-LOSS-DEBUG] policy_loss: {policy_loss.item():.6f}, requires_grad={policy_loss.requires_grad}")
         else:
             # Fallback: Use surrogate loss based on model outputs
             # This is an approximation but maintains gradient flow
@@ -383,6 +444,13 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             # Use mean advantage for fallback
             mean_advantage = advantages.mean() if isinstance(advantages, torch.Tensor) else advantages
             policy_loss = -log_probs.mean() * mean_advantage
+
+            if self.debug_logging and self._debug_batch_index % max(1, self.debug_log_frequency) == 0:
+                print(f"[RL-LOSS-DEBUG] ⚠️  USING FALLBACK MODE (approximation)")
+                print(f"[RL-LOSS-DEBUG] FALLBACK REASON: path_log_probs={path_log_probs is not None}, "
+                      f"model.training={model.training}, "
+                      f"requires_grad={path_log_probs.requires_grad if path_log_probs is not None else 'N/A'}")
+                print(f"[RL-LOSS-DEBUG] policy_loss: {policy_loss.item():.6f}, requires_grad={policy_loss.requires_grad}")
 
         # Add entropy bonus for exploration
         # UPDATED 2025-10-19: Calculate entropy over next-node selection distribution
@@ -433,11 +501,83 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
 
         total_loss = policy_loss + entropy_bonus
 
+        # Debug: Check total loss
+        if self.debug_logging and self._debug_batch_index % max(1, self.debug_log_frequency) == 0:
+            print(f"[RL-LOSS-DEBUG] entropy_grid: {entropy_grid.item():.6f}, requires_grad={entropy_grid.requires_grad}")
+            print(f"[RL-LOSS-DEBUG] entropy_bonus: {entropy_bonus.item():.6f}, requires_grad={entropy_bonus.requires_grad}")
+            print(f"[RL-LOSS-DEBUG] total_loss: {total_loss.item():.6f}, requires_grad={total_loss.requires_grad}")
+            print(f"[RL-LOSS-DEBUG] Loss components: policy_loss={policy_loss.item():.6f}, "
+                  f"entropy_bonus={entropy_bonus.item():.6f}, "
+                  f"entropy_weight={self.entropy_weight}")
+
         # Store metrics (use batch averages for logging)
-        mean_reward = rewards.mean().item()
-        reward_std = rewards.std().item() if isinstance(rewards, torch.Tensor) else 0.0
-        mean_advantage = advantages.mean().item() if isinstance(advantages, torch.Tensor) else advantages
-        advantage_std = advantages.std().item() if isinstance(advantages, torch.Tensor) else 0.0
+        def _calc_stats(tensor: torch.Tensor):
+            if tensor.numel() == 0:
+                return {'mean': 0.0, 'std': 0.0, 'min': 0.0, 'max': 0.0}
+            detached = tensor.detach()
+            mean_val = detached.mean().item()
+            if detached.numel() > 1:
+                std_val = detached.std(unbiased=False).item()
+            else:
+                std_val = 0.0
+            min_val = detached.min().item()
+            max_val = detached.max().item()
+            return {'mean': mean_val, 'std': std_val, 'min': min_val, 'max': max_val}
+
+        reward_stats = _calc_stats(rewards_detached)
+        adv_pre_stats = _calc_stats(adv_before_normalization)
+        adv_post_stats = _calc_stats(adv_after_normalization)
+        baseline_after_update = self.reward_baseline
+        normalization_applied = not torch.allclose(
+            adv_before_normalization, adv_after_normalization, atol=1e-8, rtol=1e-5
+        )
+
+        # Use the previously recorded fallback status
+        fallback_used = using_fallback_mode
+
+        if self.debug_logging:
+            self._debug_batch_index += 1
+
+            def _tensor_preview(values_tensor):
+                if values_tensor.numel() == 0:
+                    return []
+                preview = values_tensor[:self.debug_log_max_samples]
+                return [float(x) for x in preview.cpu().tolist()]
+
+            should_log = False
+            adv_abs_max = float(adv_before_normalization.abs().max().item()) if adv_before_normalization.numel() > 0 else 0.0
+            adv_std_small = adv_pre_stats['std'] < 1e-6
+            if adv_abs_max < 1e-6 or adv_std_small:
+                should_log = True
+            if fallback_used:
+                should_log = True
+            if self._debug_batch_index % max(1, self.debug_log_frequency) == 0:
+                should_log = True
+
+            if should_log:
+                print(
+                    "[RL-DEBUG] "
+                    f"epoch={self.current_epoch} batch={self._debug_batch_index} "
+                    f"reward(mean={reward_stats['mean']:.4f}, std={reward_stats['std']:.4f}, "
+                    f"min={reward_stats['min']:.4f}, max={reward_stats['max']:.4f}) "
+                    f"baseline(before={baseline_before_update:.4f}, after={baseline_after_update:.4f}) "
+                    f"adv(pre_mean={adv_pre_stats['mean']:.4f}, pre_std={adv_pre_stats['std']:.4f}, "
+                    f"pre_min={adv_pre_stats['min']:.4f}, pre_max={adv_pre_stats['max']:.4f}; "
+                    f"post_mean={adv_post_stats['mean']:.4f}, post_std={adv_post_stats['std']:.4f}) "
+                    f"norm_applied={normalization_applied} fallback={fallback_used}"
+                )
+                if adv_abs_max < 1e-6 or adv_std_small:
+                    print(
+                        "[RL-DEBUG] Advantage signal near zero. "
+                        f"adv_abs_max={adv_abs_max:.2e}, adv_pre_std={adv_pre_stats['std']:.2e}, "
+                        f"rewards_preview={_tensor_preview(rewards_detached)}, "
+                        f"advantages_preview={_tensor_preview(adv_before_normalization)}"
+                    )
+
+        mean_reward = reward_stats['mean']
+        reward_std = reward_stats['std']
+        mean_advantage = adv_post_stats['mean']
+        advantage_std = adv_post_stats['std']
 
         # Convert tensors to lists for individual value tracking
         rewards_list = rewards.detach().cpu().tolist() if isinstance(rewards, torch.Tensor) else []
@@ -457,6 +597,16 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             'is_feasible': 1 if mean_maximum_load_factor <= 1 and mean_maximum_load_factor > 0 else 0,
             'policy_loss': policy_loss.item(),
             'entropy_bonus': entropy_bonus.item(),
+            'baseline_before_update': baseline_before_update,
+            'baseline_after_update': baseline_after_update,
+            'advantage_pre_norm_std': adv_pre_stats['std'],
+            'advantage_post_norm_std': adv_post_stats['std'],
+            'advantage_pre_norm_min': adv_pre_stats['min'],
+            'advantage_pre_norm_max': adv_pre_stats['max'],
+            'reward_min': reward_stats['min'],
+            'reward_max': reward_stats['max'],
+            'normalization_applied': normalization_applied,
+            'reinforce_fallback_used': fallback_used,
             # Add individual values for proper epoch-level std calculation
             'reward_individual': rewards_list,
             'advantage_individual': advantages_list,
@@ -489,10 +639,136 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         """
         # Policy gradient backward
         loss = loss / accumulation_steps
+        loss_value = loss.detach().item()
+
+        if self.debug_logging:
+            self._grad_step_index += 1
+            log_gradients = (self._grad_step_index % max(1, self.grad_log_frequency) == 0)
+        else:
+            log_gradients = False
+
         loss.backward()
 
-        # Update weights every accumulation_steps batches
+        # ALWAYS compute gradient norm for explosion detection (even if not logging)
+        total_params = 0
+        zero_grad_params = 0
+        near_zero_grad_params = 0
+        nan_grad_params = 0
+        inf_grad_params = 0
+        grad_norm_sq = 0.0
+        max_abs_grad = 0.0
+
+        with torch.no_grad():
+            for group in optimizer.param_groups:
+                for param in group['params']:
+                    total_params += 1
+                    if param.grad is None:
+                        zero_grad_params += 1
+                        continue
+                    grad = param.grad
+
+                    # Check for NaN/Inf
+                    has_nan = torch.isnan(grad).any().item()
+                    has_inf = torch.isinf(grad).any().item()
+                    if has_nan:
+                        nan_grad_params += 1
+                    if has_inf:
+                        inf_grad_params += 1
+
+                    grad_norm = grad.norm().item()
+                    grad_norm_sq += grad_norm * grad_norm
+                    param_max = grad.abs().max().item()
+                    max_abs_grad = max(max_abs_grad, param_max)
+                    if param_max < self.grad_zero_threshold:
+                        near_zero_grad_params += 1
+
+        total_grad_norm = grad_norm_sq ** 0.5
+
+        # Track gradient norm history
+        self.grad_norm_history.append(total_grad_norm)
+        if len(self.grad_norm_history) > self.grad_norm_history_size:
+            self.grad_norm_history.pop(0)
+
+        # Detect gradient explosion
+        grad_explosion_detected = False
+        if self.detect_grad_explosion and len(self.grad_norm_history) >= 10:
+            # Check if current gradient norm is much larger than recent average
+            recent_avg = sum(self.grad_norm_history[-10:]) / 10
+            if total_grad_norm > self.grad_explosion_threshold * recent_avg and total_grad_norm > 1.0:
+                grad_explosion_detected = True
+                print(f"\n{'='*80}")
+                print(f"⚠️  GRADIENT EXPLOSION DETECTED!")
+                print(f"{'='*80}")
+                print(f"  Current grad norm: {total_grad_norm:.4e}")
+                print(f"  Recent avg (last 10): {recent_avg:.4e}")
+                print(f"  Ratio: {total_grad_norm/recent_avg:.2f}x")
+                print(f"  Max abs gradient: {max_abs_grad:.4e}")
+                print(f"  NaN gradients: {nan_grad_params}/{total_params}")
+                print(f"  Inf gradients: {inf_grad_params}/{total_params}")
+                print(f"  Loss value: {loss_value:.6f}")
+                print(f"{'='*80}\n")
+
+        # Always warn on NaN/Inf regardless of logging settings
+        if nan_grad_params > 0 or inf_grad_params > 0:
+            print(f"\n⚠️  WARNING: NaN/Inf in gradients detected!")
+            print(f"  NaN gradients: {nan_grad_params}/{total_params}")
+            print(f"  Inf gradients: {inf_grad_params}/{total_params}")
+            print(f"  Grad norm: {total_grad_norm:.4e}\n")
+
+        if log_gradients:
+            print(
+                "[RL-GRAD] "
+                f"step={self._grad_step_index} loss={loss_value:.6f} "
+                f"grad_norm={total_grad_norm:.4e} max_abs_grad={max_abs_grad:.4e} "
+                f"zero_grad={zero_grad_params}/{total_params} "
+                f"near_zero_grad={near_zero_grad_params}/{total_params} "
+                f"nan_grad={nan_grad_params} inf_grad={inf_grad_params}"
+            )
+
+            # Show gradient norm statistics
+            if len(self.grad_norm_history) >= 10:
+                recent_avg = sum(self.grad_norm_history[-10:]) / 10
+                recent_max = max(self.grad_norm_history[-10:])
+                recent_min = min(self.grad_norm_history[-10:])
+                print(f"[RL-GRAD-STATS] Recent 10 steps: avg={recent_avg:.4e}, "
+                      f"min={recent_min:.4e}, max={recent_max:.4e}, current={total_grad_norm:.4e}")
+
+            # Log layer-by-layer gradients if model is accessible
+            # This requires passing the model to backward_step
+            if hasattr(self, '_last_model_ref') and self._last_model_ref is not None:
+                model = self._last_model_ref
+                print("[RL-GRAD-LAYERS] Gradient flow by layer:")
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        grad_mean = param.grad.abs().mean().item()
+                        grad_max = param.grad.abs().max().item()
+                        grad_norm = param.grad.norm().item()
+                        has_nan = torch.isnan(param.grad).any().item()
+                        has_inf = torch.isinf(param.grad).any().item()
+
+                        # Show all layers if explosion detected, otherwise only significant ones
+                        if grad_explosion_detected or grad_max > self.grad_zero_threshold:
+                            status = ""
+                            if has_nan:
+                                status += " [NaN]"
+                            if has_inf:
+                                status += " [Inf]"
+                            if grad_norm > 10.0:
+                                status += " [LARGE]"
+                            print(f"  {name}: grad_norm={grad_norm:.4e}, mean={grad_mean:.4e}, max={grad_max:.4e}{status}")
+                    else:
+                        print(f"  {name}: NO GRADIENT")
+
+        # Apply gradient clipping before optimizer step
         if (batch_num + 1) % accumulation_steps == 0:
+            # Gradient clipping
+            if self.grad_clip_max_norm > 0:
+                params_to_clip = [p for group in optimizer.param_groups for p in group['params'] if p.grad is not None]
+                grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(params_to_clip, self.grad_clip_max_norm)
+
+                if log_gradients or (grad_explosion_detected and self.debug_logging):
+                    print(f"[RL-GRAD-CLIP] Gradient clipped: {grad_norm_before_clip:.4e} -> {min(grad_norm_before_clip, self.grad_clip_max_norm):.4e} (max_norm={self.grad_clip_max_norm})")
+
             optimizer.step()
             optimizer.zero_grad()
             return True
@@ -503,3 +779,5 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
         """Reset metrics for new epoch (but keep baseline)."""
         super().reset_metrics()
         # Keep baseline across epochs for stability
+        self._debug_batch_index = 0
+        self._grad_step_index = 0

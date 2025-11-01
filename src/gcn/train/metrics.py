@@ -13,13 +13,17 @@ class MetricsLogger:
         self.train_err_edges_list = []
         self.val_approximation_rate_list = []
         self.test_approximation_rate_list = []
-        
+
         # 時間関連のメトリクスを追加
         self.train_time_list = []
         self.val_time_list = []
         self.test_time_list = []
         self.total_train_time = 0.0
         self.total_test_time = 0.0
+
+        # エポック番号の記録を追加
+        self.val_epochs = []  # バリデーションを実行したエポック番号
+        self.test_epochs = []  # テストを実行したエポック番号
 
         # RL-specific metrics (existing)
         self.rl_reward_list = []
@@ -38,7 +42,7 @@ class MetricsLogger:
 
         self.save_dir = save_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        
+
         # 保存ディレクトリの作成
         os.makedirs(self.save_dir, exist_ok=True)
     
@@ -50,18 +54,22 @@ class MetricsLogger:
             self.train_time_list.append(train_time)
             self.total_train_time += train_time
     
-    def log_val_metrics(self, approximation_rate: float, val_time: float = None):
+    def log_val_metrics(self, approximation_rate: float, val_time: float = None, epoch: int = None):
         """検証メトリクスを記録"""
         self.val_approximation_rate_list.append(approximation_rate)
         if val_time is not None:
             self.val_time_list.append(val_time)
-    
-    def log_test_metrics(self, approximation_rate: float, test_time: float = None):
+        if epoch is not None:
+            self.val_epochs.append(epoch)
+
+    def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None):
         """テストメトリクスを記録"""
         self.test_approximation_rate_list.append(approximation_rate)
         if test_time is not None:
             self.test_time_list.append(test_time)
             self.total_test_time += test_time
+        if epoch is not None:
+            self.test_epochs.append(epoch)
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
@@ -241,13 +249,17 @@ class MetricsLogger:
                 val_approx = "N/A"
                 test_approx = "N/A"
 
-                # 検証近似率の取得（簡略化）
-                if epoch < len(self.val_approximation_rate_list):
-                    val_approx = f"{self.val_approximation_rate_list[epoch]:.2f}%"
+                # 検証近似率の取得（エポック番号でマッチング）
+                if epoch in self.val_epochs:
+                    val_idx = self.val_epochs.index(epoch)
+                    if val_idx < len(self.val_approximation_rate_list):
+                        val_approx = f"{self.val_approximation_rate_list[val_idx]:.2f}%"
 
-                # テスト近似率の取得（簡略化）
-                if epoch < len(self.test_approximation_rate_list):
-                    test_approx = f"{self.test_approximation_rate_list[epoch]:.2f}%"
+                # テスト近似率の取得（エポック番号でマッチング）
+                if epoch in self.test_epochs:
+                    test_idx = self.test_epochs.index(epoch)
+                    if test_idx < len(self.test_approximation_rate_list):
+                        test_approx = f"{self.test_approximation_rate_list[test_idx]:.2f}%"
 
                 f.write(f"{epoch+1:<6} {train_loss:<12.4f} {edge_error:<12.2f} {train_time:<12.2f} {val_approx:<12} {test_approx:<12}\n")
 
