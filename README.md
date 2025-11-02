@@ -183,6 +183,98 @@ python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/nsfnet_20_commodit
 
 ---
 
+### 4. SeqFlowRL実験
+
+#### 概要
+
+**SeqFlowRL (Sequential Flow Reinforcement Learning)** は、GCNとTealの手法を統合した新しいアプローチです。
+
+**主要な特徴**:
+- **Actor-Critic (A2C)** アルゴリズム
+- **Per-Commodity GNN更新** で動的な状態反映
+- **Sequential Rollout** による逐次経路生成
+- **2段階訓練** 対応（教師あり事前学習 + RL微調整）
+
+**設計決定**:
+- エンコーダ共有（Actor/Critic）
+- グローバルValue関数
+- ノードレベルアクション空間（デフォルト）
+- Per-Commodity GNN更新頻度
+
+詳細は `docs/hybrid_approach_design.md` を参照してください。
+
+#### 基本的な学習
+
+```bash
+# デフォルト設定で実行
+python3 scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
+
+# エポック数を指定
+python3 scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json --epochs 100
+
+# バッチサイズと学習率を指定
+python3 scripts/seq_flow_rl/train_seqflowrl.py \
+  --config configs/seqflowrl/seqflowrl_base.json \
+  --batch-size 64 \
+  --lr 0.001
+```
+
+#### 2段階訓練（教師あり事前学習 + RL微調整）
+
+```bash
+# Phase 1: 教師あり学習で事前学習（既存のGCNスクリプト）
+python scripts/gcn/train_gcn.py --config configs/gcn/supervised_pretraining.json
+
+# Phase 2: 事前学習済みモデルを使ってRL微調整
+python scripts/seq_flow_rl/train_seqflowrl.py \
+  --config configs/seqflowrl/seqflowrl_base.json \
+  --pretrained saved_models/supervised_pretrained.pt
+```
+
+#### 訓練の再開
+
+```bash
+# チェックポイントから訓練を再開
+python scripts/seq_flow_rl/train_seqflowrl.py \
+  --config configs/seqflowrl/seqflowrl_base.json \
+  --resume saved_models/seqflowrl/checkpoint_epoch_20.pt
+```
+
+#### モデルの評価
+
+```bash
+# 保存済みモデルを評価
+python scripts/seq_flow_rl/evaluate_seqflowrl.py \
+  --config configs/seqflowrl/seqflowrl_base.json \
+  --checkpoint saved_models/seqflowrl/best_model.pt
+
+# 評価結果を指定したファイルに保存
+python scripts/seq_flow_rl/evaluate_seqflowrl.py \
+  --config configs/seqflowrl/seqflowrl_base.json \
+  --checkpoint saved_models/seqflowrl/best_model.pt \
+  --output results/seqflowrl_evaluation.json
+```
+
+#### 実行フロー
+```
+1. 設定ファイル読み込み
+2. データセット読み込み
+3. SeqFlowRLモデル初期化
+   ├─ HybridGNNEncoder (共有)
+   ├─ PolicyHead (Actor)
+   └─ ValueHead (Critic)
+4. 事前学習モデルのロード（オプション）
+5. A2C訓練実行
+   ├─ Sequential Rollout（commodity毎）
+   ├─ Per-Commodity GNN更新
+   ├─ 報酬計算（Load Factor ベース）
+   └─ Actor-Critic損失最適化
+6. 検証・チェックポイント保存
+7. 結果保存（saved_models/seqflowrl/）
+```
+
+---
+
 ## 設定ファイル
 
 ### GCN用設定ファイル（`configs/gcn/`）
