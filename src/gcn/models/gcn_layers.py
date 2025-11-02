@@ -132,20 +132,42 @@ class ResidualGatedGCNLayer(nn.Module):
 class MLP(nn.Module):
     """Multi-layer Perceptron for output prediction."""
 
-    def __init__(self, hidden_dim, output_dim, num_layers=2, dropout_rate=0.2):
+    def __init__(self, input_dim, output_dim, num_layers=2, hidden_dims=None, dropout_rate=0.2):
+        """
+        Args:
+            input_dim: Input dimension
+            output_dim: Output dimension
+            num_layers: Number of layers (default: 2)
+            hidden_dims: List of hidden dimensions for intermediate layers.
+                        If None, uses input_dim for all intermediate layers (backward compatible).
+                        If provided, should have length (num_layers - 1).
+            dropout_rate: Dropout rate (default: 0.2)
+        """
         super().__init__()
+
+        # Backward compatibility: if hidden_dims not provided, use input_dim for all layers
+        if hidden_dims is None:
+            hidden_dims = [input_dim] * (num_layers - 1)
+
+        # Validate hidden_dims length
+        if len(hidden_dims) != num_layers - 1:
+            raise ValueError(f"hidden_dims length ({len(hidden_dims)}) must be num_layers - 1 ({num_layers - 1})")
+
         layers = []
-        for _ in range(num_layers - 1):
-            layers.append(nn.Linear(hidden_dim, hidden_dim))
+        prev_dim = input_dim
+        for hidden_dim in hidden_dims:
+            layers.append(nn.Linear(prev_dim, hidden_dim))
             layers.append(nn.ReLU(inplace=True))
-            layers.append(nn.Dropout(dropout_rate))  # ドロップアウトを追加
+            layers.append(nn.Dropout(dropout_rate))
+            prev_dim = hidden_dim
+
         self.layers = nn.Sequential(*layers)
-        self.output_layer = nn.Linear(hidden_dim, output_dim)
+        self.output_layer = nn.Linear(prev_dim, output_dim)
 
     def forward(self, x):
         """
         Args:
-            x: Input features (batch_size, hidden_dim)
+            x: Input features (batch_size, input_dim)
         Returns:
             y: Output predictions (batch_size, output_dim)
         """
