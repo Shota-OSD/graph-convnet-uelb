@@ -206,7 +206,8 @@ class SequentialRolloutEngine:
         demands = state['x_commodities'][:, commodity_idx, 2]  # [B]
 
         # Initialize paths and log probabilities
-        paths = [[] for _ in range(batch_size)]
+        # IMPORTANT: Initialize paths with source nodes
+        paths = [[src_nodes[b].item()] for b in range(batch_size)]
         log_probs = torch.zeros(batch_size, device=self.device)
         entropies_sum = torch.zeros(batch_size, device=self.device)
         num_steps = torch.zeros(batch_size, device=self.device)
@@ -235,7 +236,7 @@ class SequentialRolloutEngine:
             # Create valid action mask (including capacity constraints)
             valid_mask = self._create_valid_mask(
                 current_nodes, dst_nodes, state['x_edges_capacity'],
-                visited_nodes, reachability, reached_dst, state['x_edges_usage']
+                visited_nodes, reachability, reached_dst, state['x_edges_usage'], demands
             )
 
             # Get action probabilities from Policy Head
@@ -294,10 +295,25 @@ class SequentialRolloutEngine:
         # Compute mean entropy per path
         mean_entropy = entropies_sum / (num_steps + 1e-8)
 
+        # Verify all paths reached destination
+        # If not, penalize by setting large negative log probability
+        final_nodes = torch.tensor([paths[b][-1] if len(paths[b]) > 0 else src_nodes[b].item()
+                                    for b in range(batch_size)], device=self.device)
+        reached_destination_final = (final_nodes == dst_nodes)
+
+        # Apply heavy penalty to log_probs for paths that didn't reach destination
+        # This discourages incomplete paths during learning
+        penalty_for_incomplete = -10.0
+        log_probs = torch.where(
+            reached_destination_final,
+            log_probs,
+            log_probs + penalty_for_incomplete
+        )
+
         return paths, log_probs, mean_entropy, state_value
 
     def _create_valid_mask(self, current_nodes, dst_nodes, edges_capacity,
-                           visited_nodes, reachability, reached_dst, edges_usage):
+                           visited_nodes, reachability, reached_dst, edges_usage, demands):
         """
         Create valid action mask for current step.
 
@@ -309,6 +325,7 @@ class SequentialRolloutEngine:
             reachability: Reachability matrix [B, V, V]
             reached_dst: Boolean mask [B] indicating which reached destination
             edges_usage: Current edge usage [B, V, V]
+            demands: Demand for current commodity [B]
 
         Returns:
             valid_mask: Valid action mask [B, V]
@@ -316,14 +333,6 @@ class SequentialRolloutEngine:
         batch_size = len(current_nodes)
         num_nodes = edges_capacity.shape[1]
         device = edges_capacity.device
-
-        # For batch elements that already reached destination, mask all actions
-        # (they shouldn't take any more actions)
-        if reached_dst.any():
-            # Create dummy mask (will be overridden for reached elements)
-            valid_mask = torch.ones(batch_size, num_nodes, dtype=torch.bool, device=device)
-            valid_mask[reached_dst] = False  # Mask all actions for reached elements
-            return valid_mask
 
         # Generate full valid mask (with capacity constraints, no reachability check)
         valid_mask = MaskGenerator.create_full_valid_mask(
@@ -333,8 +342,14 @@ class SequentialRolloutEngine:
             visited_nodes=visited_nodes,
             reachability=None,
             check_reachability=False,
-            edges_usage=edges_usage
+            edges_usage=edges_usage,
+            demands=demands
         )
+
+        # For batch elements that already reached destination, mask all actions
+        # (they shouldn't take any more actions)
+        if reached_dst.any():
+            valid_mask[reached_dst] = False  # Mask all actions for reached elements
 
         return valid_mask
 
@@ -351,16 +366,21 @@ class SequentialRolloutEngine:
         """
         batch_size = len(paths)
         demands = state['x_commodities'][:, commodity_idx, 2]  # [B]
+        dst_nodes = state['x_commodities'][:, commodity_idx, 1].long()  # [B]
 
         for b in range(batch_size):
             path = paths[b]
             demand = demands[b].item()
 
-            # Update edge usage along the path
-            for i in range(len(path) - 1):
-                u = path[i]
-                v = path[i + 1]
-                state['x_edges_usage'][b, u, v] += demand
+            # Only update edge usage if path reached destination
+            if len(path) > 0 and path[-1] == dst_nodes[b].item():
+                # Update edge usage along the path
+                for i in range(len(path) - 1):
+                    u = path[i]
+                    v = path[i + 1]
+                    state['x_edges_usage'][b, u, v] += demand
+            # If path didn't reach destination, don't count its edge usage
+            # This prevents incomplete paths from affecting capacity constraints
 
     def _update_edge_usage_step(self, state, prev_nodes, next_nodes, demands, commodity_idx):
         """
