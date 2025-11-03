@@ -251,13 +251,32 @@ class MaskGenerator:
             )
 
         # 5. Ensure at least one valid action exists (safety check)
-        # If no valid actions, allow moving to any unvisited neighbor
+        # If no valid actions, allow moving to any unvisited neighbor with capacity
         has_valid_action = valid_mask.any(dim=1)  # [B]
         if not has_valid_action.all():
-            # Fallback: allow any neighbor with capacity
+            # Fallback: allow any neighbor with capacity (but still respect visited nodes)
             fallback_mask = MaskGenerator.create_valid_neighbors_mask(
                 current_node_tensor, edges_capacity, invalid_edges_mask
             )
+
+            # Apply visited nodes mask to fallback as well (prevent loops)
+            if visited_nodes is not None:
+                fallback_mask = MaskGenerator.apply_visited_nodes_mask(fallback_mask, visited_nodes)
+
+            # If fallback also has no valid actions, allow any neighbor (last resort)
+            # This can happen in dead-end situations - path will fail destination check later
+            has_fallback_action = fallback_mask.any(dim=1)
+            if not has_fallback_action.all():
+                # Last resort: allow any neighbor with capacity (may cause loop, but avoids crash)
+                final_fallback_mask = MaskGenerator.create_valid_neighbors_mask(
+                    current_node_tensor, edges_capacity, invalid_edges_mask
+                )
+                fallback_mask = torch.where(
+                    has_fallback_action.unsqueeze(1),
+                    fallback_mask,
+                    final_fallback_mask
+                )
+
             valid_mask = torch.where(
                 has_valid_action.unsqueeze(1),
                 valid_mask,
