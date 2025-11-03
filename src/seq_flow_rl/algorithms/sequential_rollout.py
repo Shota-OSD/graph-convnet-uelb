@@ -88,8 +88,9 @@ class SequentialRolloutEngine:
         # Initialize state
         state = self._initialize_state(x_nodes, x_commodities, x_edges_capacity)
 
-        # Precompute reachability matrix (for mask generation)
-        reachability = MaskGenerator.compute_reachability(x_edges_capacity)
+        # Reachability check disabled: static reachability doesn't account for dynamic capacity constraints
+        # Capacity-based masking is sufficient and more accurate for this problem
+        reachability = None
 
         # Storage for results
         batch_paths = [[] for _ in range(batch_size)]
@@ -231,10 +232,10 @@ class SequentialRolloutEngine:
             if reached_dst.all():
                 break
 
-            # Create valid action mask
+            # Create valid action mask (including capacity constraints)
             valid_mask = self._create_valid_mask(
                 current_nodes, dst_nodes, state['x_edges_capacity'],
-                visited_nodes, reachability, reached_dst
+                visited_nodes, reachability, reached_dst, state['x_edges_usage']
             )
 
             # Get action probabilities from Policy Head
@@ -296,7 +297,7 @@ class SequentialRolloutEngine:
         return paths, log_probs, mean_entropy, state_value
 
     def _create_valid_mask(self, current_nodes, dst_nodes, edges_capacity,
-                           visited_nodes, reachability, reached_dst):
+                           visited_nodes, reachability, reached_dst, edges_usage):
         """
         Create valid action mask for current step.
 
@@ -307,6 +308,7 @@ class SequentialRolloutEngine:
             visited_nodes: List of sets of visited nodes per batch
             reachability: Reachability matrix [B, V, V]
             reached_dst: Boolean mask [B] indicating which reached destination
+            edges_usage: Current edge usage [B, V, V]
 
         Returns:
             valid_mask: Valid action mask [B, V]
@@ -323,14 +325,15 @@ class SequentialRolloutEngine:
             valid_mask[reached_dst] = False  # Mask all actions for reached elements
             return valid_mask
 
-        # Generate full valid mask
+        # Generate full valid mask (with capacity constraints, no reachability check)
         valid_mask = MaskGenerator.create_full_valid_mask(
             current_nodes,
             dst_nodes,
             edges_capacity,
             visited_nodes=visited_nodes,
-            reachability=reachability,
-            check_reachability=True
+            reachability=None,
+            check_reachability=False,
+            edges_usage=edges_usage
         )
 
         return valid_mask

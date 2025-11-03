@@ -307,7 +307,10 @@ class A2CStrategy:
 
             if mean_model_lf > 0:
                 # approximation_ratio = (gt / model) * 100
-                # Higher is better (closer to optimal)
+                # 100% = same as optimal (perfect)
+                # < 100% = worse than optimal (lower is worse)
+                # > 100% = theoretically impossible (better than optimal)
+                # Since load factor is lower-is-better, gt/model gives correct ratio
                 approximation_ratio = (mean_gt_lf / mean_model_lf) * 100
             else:
                 approximation_ratio = 0.0
@@ -403,7 +406,10 @@ class A2CStrategy:
 
                 if mean_model_lf > 0:
                     # approximation_ratio = (gt / model) * 100
-                    # Higher is better (closer to optimal)
+                    # 100% = same as optimal (perfect)
+                    # < 100% = worse than optimal (lower is worse)
+                    # > 100% = theoretically impossible (better than optimal)
+                    # Since load factor is lower-is-better, gt/model gives correct ratio
                     approximation_ratio = (mean_gt_lf / mean_model_lf) * 100
                 else:
                     approximation_ratio = 0.0

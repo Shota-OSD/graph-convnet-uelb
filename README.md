@@ -97,8 +97,11 @@ graph-convnet-uelb/
 まず、学習・評価用のデータセットを生成します：
 
 ```bash
-# デフォルト設定でデータ生成
+# GCN用データ生成
 python scripts/common/generate_data.py --config configs/gcn/default2.json
+
+# SeqFlowRL用データ生成
+python scripts/common/generate_data.py --config configs/seqflowrl/seqflowrl_base.json
 
 # 特定の設定ファイルでデータ生成
 python scripts/common/generate_data.py --config configs/gcn/nsfnet_15_commodities.json
@@ -203,20 +206,18 @@ python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/nsfnet_20_commodit
 
 詳細は `docs/hybrid_approach_design.md` を参照してください。
 
+#### データ生成
+
+```bash
+# SeqFlowRL用データセット生成
+python scripts/common/generate_data.py --config configs/seqflowrl/seqflowrl_base.json
+```
+
 #### 基本的な学習
 
 ```bash
 # デフォルト設定で実行
-python3 scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
-
-# エポック数を指定
-python3 scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json --epochs 100
-
-# バッチサイズと学習率を指定
-python3 scripts/seq_flow_rl/train_seqflowrl.py \
-  --config configs/seqflowrl/seqflowrl_base.json \
-  --batch-size 64 \
-  --lr 0.001
+python scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
 ```
 
 #### 2段階訓練（教師あり事前学習 + RL微調整）
@@ -225,35 +226,24 @@ python3 scripts/seq_flow_rl/train_seqflowrl.py \
 # Phase 1: 教師あり学習で事前学習（既存のGCNスクリプト）
 python scripts/gcn/train_gcn.py --config configs/gcn/supervised_pretraining.json
 
-# Phase 2: 事前学習済みモデルを使ってRL微調整
-python scripts/seq_flow_rl/train_seqflowrl.py \
-  --config configs/seqflowrl/seqflowrl_base.json \
-  --pretrained saved_models/supervised_pretrained.pt
+# Phase 2: 設定ファイルで load_pretrained_model を true に設定
+# configs/seqflowrl/seqflowrl_base.json 内で:
+#   "load_pretrained_model": true
+#   "pretrained_model_path": "saved_models/supervised_pretrained.pt"
+python scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
 ```
 
-#### 訓練の再開
+#### 出力ファイル
 
-```bash
-# チェックポイントから訓練を再開
-python scripts/seq_flow_rl/train_seqflowrl.py \
-  --config configs/seqflowrl/seqflowrl_base.json \
-  --resume saved_models/seqflowrl/checkpoint_epoch_20.pt
-```
+学習完了後、以下のファイルが生成されます：
 
-#### モデルの評価
-
-```bash
-# 保存済みモデルを評価
-python scripts/seq_flow_rl/evaluate_seqflowrl.py \
-  --config configs/seqflowrl/seqflowrl_base.json \
-  --checkpoint saved_models/seqflowrl/best_model.pt
-
-# 評価結果を指定したファイルに保存
-python scripts/seq_flow_rl/evaluate_seqflowrl.py \
-  --config configs/seqflowrl/seqflowrl_base.json \
-  --checkpoint saved_models/seqflowrl/best_model.pt \
-  --output results/seqflowrl_evaluation.json
-```
+- **モデルチェックポイント**: `saved_models/seqflowrl/`
+  - `best_model.pt` - 最良モデル
+  - `latest_model.pt` - 最新モデル
+  - `checkpoint_epoch_N.pt` - エポック毎のチェックポイント
+- **学習ログ**: `logs/seqflowrl_training_YYYYMMDD_HHMMSS.txt`
+  - 詳細な学習経過とメトリクス
+  - エポック毎のLoss、Reward、Load Factor、Approximation Ratio
 
 #### 実行フロー
 ```
@@ -270,7 +260,7 @@ python scripts/seq_flow_rl/evaluate_seqflowrl.py \
    ├─ 報酬計算（Load Factor ベース）
    └─ Actor-Critic損失最適化
 6. 検証・チェックポイント保存
-7. 結果保存（saved_models/seqflowrl/）
+7. 結果保存（saved_models/seqflowrl/、logs/）
 ```
 
 ---
@@ -303,6 +293,12 @@ python scripts/seq_flow_rl/evaluate_seqflowrl.py \
 | `rl_load_saved_model.json` | RL保存済みモデル読み込み |
 | `rl_with_model_saving.json` | RLモデル保存設定 |
 
+### SeqFlowRL用設定ファイル（`configs/seqflowrl/`）
+
+| ファイル | 説明 |
+|---------|------|
+| `seqflowrl_base.json` | SeqFlowRLデフォルト設定 |
+
 ---
 
 ## 結果の確認
@@ -320,12 +316,22 @@ epoch:01  execution time:12.34s  lr:1.00e-03  loss:0.1234
 RL-KSP例:
 Episode 10/100, Total Reward: -0.0589, Loss: 0.0001,
                 Epsilon: 0.2936, Time: 0.39s
+
+SeqFlowRL例:
+Epoch 1/30 | Time: 21.86s | LR: 0.000500
+  Train - Loss: 1.2155 | Reward: 1.6512 | Load Factor: 0.1726 | Approx Ratio: 85.32%
+  Val   - Load Factor: 0.1850 (min: 0.1234, max: 0.2567) | Approx Ratio: 82.10%
 ```
 
 ### 保存されるファイル
 
-- **モデル**: `saved_models/gcn/` または `saved_models/rl_ksp/`
-- **ログ**: `logs/training_results_YYYYMMDD_HHMMSS.txt`
+- **モデル**:
+  - GCN: `saved_models/gcn/`
+  - RL-KSP: `saved_models/rl_ksp/`
+  - SeqFlowRL: `saved_models/seqflowrl/`
+- **ログ**:
+  - GCN: `logs/training_results_YYYYMMDD_HHMMSS.txt`
+  - SeqFlowRL: `logs/seqflowrl_training_YYYYMMDD_HHMMSS.txt`
 - **メトリクス**: `logs/training_results_YYYYMMDD_HHMMSS.pkl`
 - **結果**: `results/` ディレクトリ
 
