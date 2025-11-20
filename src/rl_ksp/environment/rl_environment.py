@@ -10,6 +10,7 @@ import numpy as np
 import random
 import csv
 import copy
+import time
 from typing import List, Tuple, Optional
 
 from src.common.graph.k_shortest_path import KShortestPathFinder
@@ -70,6 +71,15 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
         self.grouping = []
         self.pair_list = []
         self.allcommodity_ksps = []
+
+        # プロファイリング設定
+        self.profile_enabled = config.get('debug_profile_episode', False)
+        self._profile_episode_idx = 0
+        self._profile_totals = {}
+        self._profile_counts = {}
+        self._profile_step_count = 0
+        self._profile_episode_start = None
+        self._profile_mode = 'train'
         
     
     def search_combination(self, allcommodity_ksps: List[List[List[int]]]) -> List[List[List[int]]]:
@@ -148,6 +158,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
     
     def load_factor(self, grouping: List[List[int]]) -> List[float]:
         """負荷率計算"""
+        start_time = time.perf_counter()
         loads = []
         zo_combination = self.zero_one(grouping)
         for e in range(len(self.edge_list)):
@@ -156,12 +167,16 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
                 for l in range(self.commodity)
             ) / self.capacity_list[self.edge_list[e][1]]
             loads.append(load)
+        self._record_timing('metric.load_factor', time.perf_counter() - start_time)
         return loads
     
     def max_load_factor(self, grouping: List[List[int]]) -> float:
         """最大負荷率計算"""
+        start_time = time.perf_counter()
         loads = self.load_factor(grouping)
-        return max(loads) if loads else 0.0
+        max_load = max(loads) if loads else 0.0
+        self._record_timing('metric.max_load_factor', time.perf_counter() - start_time)
+        return max_load
     
     def get_difference(self, grouping: List[List[int]]) -> float:
         """最大負荷率の変化差"""
@@ -181,6 +196,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
     
     def get_observation(self) -> List[float]:
         """観測変数の取得"""
+        obs_start = time.perf_counter()
         grouping = self.grouping.copy()
         candidate_list = []
         self.old_maxloadfactor = self.max_load_factor(grouping)
@@ -205,6 +221,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             for n in range(i):
                 mask.append(-100.0)
         
+        self._record_timing('observation.build', time.perf_counter() - obs_start)
         return mask
     
     def check_is_done(self) -> bool:
@@ -217,7 +234,10 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
     
     def step(self, action: int) -> Tuple[List[float], float, bool, dict, float]:
         """1ステップの実行"""
+        step_start = time.perf_counter()
         self.time += 1
+        if self.profile_enabled:
+            self._profile_step_count += 1
         observation = self.get_observation()
         oldmaxload = self.max_load_factor(self.grouping)
         
@@ -240,10 +260,16 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             info = {}
         
         maxload = self.max_load_factor(self.grouping)
+        self._record_timing('step.total', time.perf_counter() - step_start)
+        if done:
+            self._finalize_episode_profile()
         return self.observation, self.reward, done, info, maxload
     
     def reset(self, mode: str = 'train') -> List[float]:
         """エピソードの初期化"""
+        reset_start = time.perf_counter()
+        if self.profile_enabled:
+            self._start_episode_profile(mode)
         self.time = 0
         # 毎エピソードで新しいグラフ・品種を生成
         self.grouping = self.get_random_grouping(mode)
@@ -260,10 +286,12 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             if count == self.count_limit:
                 break
         
+        self._record_timing('reset.total', time.perf_counter() - reset_start)
         return self.observation
     
     def get_random_grouping(self, mode: str = 'train') -> List[List[int]]:
         """状態の初期化 - 既存データを使用"""
+        grouping_start = time.perf_counter()
         # 現在のdata_idxを保存（このデータを実際に使用する）
         self.current_used_data_idx = self.data_idx
         
@@ -283,9 +311,11 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             self.data_idx = (self.data_idx + 1) % self.max_train_data
         
         # K最短経路探索
+        ksp_start = time.perf_counter()
         self.allcommodity_ksps = self.ksp_finder.search_k_shortest_paths(
             self.G, self.commodity_list, self.K
         )
+        self._record_timing('reset.ksp_search', time.perf_counter() - ksp_start)
         
         # 初期状態の設定
         if self.initial_state == 1:
@@ -296,6 +326,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             combination = self.search_combination(self.allcommodity_ksps)
         
         self.grouping = combination[0]
+        self._record_timing('reset.init_grouping_total', time.perf_counter() - grouping_start)
         return self.grouping
     
     def load_data_from_files(self, data_idx: int, mode: str = 'train') -> None:
@@ -306,9 +337,12 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             data_idx: データインデックス
             mode: データモード ('train', 'test', 'val')
         """
+        start_time = time.perf_counter()
         # グラフファイルの読み込み（GCNモードと同じ形式）
         graph_file = f"./data/{mode}_data/graph_file/{data_idx-(data_idx%10)}/graph_{data_idx}.gml"
+        graph_load_start = time.perf_counter()
         self.G = nx.read_gml(graph_file, destringizer=int)
+        self._record_timing('data.read_graph', time.perf_counter() - graph_load_start)
         
         # 品種ファイルの読み込み（GCNモードと同じ形式）
         commodity_file = f"./data/{mode}_data/commodity_file/{data_idx-(data_idx%10)}/commodity_data_{data_idx}.csv"
@@ -318,6 +352,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
         self.commodity_list = []
         available_nodes = set(self.G.nodes())
         
+        commodity_load_start = time.perf_counter()
         with open(commodity_file, 'r') as f:
             reader = csv.reader(f)
             for row_idx, row in enumerate(reader):
@@ -335,6 +370,7 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
                         raise ValueError(f"FATAL ERROR: Source and target are the same node {source} in commodity data (file: {commodity_file}, row: {row_idx})")
                     
                     self.commodity_list.append([source, target, demand])
+        self._record_timing('data.read_commodity', time.perf_counter() - commodity_load_start)
         
         # 品種データが空の場合もエラー
         if len(self.commodity_list) == 0:
@@ -347,6 +383,54 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
         self.capacity_list = nx.get_edge_attributes(self.G, 'capacity')
         self.edge_list = list(enumerate(self.G.edges()))
         self.edges_notindex = [self.edge_list[z][1] for z in range(len(self.edge_list))]
+        self._record_timing('reset.load_data_from_files', time.perf_counter() - start_time)
+    
+    def _record_timing(self, key: str, duration: float) -> None:
+        """プロファイリング用の時間記録"""
+        if not self.profile_enabled:
+            return
+        if duration < 0:
+            return
+        self._profile_totals[key] = self._profile_totals.get(key, 0.0) + duration
+        self._profile_counts[key] = self._profile_counts.get(key, 0) + 1
+    
+    def _start_episode_profile(self, mode: str) -> None:
+        """エピソード開始時のプロファイル初期化"""
+        self._profile_episode_idx += 1
+        self._profile_mode = mode
+        self._profile_totals = {}
+        self._profile_counts = {}
+        self._profile_step_count = 0
+        self._profile_episode_start = time.perf_counter()
+    
+    def _finalize_episode_profile(self) -> None:
+        """エピソード終了時に計測結果を出力"""
+        if not self.profile_enabled or self._profile_episode_start is None:
+            return
+        episode_duration = time.perf_counter() - self._profile_episode_start
+        print(
+            f"[RL-KSP PROFILE] Episode #{self._profile_episode_idx} "
+            f"({self._profile_mode}) finished in {episode_duration:.3f}s "
+            f"over {self._profile_step_count} steps"
+        )
+        if not self._profile_totals:
+            print("    No timing data collected.")
+        else:
+            sorted_stats = sorted(
+                self._profile_totals.items(),
+                key=lambda item: item[1],
+                reverse=True
+            )
+            max_entries = 8
+            for key, total in sorted_stats[:max_entries]:
+                count = self._profile_counts.get(key, 1)
+                avg_ms = (total / count) * 1000
+                print(
+                    f"    {key}: total={total:.3f}s count={count} avg={avg_ms:.1f}ms"
+                )
+            if len(sorted_stats) > max_entries:
+                print(f"    ... {len(sorted_stats) - max_entries} more timers recorded")
+        self._profile_episode_start = None
     
     
     def render(self, mode='human'):

@@ -7,7 +7,13 @@ import matplotlib.pyplot as plt
 from src.common.graph.flow import Flow
 import pulp
 import torch
-# from pyscipopt import Model as SCIPModel, quicksum
+import numpy as np
+
+try:
+    from pyscipopt import Model as SCIPModel, quicksum
+except ImportError:  # PySCIPOpt is optional
+    SCIPModel = None
+    quicksum = None
 
 class SolveExactSolution():
     def __init__(self, solver_type, comodity_file_name, graph_file_name):
@@ -113,10 +119,9 @@ class SolveExactSolution():
             UELB_kakai.optimize()
             elapsed_time = time.time()-start
 
-            with open(self.exact_file_name, 'a', newline='') as f:
-                out = csv.writer(f)
-                out.writerow([UELB_kakai.objective_value, elapsed_time]) 
-            return UELB_kakai.objective_value,elapsed_time
+            solution_matrix = self._extract_solution_matrix(flow_var_kakai, lambda var: var.x)
+            self.flow_var_kakai = solution_matrix
+            return solution_matrix, self.r_kakai, L_kakai.x, elapsed_time
         
         if (self.solver_type == 'pulp'): # pulp+CBC
             UELB_problem = pulp.LpProblem('UELB', pulp.LpMinimize) # モデルの名前
@@ -177,10 +182,14 @@ class SolveExactSolution():
 
             # print(status)
             # print(UELB_problem) # 制約式を全て出してくれる    
-            self.flow_var_kakai = flow_var_kakai
-            return flow_var_kakai, self.r_kakai, L.value(), elapsed_time
+            solution_matrix = self._extract_solution_matrix(flow_var_kakai, pulp.value)
+            self.flow_var_kakai = solution_matrix
+            return solution_matrix, self.r_kakai, L.value(), elapsed_time
 
         if (self.solver_type == 'SCIP'): # PySCIPOpt+SCIP
+
+            if SCIPModel is None:
+                raise ImportError("PySCIPOpt is not installed. Please install pyscipopt to use the SCIP solver.")
 
             # SCIP Modelの作成
             model = SCIPModel("UELB_problem_SCIP")
@@ -216,13 +225,28 @@ class SolveExactSolution():
             start = time.time()
             model.optimize()
             elapsed_time = time.time()-start
-            
-            with open(self.exact_file_name, 'a', newline='') as f:
-                out = csv.writer(f)
-                out.writerow([model.getObjVal(),elapsed_time]) 
-            # nx.draw(self.G, with_labels=True)
-            # plt.show()
-            return model.getObjVal(),elapsed_time
+            best_sol = model.getBestSol()
+            solution_matrix = self._extract_solution_matrix(flow_var_kakai, lambda var: model.getSolVal(best_sol, var))
+            self.flow_var_kakai = solution_matrix
+            objective_value = model.getSolVal(best_sol, L)
+            return solution_matrix, self.r_kakai, objective_value, elapsed_time
+
+    def _extract_solution_matrix(self, flow_var_kakai, value_fn):
+        """
+        SolveExactSolution 内で定義した変数の値を 0/1 の Python 配列へ落とし込む補助関数。
+        どのソルバーを使っても generate_flow_matrices などが同じインターフェースで動く。
+        """
+        solution = []
+        for flow_vars in flow_var_kakai:
+            solution.append([self._binary_round(value_fn(var)) for var in flow_vars])
+        return solution
+
+    @staticmethod
+    def _binary_round(value):
+        """数値（浮動小数や None）を 0/1 に丸める。"""
+        if value is None:
+            return 0
+        return 1 if float(value) >= 0.5 else 0
         
     def generate_edges_target(self):
         num_flows = len(self.G.all_flows)
@@ -232,7 +256,7 @@ class SolveExactSolution():
         
         for l in range(num_flows):
             for e in range(num_edges):
-                if pulp.value(self.flow_var_kakai[l][e]) == 1:
+                if self.flow_var_kakai[l][e] == 1:
                     node_from = self.r_kakai[e][1][0]
                     node_to = self.r_kakai[e][1][1]
                     exact_edges_matrix[node_from][node_to][l] = 1
@@ -297,7 +321,7 @@ class SolveExactSolution():
                     node_from = self.r_kakai[e][1][0]
                     node_to = self.r_kakai[e][1][1]
 
-                    if node_from == current_node and pulp.value(flow_var_kakai[l][e]) == 1:  # 次に進むエッジを発見
+                    if node_from == current_node and flow_var_kakai[l][e] == 1:  # 次に進むエッジを発見
                         # エッジの順序を記録
                         edge_flow_matrix[l][e] = current_edge_order
                         current_edge_order += 1

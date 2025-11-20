@@ -123,15 +123,19 @@ class PolicyHead(nn.Module):
             # Mask invalid edges with large negative values
             action_logits = action_logits.masked_fill(~valid_edges_mask, float('-inf'))
 
-            # For batches with no valid actions, create uniform distribution over all actions
-            # (This is a fallback - ideally this should never happen in a well-designed environment)
+            # For batches with no valid actions, stay at current node (probability 1.0)
+            # Rollout engine will detect this as "dead end" / "unreachable destination"
             if not has_valid_action.all():
-                # Set uniform logits for batches with no valid actions
-                uniform_logits = torch.zeros_like(action_logits[0])
+                # Create one-hot distribution at current_node
+                # Set all logits to -inf, then current_node to 0
+                batch_indices = torch.arange(batch_size, device=device)
+                stay_logits = torch.full_like(action_logits, float('-inf'))
+                stay_logits[batch_indices, current_node] = 0.0
+
                 action_logits = torch.where(
                     has_valid_action.unsqueeze(-1),
                     action_logits,
-                    uniform_logits.unsqueeze(0)
+                    stay_logits
                 )
 
         # Compute probabilities

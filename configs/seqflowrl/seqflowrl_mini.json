@@ -69,13 +69,19 @@
     "ppo_epochs": 4,
     "_ppo_note": "Only used if rl_algorithm='ppo'",
 
-    "_comment_reward": "=== Reward Function ===",
-    "reward_function_version": "continuous_v1",
-    "_reward_formula": "reward = 2.0 - 2.0 * load_factor",
-    "_reward_range": "[-∞, 2.0], higher is better",
-    "rl_use_smooth_penalty": true,
-    "rl_penalty_lambda": 5.0,
-    "_penalty_note": "Smooth penalty for capacity constraint violations",
+    "_comment_reward": "=== Reward Function (Focus on Completion Only) ===",
+    "reward_function_version": "completion_focused",
+    "_reward_formula": "reward = completion_penalty + distance_shaping (load_factor and capacity penalties disabled)",
+    "_reward_range": "[-∞, ∞], higher is better",
+    "rl_use_smooth_penalty": false,
+    "rl_penalty_lambda": 0.0,
+    "_penalty_note": "DISABLED: Capacity penalty set to 0 to focus on completion",
+    "rl_completion_penalty_weight": 10.0,
+    "_completion_penalty_note": "PRIMARY REWARD: Penalty weight for incomplete paths (applied to reward). Penalty = -weight * incomplete_rate. Increased to 10.0 to strongly encourage completion",
+    "rl_distance_shaping_weight": 2.0,
+    "_distance_shaping_note": "SECONDARY REWARD: Distance-based completion shaping. Increased to 2.0 to guide agent toward destinations",
+    "incomplete_path_penalty": 0.0,
+    "_incomplete_path_penalty_note": "DISABLED: Using completion_penalty_weight instead",
 
     "_comment_training": "=== Training Configuration ===",
     "max_epochs": 30,
@@ -119,7 +125,7 @@
 
     "_comment_logging": "=== Logging and Checkpointing ===",
     "log_every": 10,
-    "save_every": 10,
+    "save_every": 1000,
     "save_best_only": true,
     "checkpoint_dir": "saved_models/seqflowrl/",
     "tensorboard_dir": "runs/seqflowrl/",
@@ -132,7 +138,8 @@
 
     "_comment_debug": "=== Debug Options ===",
     "debug_mode": false,
+    "debug_rollout": false,
     "verbose": true,
     "save_trajectories": false,
-    "_debug_note": "Set debug_mode=true for detailed logging"
+    "_debug_note": "Set debug_mode=true for detailed logging, debug_rollout=true for path debugging"
 }

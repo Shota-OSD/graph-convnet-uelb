@@ -15,6 +15,8 @@ from datetime import datetime
 
 from ..models.seqflowrl_model import SeqFlowRLModel
 from .a2c_strategy import A2CStrategy
+from .supervised_pretrain_strategy import SupervisedPretrainStrategy
+from ..data.path_extraction import convert_batch_to_seqflowrl_format
 from src.common.types import BatchData, validate_batch_types
 
 
@@ -47,12 +49,25 @@ class SeqFlowRLTrainer:
         # Model instantiation
         self.model = self._instantiate_model()
 
-        # Training strategy (A2C)
-        self.strategy = A2CStrategy(self.model, config)
-        print(f"✓ Using A2C Training Strategy")
-        print(f"  - Entropy weight: {config.get('entropy_weight', 0.01)}")
-        print(f"  - Value loss weight: {config.get('value_loss_weight', 0.5)}")
-        print(f"  - Learning rate: {config.get('learning_rate', 0.0005)}")
+        # Check if using supervised pre-training mode
+        self.pretrain_mode = config.get('pretrain_mode', False)
+
+        if self.pretrain_mode:
+            # Supervised pre-training strategy
+            from ..algorithms.sequential_rollout import SequentialRolloutEngine
+            rollout_engine = SequentialRolloutEngine(self.model, config, self.device)
+            self.strategy = SupervisedPretrainStrategy(self.model, rollout_engine, config, self.device)
+            print(f"✓ Using Supervised Pre-training Strategy (Behavior Cloning)")
+            print(f"  - Learning rate: {config.get('learning_rate', 0.001)}")
+        else:
+            # RL training strategy (A2C)
+            self.strategy = A2CStrategy(self.model, config)
+            print(f"✓ Using A2C Training Strategy")
+            print(f"  - Entropy weight: {config.get('entropy_weight', 0.01)}")
+            print(f"  - Value loss weight: {config.get('value_loss_weight', 0.5)}")
+            print(f"  - Learning rate: {config.get('learning_rate', 0.0005)}")
+            print(f"  - Completion bonus weight: {config.get('rl_completion_bonus_weight', 5.0)}")
+            print(f"  - Distance shaping weight: {config.get('rl_distance_shaping_weight', 2.0)}")
 
         # Checkpointing
         self.checkpoint_dir = Path(config.get('checkpoint_dir', 'saved_models/seqflowrl/'))
@@ -269,15 +284,37 @@ class SeqFlowRLTrainer:
         """
         self.model.train()
 
-        epoch_metrics = {
-            'actor_loss': [],
-            'critic_loss': [],
-            'total_loss': [],
-            'mean_reward': [],
-            'mean_load_factor': [],
-            'mean_entropy': [],
-            'approximation_ratio': [],
-        }
+        # Different metrics for pretrain vs RL mode
+        if self.pretrain_mode:
+            epoch_metrics = {
+                'loss': [],
+                'accuracy': [],
+                'total_predictions': [],
+            }
+        else:
+            epoch_metrics = {
+                'actor_loss': [],
+                'critic_loss': [],
+                'total_loss': [],
+                'mean_reward': [],
+                'mean_load_factor': [],
+                'mean_entropy': [],
+                'approximation_ratio': [],
+                'completion_rate': [],
+                'num_violations': [],
+                'batch_size': [],
+                'termination_max_steps': [],
+                'termination_no_valid_actions': [],
+                'termination_reached_destination': [],
+                'termination_max_steps_pct': [],
+                'termination_no_valid_actions_pct': [],
+                'termination_reached_destination_pct': [],
+                # Reward breakdown
+                'base_reward': [],
+                'capacity_penalty': [],
+                'completion_penalty': [],
+                'distance_shaping': [],
+            }
 
         # DatasetReader has max_iter attribute
         num_batches = train_loader.max_iter
@@ -292,15 +329,21 @@ class SeqFlowRLTrainer:
             except StopIteration:
                 break
 
-            # Convert DotDict batch to dictionary format expected by strategy
-            batch_data = self._prepare_batch(batch)
+            # Convert batch format
+            if self.pretrain_mode:
+                # Convert to SeqFlowRL format with path information
+                batch_data = convert_batch_to_seqflowrl_format(batch)
+            else:
+                # Standard conversion for RL
+                batch_data = self._prepare_batch(batch)
 
             # Move data to device
             batch_data = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
                          for k, v in batch_data.items()}
 
-            # Store capacity for reward computation (workaround)
-            self.config['_batch_capacity'] = batch_data['x_edges_capacity']
+            # Store capacity for reward computation (workaround, only for RL mode)
+            if not self.pretrain_mode:
+                self.config['_batch_capacity'] = batch_data['x_edges_capacity']
 
             # Training step
             metrics = self.strategy.train_step(batch_data)
@@ -323,6 +366,9 @@ class SeqFlowRLTrainer:
                 # Filter out None values for approximation ratio
                 valid_values = [x for x in v if x is not None]
                 avg_metrics[k] = np.mean(valid_values) if valid_values else None
+            elif k in ['num_violations', 'batch_size', 'termination_max_steps', 'termination_no_valid_actions', 'termination_reached_destination']:
+                # Sum instead of average for counts
+                avg_metrics[k] = np.sum(v)
             else:
                 avg_metrics[k] = np.mean(v)
 
@@ -344,13 +390,30 @@ class SeqFlowRLTrainer:
         if num_batches == 0:
             return None
 
-        epoch_metrics = {
-            'mean_reward': [],
-            'mean_load_factor': [],
-            'min_load_factor': [],
-            'max_load_factor': [],
-            'approximation_ratio': [],
-        }
+        # Different metrics for pretrain vs RL mode
+        if self.pretrain_mode:
+            epoch_metrics = {
+                'loss': [],
+                'accuracy': [],
+                'total_predictions': [],
+            }
+        else:
+            epoch_metrics = {
+                'mean_reward': [],
+                'mean_load_factor': [],
+                'min_load_factor': [],
+                'max_load_factor': [],
+                'approximation_ratio': [],
+                'completion_rate': [],
+                'num_violations': [],
+                'batch_size': [],
+                'termination_max_steps': [],
+                'termination_no_valid_actions': [],
+                'termination_reached_destination': [],
+                'termination_max_steps_pct': [],
+                'termination_no_valid_actions_pct': [],
+                'termination_reached_destination_pct': [],
+            }
 
         # Create iterator from DatasetReader
         dataset_iter = iter(val_loader)
@@ -362,8 +425,13 @@ class SeqFlowRLTrainer:
                 except StopIteration:
                     break
 
-                # Convert DotDict batch to dictionary format expected by strategy
-                batch_data = self._prepare_batch(batch)
+                # Convert batch format
+                if self.pretrain_mode:
+                    # Convert to SeqFlowRL format with path information
+                    batch_data = convert_batch_to_seqflowrl_format(batch)
+                else:
+                    # Standard conversion for RL
+                    batch_data = self._prepare_batch(batch)
 
                 # Move data to device
                 batch_data = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
@@ -378,7 +446,9 @@ class SeqFlowRLTrainer:
                         epoch_metrics[key].append(metrics[key])
 
         # Average metrics (only if we have data)
-        if not epoch_metrics['mean_load_factor']:
+        # Check for the right key depending on mode
+        check_key = 'loss' if self.pretrain_mode else 'mean_load_factor'
+        if not epoch_metrics[check_key]:
             return None
 
         avg_metrics = {}
@@ -389,6 +459,9 @@ class SeqFlowRLTrainer:
                 # Filter out None values for approximation ratio
                 valid_values = [x for x in v if x is not None]
                 avg_metrics[k] = np.mean(valid_values) if valid_values else None
+            elif k in ['num_violations', 'batch_size', 'termination_max_steps', 'termination_no_valid_actions', 'termination_reached_destination']:
+                # Sum instead of average for counts
+                avg_metrics[k] = np.sum(v)
             else:
                 avg_metrics[k] = np.mean(v)
 
@@ -398,26 +471,99 @@ class SeqFlowRLTrainer:
         """Log epoch summary."""
         print(f"\nEpoch {epoch + 1}/{self.config.get('max_epochs', 50)} | Time: {epoch_time:.2f}s | LR: {lr:.6f}")
 
-        # Training metrics with approximation ratio
-        approx_ratio_str = ""
-        if train_metrics.get('approximation_ratio') is not None:
-            approx_ratio_str = f" | Approx Ratio: {train_metrics.get('approximation_ratio'):.2f}%"
+        # Different logging for pretrain vs RL mode
+        if self.pretrain_mode:
+            # Supervised pre-training metrics
+            print(f"  Train - Loss: {train_metrics.get('loss', 0):.4f} | "
+                  f"Accuracy: {train_metrics.get('accuracy', 0):.2f}% | "
+                  f"Predictions: {int(train_metrics.get('total_predictions', 0))}")
+        else:
+            # RL training metrics
+            approx_ratio_str = ""
+            if train_metrics.get('approximation_ratio') is not None:
+                approx_ratio_str = f" | Approx Ratio: {train_metrics.get('approximation_ratio'):.2f}%"
 
-        print(f"  Train - Loss: {train_metrics.get('total_loss', 0):.4f} | "
-              f"Reward: {train_metrics.get('mean_reward', 0):.4f} | "
-              f"Load Factor: {train_metrics.get('mean_load_factor', 0):.4f}"
-              f"{approx_ratio_str}")
+            completion_str = ""
+            if train_metrics.get('completion_rate') is not None:
+                completion_str = f" | Completion: {train_metrics.get('completion_rate'):.1f}%"
 
-        # Validation metrics with approximation ratio
+            violation_str = ""
+            if train_metrics.get('num_violations') is not None:
+                num_violations = int(train_metrics.get('num_violations', 0))
+                batch_size = int(train_metrics.get('batch_size', 1))
+                violation_str = f" | Violations: {num_violations}/{batch_size}"
+
+            # Path length
+            path_length_str = ""
+            if train_metrics.get('mean_path_length') is not None:
+                mean_path_len = train_metrics.get('mean_path_length', 0)
+                max_path_len = train_metrics.get('max_path_length', 0)
+                path_length_str = f" | AvgPath: {mean_path_len:.1f} (max: {max_path_len:.0f})"
+
+            # Termination statistics
+            termination_str = ""
+            if train_metrics.get('termination_max_steps_pct') is not None:
+                max_steps_pct = train_metrics.get('termination_max_steps_pct', 0)
+                no_valid_pct = train_metrics.get('termination_no_valid_actions_pct', 0)
+                reached_pct = train_metrics.get('termination_reached_destination_pct', 0)
+                termination_str = f"\n    Termination: MaxSteps={max_steps_pct:.1f}% | NoValid={no_valid_pct:.1f}% | Reached={reached_pct:.1f}%"
+
+            # Reward breakdown
+            reward_breakdown_str = ""
+            if train_metrics.get('base_reward') is not None:
+                base_r = train_metrics.get('base_reward', 0)
+                cap_p = train_metrics.get('capacity_penalty', 0)
+                comp_p = train_metrics.get('completion_penalty', 0)
+                dist_s = train_metrics.get('distance_shaping', 0)
+                reward_breakdown_str = f"\n    Reward: Base={base_r:.4f} | CapPenalty={cap_p:.4f} | CompPenalty={comp_p:.4f} | DistShaping={dist_s:.4f}"
+
+            print(f"  Train - Loss: {train_metrics.get('total_loss', 0):.4f} | "
+                  f"Reward: {train_metrics.get('mean_reward', 0):.4f} | "
+                  f"Load Factor: {train_metrics.get('mean_load_factor', 0):.4f}"
+                  f"{approx_ratio_str}{completion_str}{path_length_str}{violation_str}{termination_str}{reward_breakdown_str}")
+
+        # Validation metrics
         if val_metrics is not None:
-            val_approx_str = ""
-            if val_metrics.get('approximation_ratio') is not None:
-                val_approx_str = f" | Approx Ratio: {val_metrics.get('approximation_ratio'):.2f}%"
+            if self.pretrain_mode:
+                # Supervised pre-training validation
+                print(f"  Val   - Loss: {val_metrics.get('loss', 0):.4f} | "
+                      f"Accuracy: {val_metrics.get('accuracy', 0):.2f}% | "
+                      f"Predictions: {int(val_metrics.get('total_predictions', 0))}")
+            else:
+                # RL validation metrics
+                val_approx_str = ""
+                if val_metrics.get('approximation_ratio') is not None:
+                    val_approx_str = f" | Approx Ratio: {val_metrics.get('approximation_ratio'):.2f}%"
 
-            print(f"  Val   - Load Factor: {val_metrics.get('mean_load_factor', 0):.4f} "
-                  f"(min: {val_metrics.get('min_load_factor', 0):.4f}, "
-                  f"max: {val_metrics.get('max_load_factor', 0):.4f})"
-                  f"{val_approx_str}")
+                val_completion_str = ""
+                if val_metrics.get('completion_rate') is not None:
+                    val_completion_str = f" | Completion: {val_metrics.get('completion_rate'):.1f}%"
+
+                val_violation_str = ""
+                if val_metrics.get('num_violations') is not None:
+                    num_violations = int(val_metrics.get('num_violations', 0))
+                    batch_size = int(val_metrics.get('batch_size', 1))
+                    val_violation_str = f" | Violations: {num_violations}/{batch_size}"
+
+                # Validation path length
+                val_path_length_str = ""
+                if val_metrics.get('mean_path_length') is not None:
+                    mean_path_len = val_metrics.get('mean_path_length', 0)
+                    max_path_len = val_metrics.get('max_path_length', 0)
+                    val_path_length_str = f" | AvgPath: {mean_path_len:.1f} (max: {max_path_len:.0f})"
+
+                # Validation termination statistics
+                val_termination_str = ""
+                if val_metrics.get('termination_max_steps_pct') is not None:
+                    max_steps_pct = val_metrics.get('termination_max_steps_pct', 0)
+                    no_valid_pct = val_metrics.get('termination_no_valid_actions_pct', 0)
+                    reached_pct = val_metrics.get('termination_reached_destination_pct', 0)
+                    val_termination_str = f"\n    Termination: MaxSteps={max_steps_pct:.1f}% | NoValid={no_valid_pct:.1f}% | Reached={reached_pct:.1f}%"
+
+                print(f"  Val   - Load Factor: {val_metrics.get('mean_load_factor', 0):.4f} "
+                      f"(min: {val_metrics.get('min_load_factor', 0):.4f}, "
+                      f"max: {val_metrics.get('max_load_factor', 0):.4f})"
+                      f"{val_approx_str}{val_completion_str}{val_path_length_str}{val_violation_str}{val_termination_str}")
         else:
             print(f"  Val   - Skipped (insufficient validation data)")
 

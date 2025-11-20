@@ -19,7 +19,7 @@ class MaskGenerator:
     """
 
     @staticmethod
-    def create_invalid_edges_mask(edges_capacity, num_nodes, device, edges_usage=None):
+    def create_invalid_edges_mask(edges_capacity, num_nodes, device, edges_usage=None, demands=None):
         """
         Create mask for invalid edges (zero/insufficient capacity or self-loops).
 
@@ -28,6 +28,7 @@ class MaskGenerator:
             num_nodes: Number of nodes
             device: Device to create mask on
             edges_usage: Current edge usage [B, V, V] (optional, for capacity constraints)
+            demands: Current commodity demands [B] (optional, to check if demand fits in remaining capacity)
 
         Returns:
             invalid_mask: Boolean mask [B, V, V], True = invalid edge
@@ -40,8 +41,19 @@ class MaskGenerator:
         # If edge usage is provided, check remaining capacity
         if edges_usage is not None:
             remaining_capacity = edges_capacity - edges_usage
-            # Edges with no remaining capacity are invalid (with small epsilon for numerical stability)
-            insufficient_capacity_mask = remaining_capacity <= 1e-6
+            # # Edges with no remaining capacity are invalid (with small epsilon for numerical stability)
+            # insufficient_capacity_mask = remaining_capacity <= 1e-6
+
+            # If demands are provided, check if current demand fits in remaining capacity
+            if demands is not None:
+                # demands: [B] -> [B, 1, 1] for broadcasting
+                demands_expanded = demands.view(batch_size, 1, 1)
+                # Edges where remaining capacity < demand are invalid
+                insufficient_capacity_mask = remaining_capacity < demands_expanded - 1e-6
+            else:
+                # Edges with no remaining capacity are invalid (with small epsilon for numerical stability)
+                insufficient_capacity_mask = remaining_capacity <= 1e-6
+
             zero_capacity_mask = zero_capacity_mask | insufficient_capacity_mask
 
         # Self-loops are invalid
@@ -188,7 +200,7 @@ class MaskGenerator:
     @staticmethod
     def create_full_valid_mask(current_node, dst_node, edges_capacity,
                                visited_nodes=None, reachability=None,
-                               check_reachability=True, edges_usage=None):
+                               check_reachability=True, edges_usage=None, demands=None):
         """
         Create complete valid action mask combining all constraints.
 
@@ -200,6 +212,7 @@ class MaskGenerator:
             reachability: Precomputed reachability matrix [B, V, V]
             check_reachability: Whether to apply reachability constraint
             edges_usage: Current edge usage [B, V, V] (for capacity constraints)
+            demands: Current commodity demands [B] (to check if demand fits in remaining capacity)
 
         Returns:
             valid_mask: Complete valid action mask [B, V], True = valid action
@@ -219,9 +232,9 @@ class MaskGenerator:
         else:
             dst_node_tensor = dst_node
 
-        # 1. Create invalid edges mask (including capacity constraints)
+        # 1. Create invalid edges mask (including capacity constraints with demands)
         invalid_edges_mask = MaskGenerator.create_invalid_edges_mask(
-            edges_capacity, num_nodes, device, edges_usage=edges_usage
+            edges_capacity, num_nodes, device, edges_usage=edges_usage, demands=demands
         )
 
         # 2. Get valid neighbors from current node
@@ -237,20 +250,6 @@ class MaskGenerator:
         if check_reachability and reachability is not None:
             valid_mask = MaskGenerator.apply_reachability_mask(
                 valid_mask, current_node_tensor, dst_node_tensor, reachability
-            )
-
-        # 5. Ensure at least one valid action exists (safety check)
-        # If no valid actions, allow moving to any unvisited neighbor
-        has_valid_action = valid_mask.any(dim=1)  # [B]
-        if not has_valid_action.all():
-            # Fallback: allow any neighbor with capacity
-            fallback_mask = MaskGenerator.create_valid_neighbors_mask(
-                current_node_tensor, edges_capacity, invalid_edges_mask
-            )
-            valid_mask = torch.where(
-                has_valid_action.unsqueeze(1),
-                valid_mask,
-                fallback_mask
             )
 
         return valid_mask

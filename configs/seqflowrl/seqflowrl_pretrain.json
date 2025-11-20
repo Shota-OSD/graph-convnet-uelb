@@ -1,0 +1,96 @@
+{
+    "_comment_meta": "=== SeqFlowRL: Supervised Pre-training (Phase 1) ===",
+    "_description": "Behavior cloning from optimal solution paths",
+    "_usage": "Use this config for Phase 1 (supervised pre-training), then switch to seqflowrl_mini.json with load_pretrained_model=true for Phase 2 (RL fine-tuning)",
+
+    "expt_name": "seqflowrl_pretrain",
+    "gpu_id": "0",
+    "use_gpu": true,
+
+    "_comment_mode": "=== Pre-training Mode ===",
+    "pretrain_mode": true,
+    "_pretrain_mode_note": "Set to true for supervised pre-training (behavior cloning), false for RL training",
+
+    "_comment_data": "=== Data Configuration ===",
+    "graph_filepath": "./data/graph.gml",
+    "edge_numbering_filepath": "./data/edge_numbering_file.csv",
+    "train_filepath": "./data/gragh.gml",
+    "val_filepath": "./data/tsp10_val_concorde.txt",
+    "test_filepath": "./data/tsp10_test_concorde.txt",
+
+    "solver_type": "pulp",
+    "graph_model": "random",
+
+    "num_train_data": 320,
+    "num_val_data": 32,
+    "num_test_data": 32,
+    "num_nodes": 14,
+    "num_commodities": 5,
+    "sample_size": 5,
+    "capacity_lower": 1000,
+    "capacity_higher": 10000,
+    "demand_lower": 5,
+    "demand_higher": 500,
+
+    "_comment_model": "=== Model Architecture ===",
+    "hidden_dim": 128,
+    "num_layers": 8,
+    "mlp_layers": 3,
+    "aggregation": "mean",
+    "dropout_rate": 0.3,
+
+    "_comment_action": "=== Action Space ===",
+    "action_type": "node",
+    "policy_head_mlp_layers": 2,
+
+    "_comment_value": "=== Value Network ===",
+    "value_head_mlp_layers": 3,
+    "value_type": "global",
+    "_value_note": "Value network is NOT trained during pre-training",
+
+    "_comment_rollout": "=== Sequential Rollout ===",
+    "gnn_update_frequency": "per_commodity",
+    "_gnn_update_note": "GNN is updated per commodity during supervised pre-training",
+    "max_path_length": 20,
+
+    "_comment_training": "=== Pre-training Configuration ===",
+    "max_epochs": 30,
+    "_max_epochs_note": "Typically 50-100 epochs for behavior cloning",
+    "val_every": 5,
+    "test_every": 10,
+    "batch_size": 32,
+    "accumulation_steps": 1,
+    "learning_rate": 0.001,
+    "_learning_rate_note": "Higher LR for pre-training (0.001 vs 0.0005 for RL)",
+    "decay_rate": 1.0,
+    "lr_scheduler": "step",
+
+    "_comment_optimization": "=== Optimization ===",
+    "optimizer": "adam",
+    "adam_beta1": 0.9,
+    "adam_beta2": 0.999,
+    "weight_decay": 0.0001,
+    "grad_clip_norm": 1.0,
+
+    "_comment_logging": "=== Logging and Checkpointing ===",
+    "log_every": 10,
+    "save_every": 10,
+    "save_best_only": true,
+    "checkpoint_dir": "saved_models/seqflowrl_pretrain/",
+    "_checkpoint_note": "Pre-trained model will be saved here for Phase 2",
+    "tensorboard_dir": "runs/seqflowrl_pretrain/",
+
+    "_comment_eval": "=== Evaluation ===",
+    "eval_deterministic": true,
+
+    "_comment_debug": "=== Debug Options ===",
+    "debug_mode": false,
+    "verbose": true,
+    "save_trajectories": false,
+
+    "_comment_next_phase": "=== After Pre-training ===",
+    "_next_phase_note": "After pre-training completes:",
+    "_step_1": "1. Note the path to the best checkpoint (e.g., saved_models/seqflowrl_pretrain/best_model.pt)",
+    "_step_2": "2. Update seqflowrl_mini.json: set load_pretrained_model=true and pretrained_model_path to the checkpoint path",
+    "_step_3": "3. Run RL fine-tuning with seqflowrl_mini.json (pretrain_mode will be false by default)"
+}

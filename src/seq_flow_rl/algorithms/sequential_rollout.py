@@ -28,7 +28,7 @@ class SequentialRolloutEngine:
     - Re-encode graph state for next commodity
     """
 
-    def __init__(self, model, config):
+    def __init__(self, model, config, device=None):
         """
         Args:
             model: SeqFlowRLModel instance
@@ -37,9 +37,11 @@ class SequentialRolloutEngine:
                 - sampling_temperature: Temperature for sampling (default: 1.0)
                 - sampling_top_p: Nucleus sampling threshold (default: 0.9)
                 - max_path_length: Maximum hops per commodity (default: 20)
+            device: Device for computation (optional, will use model's device if not provided)
         """
         self.model = model
         self.config = config
+        self.device = device if device is not None else next(model.parameters()).device
 
         # GNN update strategy (Decision #3)
         self.gnn_update_frequency = config.get('gnn_update_frequency', 'per_commodity')
@@ -50,9 +52,6 @@ class SequentialRolloutEngine:
         self.temperature = config.get('sampling_temperature', 1.0)
         self.top_p = config.get('sampling_top_p', 0.9)
         self.max_path_length = config.get('max_path_length', 20)
-
-        # Device
-        self.device = next(model.parameters()).device
 
     def rollout(self, batch_data, mode='train', deterministic=False):
         """
@@ -98,7 +97,10 @@ class SequentialRolloutEngine:
         batch_entropies = torch.zeros(batch_size, num_commodities, device=self.device)
         batch_state_values = torch.zeros(batch_size, num_commodities, device=self.device)
 
-        # Initial GNN encoding (if gnn_update_frequency == 'never', this is the only encoding)
+        # Initial GNN encoding
+        # For 'never': this is the only encoding
+        # For 'per_commodity': will be re-encoded at start of each commodity
+        # For 'per_step': will be re-encoded at start of first commodity, then at each step
         if self.gnn_update_frequency == 'never':
             node_features, edge_features, _ = self.model.encoder(
                 state['x_nodes'],
@@ -110,7 +112,8 @@ class SequentialRolloutEngine:
         # Sequential rollout: Process each commodity in order
         for c in range(num_commodities):
             # Per-commodity GNN update (Decision #3-B: confirmed)
-            if self.gnn_update_frequency == 'per_commodity':
+            # Also run initial encoding for per_step mode
+            if self.gnn_update_frequency == 'per_commodity' or self.gnn_update_frequency == 'per_step':
                 # Re-encode with updated edge usage
                 node_features, edge_features, _ = self.model.encoder(
                     state['x_nodes'],
@@ -148,6 +151,7 @@ class SequentialRolloutEngine:
             'total_log_prob': batch_log_probs.sum(dim=1),  # [B]
             'mean_entropy': batch_entropies.mean(dim=1),  # [B]
             'edge_usage': state['x_edges_usage'],  # Final edge usage [B, V, V]
+            'path_termination_stats': state.get('path_termination_stats', {}),  # Termination statistics
         }
 
         return rollout_results
@@ -173,6 +177,13 @@ class SequentialRolloutEngine:
             'x_edges_capacity': x_edges_capacity,
             # Initialize edge usage to zero (will be updated during rollout)
             'x_edges_usage': torch.zeros_like(x_edges_capacity),
+            # Track termination reasons
+            'path_termination_stats': {
+                'max_steps': 0,
+                'no_valid_actions': 0,
+                'reached_destination': 0,
+                'total_paths': 0,
+            }
         }
 
         return state
@@ -206,7 +217,8 @@ class SequentialRolloutEngine:
         demands = state['x_commodities'][:, commodity_idx, 2]  # [B]
 
         # Initialize paths and log probabilities
-        paths = [[] for _ in range(batch_size)]
+        # IMPORTANT: Start paths with source node to correctly track edge usage
+        paths = [[src_nodes[b].item()] for b in range(batch_size)]
         log_probs = torch.zeros(batch_size, device=self.device)
         entropies_sum = torch.zeros(batch_size, device=self.device)
         num_steps = torch.zeros(batch_size, device=self.device)
@@ -220,6 +232,9 @@ class SequentialRolloutEngine:
         # Track which batch elements have reached destination
         reached_dst = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
 
+        # Track termination reason for each batch element
+        termination_reason = ['unknown'] * batch_size
+
         # Compute state value once at the beginning (Critic evaluation)
         state_value = self.model.critic(node_features)  # [B]
 
@@ -230,15 +245,19 @@ class SequentialRolloutEngine:
 
             # If all reached destination, stop
             if reached_dst.all():
+                for b in range(batch_size):
+                    if termination_reason[b] == 'unknown':
+                        termination_reason[b] = 'reached_destination'
                 break
 
-            # Create valid action mask (including capacity constraints)
+            # Create valid action mask (including capacity constraints with demands)
             valid_mask = self._create_valid_mask(
                 current_nodes, dst_nodes, state['x_edges_capacity'],
-                visited_nodes, reachability, reached_dst, state['x_edges_usage']
+                visited_nodes, reachability, reached_dst, state['x_edges_usage'], demands
             )
 
             # Get action probabilities from Policy Head
+            # If no valid actions, PolicyHead will return one-hot at current_node (stay in place)
             action_probs, action_log_probs, entropy = self.model.actor(
                 node_features,
                 edge_features,
@@ -261,10 +280,21 @@ class SequentialRolloutEngine:
                     top_p=self.top_p
                 )  # [B]
 
-            # Update paths and log probabilities (only for batch elements not yet at destination)
+            # Update paths and log probabilities
             for b in range(batch_size):
                 if not reached_dst[b]:
                     next_node = next_nodes[b].item()
+                    current_node_val = current_nodes[b].item()
+
+                    # Check if agent stayed at current node (no valid actions / dead end)
+                    if next_node == current_node_val:
+                        # Agent is stuck - terminate this path
+                        if termination_reason[b] == 'unknown':
+                            termination_reason[b] = 'no_valid_actions'
+                        # Mark as reached to stop further processing
+                        reached_dst[b] = True
+                        continue
+
                     paths[b].append(next_node)
                     visited_nodes[b].add(next_node)
 
@@ -278,7 +308,7 @@ class SequentialRolloutEngine:
             # Move to next nodes
             current_nodes = next_nodes
 
-            # Per-step GNN update (experimental, not default)
+            # Per-step GNN update (optional)
             if self.gnn_update_frequency == 'per_step':
                 # Update edge usage for this step
                 self._update_edge_usage_step(state, current_nodes, next_nodes, demands, commodity_idx)
@@ -291,13 +321,56 @@ class SequentialRolloutEngine:
                     state['x_edges_usage']
                 )
 
+        # After loop, check termination reasons for remaining paths
+        for b in range(batch_size):
+            if termination_reason[b] == 'unknown':
+                if reached_dst[b]:
+                    termination_reason[b] = 'reached_destination'
+                else:
+                    termination_reason[b] = 'max_steps'
+
+        # Update termination statistics
+        for reason in termination_reason:
+            state['path_termination_stats'][reason] += 1
+        state['path_termination_stats']['total_paths'] += batch_size
+
         # Compute mean entropy per path
         mean_entropy = entropies_sum / (num_steps + 1e-8)
+
+        # Apply penalty for paths that didn't reach destination
+        final_nodes = torch.tensor([
+            paths[b][-1] if len(paths[b]) > 0 else src_nodes[b].item()
+            for b in range(batch_size)
+        ], device=self.device)
+
+        reached_destination_final = (final_nodes == dst_nodes)
+
+        # Debug: Print unreached paths (only if debug mode enabled)
+        if self.config.get('debug_rollout', False):
+            for b in range(batch_size):
+                if not reached_destination_final[b]:
+                    print(f"[DEBUG] Commodity {commodity_idx} (Batch {b}): Path did not reach destination")
+                    print(f"  Source: {src_nodes[b].item()}, Destination: {dst_nodes[b].item()}, Demand: {demands[b].item():.2f}")
+                    print(f"  Path: {paths[b]}")
+                    print(f"  Final node: {final_nodes[b].item()}")
+                    print(f"  Termination reason: {termination_reason[b]}")
+
+        # Penalty for incomplete paths (encourages reaching destination)
+        # Can be disabled by setting to 0.0 in config
+        penalty_for_incomplete = self.config.get('incomplete_path_penalty', 0.0)
+
+        # Apply penalty to log_probs for unreached paths (if enabled)
+        if penalty_for_incomplete != 0.0:
+            log_probs = torch.where(
+                reached_destination_final,
+                log_probs,
+                log_probs + penalty_for_incomplete
+            )
 
         return paths, log_probs, mean_entropy, state_value
 
     def _create_valid_mask(self, current_nodes, dst_nodes, edges_capacity,
-                           visited_nodes, reachability, reached_dst, edges_usage):
+                           visited_nodes, reachability, reached_dst, edges_usage, demands):
         """
         Create valid action mask for current step.
 
@@ -309,6 +382,7 @@ class SequentialRolloutEngine:
             reachability: Reachability matrix [B, V, V]
             reached_dst: Boolean mask [B] indicating which reached destination
             edges_usage: Current edge usage [B, V, V]
+            demands: Demand for current commodity [B]
 
         Returns:
             valid_mask: Valid action mask [B, V]
@@ -317,15 +391,7 @@ class SequentialRolloutEngine:
         num_nodes = edges_capacity.shape[1]
         device = edges_capacity.device
 
-        # For batch elements that already reached destination, mask all actions
-        # (they shouldn't take any more actions)
-        if reached_dst.any():
-            # Create dummy mask (will be overridden for reached elements)
-            valid_mask = torch.ones(batch_size, num_nodes, dtype=torch.bool, device=device)
-            valid_mask[reached_dst] = False  # Mask all actions for reached elements
-            return valid_mask
-
-        # Generate full valid mask (with capacity constraints, no reachability check)
+        # Generate full valid mask for ALL samples (with capacity constraints, visited nodes, etc.)
         valid_mask = MaskGenerator.create_full_valid_mask(
             current_nodes,
             dst_nodes,
@@ -333,8 +399,14 @@ class SequentialRolloutEngine:
             visited_nodes=visited_nodes,
             reachability=None,
             check_reachability=False,
-            edges_usage=edges_usage
+            edges_usage=edges_usage,
+            demands=demands  # Pass demands to enforce capacity constraint
         )
+
+        # For batch elements that already reached destination, mask all actions
+        # (they shouldn't take any more actions)
+        if reached_dst.any():
+            valid_mask[reached_dst] = False  # Mask all actions for reached elements
 
         return valid_mask
 
