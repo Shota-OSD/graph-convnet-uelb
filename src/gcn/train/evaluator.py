@@ -22,7 +22,7 @@ class Evaluator:
         net.eval()
         num_data = getattr(self.config, f'num_{mode}_data')
         batch_size = self.config.batch_size
-        dataset = DatasetReader(num_data, batch_size, mode)
+        dataset = DatasetReader(num_data, batch_size, mode, self.config)
         batches_per_epoch = dataset.max_iter
         dataset = iter(dataset)
         edge_cw = None

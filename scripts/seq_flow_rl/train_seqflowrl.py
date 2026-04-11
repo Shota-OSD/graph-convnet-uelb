@@ -16,30 +16,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from src.seq_flow_rl.training import SeqFlowRLTrainer
 from src.common.config.config_manager import ConfigManager
+from src.common.config.paths import dataset_exists
 from src.common.data_management.dataset_reader import DatasetReader
-
-
-def _check_data_exists():
-    """Check if data directories exist."""
-    data_dirs = ['./data/train_data', './data/val_data', './data/test_data']
-    required_subdirs = ['commodity_file', 'graph_file', 'node_flow_file']
-
-    for data_dir in data_dirs:
-        if not os.path.exists(data_dir):
-            return False
-
-        for subdir in required_subdirs:
-            subdir_path = os.path.join(data_dir, subdir)
-            if not os.path.exists(subdir_path):
-                return False
-
-        commodity_dir = os.path.join(data_dir, 'commodity_file')
-        subdirs = [d for d in os.listdir(commodity_dir)
-                  if os.path.isdir(os.path.join(commodity_dir, d)) and d.isdigit()]
-        if len(subdirs) == 0:
-            return False
-
-    return True
 
 
 def create_dataloaders(config, dtypeFloat, dtypeLong):
@@ -60,8 +38,8 @@ def create_dataloaders(config, dtypeFloat, dtypeLong):
     num_val_data = config.get('num_val_data', 1000)
 
     # Create dataset readers (they are iterators)
-    train_dataset = DatasetReader(num_train_data, batch_size, 'train')
-    val_dataset = DatasetReader(num_val_data, batch_size, 'val')
+    train_dataset = DatasetReader(num_train_data, batch_size, 'train', config)
+    val_dataset = DatasetReader(num_val_data, batch_size, 'val', config)
 
     return train_dataset, val_dataset
 
@@ -89,15 +67,15 @@ def main():
     print("="*70)
     print(f"Config: {args.config}")
 
-    # Check if data exists
-    if not _check_data_exists():
-        print("\n⚠️  Data not found. Please generate data first:")
-        print(f"    python scripts/common/generate_data.py --config {args.config}")
-        sys.exit(1)
-
     # Load configuration
     config_manager = ConfigManager(args.config)
     config = config_manager.get_config()
+
+    # Check if data exists
+    if not dataset_exists(config):
+        print("\n⚠️  Data not found. Please generate data first:")
+        print(f"    python scripts/common/generate_data.py --config {args.config}")
+        sys.exit(1)
     dtypeFloat, dtypeLong = config_manager.get_dtypes()
 
     # Override config with command line arguments

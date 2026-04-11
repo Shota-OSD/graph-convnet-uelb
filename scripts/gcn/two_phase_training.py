@@ -22,6 +22,8 @@ from pathlib import Path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.insert(0, project_root)
 
+from src.common.config.paths import get_model_root
+
 
 def run_training_phase(config_path, phase_name, pretrained_model_path=None):
     """
@@ -110,7 +112,7 @@ def main():
     parser.add_argument('--skip-supervised', action='store_true',
                        help='Skip supervised pre-training (use existing model)')
     parser.add_argument('--pretrained-model', type=str,
-                       default='saved_models/supervised_pretrained.pt',
+                       default=str(get_model_root() / 'supervised_pretrained.pt'),
                        help='Path to save/load pre-trained model')
     args = parser.parse_args()
 
@@ -144,7 +146,7 @@ def main():
             return 1
 
         # Automatically find the latest supervised model (just trained)
-        saved_models_dir = os.path.join(project_root, 'saved_models')
+        saved_models_dir = str(get_model_root())
         if os.path.exists(saved_models_dir):
             models = [f for f in os.listdir(saved_models_dir) if f.endswith('.pt')]
             if models:
@@ -155,16 +157,16 @@ def main():
                 args.pretrained_model = os.path.join(saved_models_dir, latest_model)
                 print(f"\n✓ Automatically using latest supervised model: {latest_model}")
             else:
-                print("\n✗ No model files found in saved_models directory.")
+                print(f"\n✗ No model files found in {saved_models_dir}.")
                 return 1
         else:
-            print("\n✗ saved_models directory does not exist.")
+            print(f"\n✗ Model directory does not exist: {saved_models_dir}")
             return 1
 
     else:
         print("\n⏭  Skipping supervised pre-training (using existing model)")
         # When skipping Phase 1, automatically find the latest model
-        saved_models_dir = os.path.join(project_root, 'saved_models')
+        saved_models_dir = str(get_model_root())
         if os.path.exists(saved_models_dir):
             models = [f for f in os.listdir(saved_models_dir) if f.endswith('.pt')]
             if models:
@@ -174,10 +176,10 @@ def main():
                 args.pretrained_model = os.path.join(saved_models_dir, latest_model)
                 print(f"✓ Automatically using latest model: {latest_model}")
             else:
-                print("\n✗ No model files found in saved_models directory.")
+                print(f"\n✗ No model files found in {saved_models_dir}.")
                 return 1
         else:
-            print("\n✗ saved_models directory does not exist.")
+            print(f"\n✗ Model directory does not exist: {saved_models_dir}")
             return 1
 
     # Phase 2: RL Fine-tuning

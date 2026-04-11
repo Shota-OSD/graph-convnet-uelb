@@ -12,6 +12,7 @@ from src.gcn.algorithms.beamsearch_uelb import BeamSearchAlgorithm
 from src.common.data_management.dataset_reader import DatasetReader
 from src.gcn.models.gcn_model import ResidualGatedGCNModel
 from src.common.config.config_manager import ConfigManager
+from src.common.config.paths import get_model_root
 
 def load_example_config(config_path: str) -> Dict[str, Any]:
     """アルゴリズム例用の設定を読み込み"""
@@ -20,8 +21,10 @@ def load_example_config(config_path: str) -> Dict[str, Any]:
 
 def find_model_path(model_config: Dict[str, Any]) -> Optional[str]:
     """設定に基づいてモデルパスを決定"""
-    model_dir = model_config.get('model_path', './saved_models')
-    
+    model_dir = model_config.get('model_path')
+    if not model_dir:
+        model_dir = str(get_model_root())
+
     if not os.path.exists(model_dir):
         return None
     
@@ -91,7 +94,7 @@ def create_real_prediction_data(batch_size, config_path, model_path):
     
     # テストデータの読み込み
     num_test_data = min(config.get('num_test_data', 20), batch_size * 10)  # 十分なデータを確保
-    dataset = DatasetReader(num_test_data, batch_size, 'test')
+    dataset = DatasetReader(num_test_data, batch_size, 'test', config)
     
     try:
         # 最初のバッチを取得
@@ -150,7 +153,7 @@ def create_sample_data(batch_size=2, num_nodes=10, num_commodities=5):
     """後方互換性のためのラッパー関数"""
     # デフォルトのモデルと設定を探す
     config_path = 'configs/load_saved_model.json'
-    model_dir = './saved_models'
+    model_dir = str(get_model_root())
     
     model_path = None
     if os.path.exists(model_dir):

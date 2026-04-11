@@ -16,6 +16,7 @@ from datetime import datetime
 from ..models.seqflowrl_model import SeqFlowRLModel
 from .a2c_strategy import A2CStrategy
 from src.common.types import BatchData, validate_batch_types
+from src.common.config.paths import get_model_root
 
 
 class SeqFlowRLTrainer:
@@ -55,7 +56,11 @@ class SeqFlowRLTrainer:
         print(f"  - Learning rate: {config.get('learning_rate', 0.0005)}")
 
         # Checkpointing
-        self.checkpoint_dir = Path(config.get('checkpoint_dir', 'saved_models/seqflowrl/'))
+        checkpoint_dir_cfg = config.get('checkpoint_dir')
+        if checkpoint_dir_cfg:
+            self.checkpoint_dir = Path(checkpoint_dir_cfg).expanduser()
+        else:
+            self.checkpoint_dir = get_model_root(config) / 'seqflowrl'
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         self.save_every = config.get('save_every', 5)
         self.save_best_only = config.get('save_best_only', True)

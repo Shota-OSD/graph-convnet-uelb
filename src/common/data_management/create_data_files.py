@@ -3,6 +3,7 @@ import csv
 import networkx as nx
 from .data_maker import DataMaker
 from .exact_solution import SolveExactSolution
+from src.common.config.paths import get_mode_dir
 import torch
 
 def create_data_files(config, data_mode="test"):
@@ -16,10 +17,14 @@ def create_data_files(config, data_mode="test"):
     num_data = getattr(config, f'num_{data_mode}_data')
     solver_type = config.solver_type
     Maker = DataMaker(config)
-    exact_file_name = f"./data/{data_mode}_data/exact_solution.csv"
+
+    mode_dir = get_mode_dir(data_mode, config)
+    mode_dir.mkdir(parents=True, exist_ok=True)
+
+    exact_file_name = str(mode_dir / "exact_solution.csv")
     infinit_loop_count = 0
     incorrect_value_count = 0
-    
+
     if os.path.exists(exact_file_name):
         os.remove(exact_file_name)
 
@@ -30,20 +35,19 @@ def create_data_files(config, data_mode="test"):
 
         # ディレクトリ番号の定義
         file_number = data - (data % 10)
-        
+
         # ディレクトリ作成
         directories = ["graph_file", "commodity_file", "node_flow_file"]
         #directories = ["graph_file", "commodity_file", "edge_file", "node_flow_file", "edge_flow_file"]
         for directory in directories:
-            path = f"./data/{data_mode}_data/{directory}/{file_number}"
-            os.makedirs(path, exist_ok=True)
+            (mode_dir / directory / str(file_number)).mkdir(parents=True, exist_ok=True)
 
         # ファイル名の定義
-        graph_file_name = f"./data/{data_mode}_data/graph_file/{file_number}/graph_{data}.gml"
-        commodity_file_name = f"./data/{data_mode}_data/commodity_file/{file_number}/commodity_data_{data}.csv"
-        node_flow_file_name = f"./data/{data_mode}_data/node_flow_file/{file_number}/node_flow_{data}.csv"
-        #edge_file_name = f"./data/{data_mode}_data/edge_file/{file_number}/edge_numbering_{data}.csv"
-        #edge_flow_file_name = f"./data/{data_mode}_data/edge_flow_file/{file_number}/edge_flow_{data}.csv"
+        graph_file_name = str(mode_dir / "graph_file" / str(file_number) / f"graph_{data}.gml")
+        commodity_file_name = str(mode_dir / "commodity_file" / str(file_number) / f"commodity_data_{data}.csv")
+        node_flow_file_name = str(mode_dir / "node_flow_file" / str(file_number) / f"node_flow_{data}.csv")
+        #edge_file_name = str(mode_dir / "edge_file" / str(file_number) / f"edge_numbering_{data}.csv")
+        #edge_flow_file_name = str(mode_dir / "edge_flow_file" / str(file_number) / f"edge_flow_{data}.csv")
 
         # 作成したデータが適切でない場合のやり直し
         while True:
