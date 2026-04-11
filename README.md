@@ -204,7 +204,7 @@ python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/nsfnet_20_commodit
 - ノードレベルアクション空間（デフォルト）
 - Per-Commodity GNN更新頻度
 
-詳細は `docs/hybrid_approach_design.md` を参照してください。
+詳細は `configs/seqflowrl/seqflowrl_base.json` 内のコメントを参照してください。
 
 #### データ生成
 
@@ -395,15 +395,64 @@ python scripts/common/generate_data.py --config configs/gcn/default2.json
 
 ## ハイパーパラメータ調整
 
-（将来実装予定）
+Grid SearchとRandom Searchの2手法をサポート。
+
+### 実行方法
 
 ```bash
-# GCN用
-python scripts/gcn/tune_gcn.py --config configs/gcn/tuning_config.json
+# Grid Search
+python scripts/gcn/tune_hyperparameters.py --search grid
 
-# RL-KSP用
-python scripts/rl_ksp/tune_rl_ksp.py --config configs/rl_ksp/tuning_config.json
+# Random Search（試行回数指定）
+python scripts/gcn/tune_hyperparameters.py --search random --trials 50
+
+# 設定ファイル指定
+python scripts/gcn/tune_hyperparameters.py --search grid --config configs/gcn/default.json
 ```
+
+### チューニング設定（`configs/gcn/tuning_config.json`）
+
+```json
+{
+  "grid_search": {
+    "parameters": {
+      "learning_rate": [0.001, 0.01, 0.0001],
+      "hidden_dim": [32, 64, 128],
+      "num_layers": [5, 10, 15]
+    }
+  },
+  "random_search": {
+    "n_trials": 20,
+    "parameters": {
+      "learning_rate": { "type": "float", "min": 0.0001, "max": 0.01, "log_scale": true },
+      "hidden_dim": { "type": "choice", "choices": [32, 64, 96, 128, 256] }
+    }
+  }
+}
+```
+
+パラメータタイプ: `int`（min/max）、`float`（min/max/log_scale）、`choice`（choices配列）
+
+### チューニング対象パラメータ
+
+| 優先度 | パラメータ |
+|--------|-----------|
+| 高 | `learning_rate`, `hidden_dim`, `num_layers` |
+| 中 | `batch_size`, `dropout_rate`, `beam_size` |
+| 低 | `decay_rate`, `mlp_layers`, `aggregation` |
+| RL特有 | `rl_baseline_momentum`, `rl_entropy_weight`, `rl_beam_search_type` |
+
+### 結果の確認
+
+結果は `tuning_results/` に保存されます。最適設定で再実行：
+
+```bash
+python scripts/gcn/train_gcn.py --config tuning_results/best_config_YYYYMMDD_HHMMSS.json
+```
+
+### 推奨ワークフロー
+
+1. 少数パラメータでGrid Search → 2. Random Searchで広範囲探索 → 3. ベスト近辺でGrid Search
 
 ---
 

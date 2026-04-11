@@ -1,7 +1,7 @@
 {
     "_comment_meta": "=== SeqFlowRL: Sequential Flow Reinforcement Learning ===",
     "_description": "Hybrid approach combining GCN and Teal methods for network routing",
-    "_design_decisions": "All design points confirmed - see docs/hybrid_approach_design.md",
+    "_design_decisions": "All design points confirmed - see git history for design docs",
 
     "expt_name": "seqflowrl_base",
     "gpu_id": "0",
@@ -115,7 +115,7 @@
     "use_curiosity": false,
     "curiosity_weight": 0.1,
     "epsilon_greedy": 0.0,
-    "_advanced_note": "See docs/hybrid_improvement_proposals.md for details",
+    "_advanced_note": "See git history for design docs",
 
     "_comment_logging": "=== Logging and Checkpointing ===",
     "log_every": 10,
