@@ -13,6 +13,7 @@ import shutil
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from src.common.config.config_manager import ConfigManager
+from src.common.config.paths import get_mode_dir, get_dataset_dir
 from src.common.data_management.create_data_files import create_data_files
 
 def main():
@@ -40,6 +41,7 @@ def main():
     try:
         config_manager = ConfigManager(args.config)
         config = config_manager.get_config()
+        print(f"Dataset directory: {get_dataset_dir(config)}")
         print(f"Number of commodities: {config.num_commodities}")
         print(f"Number of nodes: {config.num_nodes}")
         print(f"Train data: {config.num_train_data}")
@@ -48,29 +50,29 @@ def main():
     except Exception as e:
         print(f"Error loading config: {e}")
         sys.exit(1)
-    
+
     # 既存データの確認と削除
     existing_dirs = []
     for mode in args.modes:
-        data_dir = f"./data/{mode}_data"
-        if os.path.exists(data_dir):
+        data_dir = get_mode_dir(mode, config)
+        if data_dir.exists():
             existing_dirs.append(data_dir)
-    
+
     if existing_dirs:
         print(f"\n既存のデータディレクトリが見つかりました:")
         for dir_path in existing_dirs:
             print(f"  - {dir_path}")
-        
+
         if not args.force:
             ans = input("\n既存データを削除して再生成しますか？ (y/n): ").strip().lower()
             if ans not in ["y", "yes"]:
                 print("データ生成をキャンセルしました。")
                 sys.exit(0)
-    
+
     # 既存データの削除
     for mode in args.modes:
-        data_dir = f"./data/{mode}_data"
-        if os.path.exists(data_dir):
+        data_dir = get_mode_dir(mode, config)
+        if data_dir.exists():
             shutil.rmtree(data_dir)
             print(f"削除: {data_dir}")
     
@@ -96,9 +98,9 @@ def main():
     # 生成されたデータの確認
     print("\n生成されたデータ:")
     for mode in args.modes:
-        data_dir = f"./data/{mode}_data"
-        if os.path.exists(data_dir):
-            file_count = len([f for f in os.listdir(data_dir) if f.endswith('.pkl')])
+        data_dir = get_mode_dir(mode, config)
+        if data_dir.exists():
+            file_count = sum(1 for _ in data_dir.rglob("*") if _.is_file())
             print(f"  - {data_dir}: {file_count} files")
         else:
             print(f"  - {data_dir}: 生成されませんでした")

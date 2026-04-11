@@ -15,31 +15,7 @@ from src.gcn.train.trainer import Trainer
 from src.gcn.train.evaluator import Evaluator
 from src.gcn.train.metrics import MetricsLogger
 from src.common.config.config_manager import ConfigManager
-
-
-def _check_data_exists():
-    """データディレクトリの存在を確認"""
-    data_dirs = ['./data/train_data', './data/val_data', './data/test_data']
-    required_subdirs = ['commodity_file', 'graph_file', 'node_flow_file']
-
-    for data_dir in data_dirs:
-        if not os.path.exists(data_dir):
-            return False
-
-        # 必要なサブディレクトリが存在するかチェック
-        for subdir in required_subdirs:
-            subdir_path = os.path.join(data_dir, subdir)
-            if not os.path.exists(subdir_path):
-                return False
-
-        # commodity_fileディレクトリに数値名のサブディレクトリが存在するかチェック
-        commodity_dir = os.path.join(data_dir, 'commodity_file')
-        subdirs = [d for d in os.listdir(commodity_dir)
-                  if os.path.isdir(os.path.join(commodity_dir, d)) and d.isdigit()]
-        if len(subdirs) == 0:
-            return False
-
-    return True
+from src.common.config.paths import dataset_exists
 
 
 def main():
@@ -54,16 +30,16 @@ def main():
     print("GCN (GRAPH CONVOLUTIONAL NETWORK) TRAINING")
     print("="*60)
 
-    # データの存在確認
-    if not _check_data_exists():
-        print("データが存在しません。以下のコマンドでデータを生成してください:")
-        print(f"python scripts/common/generate_data.py --config {args.config}")
-        sys.exit(1)
-
     # 設定の初期化
     config_manager = ConfigManager(args.config)
     config = config_manager.get_config()
     dtypeFloat, dtypeLong = config_manager.get_dtypes()
+
+    # データの存在確認
+    if not dataset_exists(config):
+        print("データが存在しません。以下のコマンドでデータを生成してください:")
+        print(f"python scripts/common/generate_data.py --config {args.config}")
+        sys.exit(1)
 
     # トレーナーとエバリュエーターの初期化
     trainer = Trainer(config, dtypeFloat, dtypeLong)

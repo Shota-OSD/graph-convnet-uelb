@@ -2,38 +2,39 @@ import os
 import shutil
 from typing import Optional
 from .create_data_files import create_data_files
+from src.common.config.paths import get_mode_dir
 
 class DatasetManager:
     """データセットの作成と管理を担当するクラス"""
-    
+
     def __init__(self, config):
         self.config = config
-    
+
     def remake_dataset(self) -> bool:
         """データセットの再作成を確認"""
         ans = input("トレーニング・検証・テスト用データを再作成しますか？ (y/n): ").strip().lower()
         return ans in ["y", "yes"]
-    
+
     def create_all_datasets(self):
         """全てのデータセットを作成"""
         # 既存のデータを削除
         for mode in ["val", "test", "train"]:
-            data_dir = f"./data/{mode}_data"
-            if os.path.exists(data_dir):
+            data_dir = get_mode_dir(mode, self.config)
+            if data_dir.exists():
                 shutil.rmtree(data_dir)
-                print(f"Removed existing {mode} data directory")
-        
+                print(f"Removed existing {mode} data directory: {data_dir}")
+
         # 新しいデータを生成
         for mode in ["val", "test", "train"]:
             create_data_files(self.config, data_mode=mode)
-    
+
     def test_data_loading(self):
         """データローディングのテスト"""
         mode = "test"
         num_data = getattr(self.config, f'num_{mode}_data')
         batch_size = self.config.batch_size
         from .dataset_reader import DatasetReader
-        dataset = DatasetReader(num_data, batch_size, mode)
+        dataset = DatasetReader(num_data, batch_size, mode, self.config)
         print(f"Number of batches of size {batch_size}: {dataset.max_iter}")
         batch = next(iter(dataset))
         print("edges shape:", batch.edges.shape)

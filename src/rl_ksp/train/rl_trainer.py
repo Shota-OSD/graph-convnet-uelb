@@ -21,6 +21,12 @@ from src.rl_ksp.models.dqn_model import DQNModel
 from src.common.data_management.dataset_reader import DatasetReader
 from src.gcn.train.metrics import MetricsLogger
 from src.common.data_management.exact_solution import SolveExactSolution
+from src.common.config.paths import (
+    get_model_root,
+    get_graph_file,
+    get_commodity_file,
+    get_exact_solution_file,
+)
 
 
 # DQNModel is now imported from src.rl_ksp.models.dqn_model
@@ -42,14 +48,18 @@ class RLTrainer:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         # モデル保存設定
-        self.models_dir = Path(config.get('models_dir', './saved_models'))
-        self.models_dir.mkdir(exist_ok=True)
-        
+        models_dir_cfg = config.get('models_dir')
+        if models_dir_cfg:
+            self.models_dir = Path(models_dir_cfg).expanduser()
+        else:
+            self.models_dir = get_model_root(config)
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+
         # データセットリーダーの初期化
         num_train_data = config.get('num_train_data', 100)
         batch_size = 1  # RL用には1つずつ処理
-        self.train_dataset = DatasetReader(num_train_data, batch_size, 'train')
-        self.test_dataset = DatasetReader(config.get('num_test_data', 20), batch_size, 'test')
+        self.train_dataset = DatasetReader(num_train_data, batch_size, 'train', config)
+        self.test_dataset = DatasetReader(config.get('num_test_data', 20), batch_size, 'test', config)
         
         # 環境の初期化（既存データを使用）
         self.env = MinMaxLoadKSPsEnv(config)
@@ -421,8 +431,8 @@ class RLTrainer:
             gt_load_factor = self._get_actual_load_factor(current_data_idx)
             
             # RLが実際に使用したファイルパスをデバッグ出力
-            graph_file = f"./data/test_data/graph_file/{current_data_idx-(current_data_idx%10)}/graph_{current_data_idx}.gml"
-            commodity_file = f"./data/test_data/commodity_file/{current_data_idx-(current_data_idx%10)}/commodity_data_{current_data_idx}.csv"
+            graph_file = str(get_graph_file('test', current_data_idx, self.config))
+            commodity_file = str(get_commodity_file('test', current_data_idx, self.config))
             # print(f"    RL actually used files: {graph_file}, {commodity_file}")
             
             # GCNと同じ計算方法: gt_load_factor / predicted_load_factor * 100
@@ -622,7 +632,7 @@ class RLTrainer:
         """
         # データセットリーダーを使用してバッチを取得（GCNと同じ方法）
         batch_size = 1
-        dataset = DatasetReader(self.config.get('num_test_data', 20), batch_size, 'test')
+        dataset = DatasetReader(self.config.get('num_test_data', 20), batch_size, 'test', self.config)
         
         # 指定されたdata_idxのデータを取得
         for i, batch in enumerate(dataset):
@@ -642,7 +652,7 @@ class RLTrainer:
         GCNの計算方法: gt_load_factor / predicted_load_factor * 100
         """
         try:
-            exact_solution_file = './data/test_data/exact_solution.csv'
+            exact_solution_file = str(get_exact_solution_file('test', self.config))
             
             with open(exact_solution_file, 'r') as f:
                 lines = f.readlines()

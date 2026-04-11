@@ -5,6 +5,8 @@ import networkx as nx
 import csv
 import torch
 
+from src.common.config.paths import get_mode_dir
+
 class DotDict(dict):
     """Wrapper around in-built dict class to access members through the dot operation.
     d = DotDict(name="Alice", age=25)
@@ -25,17 +27,19 @@ class DatasetReader(object):
     """Iterator that reads UELB dataset files and yields mini-batches.
     """
 
-    def __init__(self, num_data, batch_size, mode):
+    def __init__(self, num_data, batch_size, mode, config):
         """
         Args:
-            num_nodes: Number of nodes
-            num_data: Number of data that will be generated
+            num_data: Number of data samples
             batch_size: Batch size
+            mode: 'train' / 'val' / 'test'
+            config: 設定オブジェクト (dataset_name / data_root 参照に使用)
         """
         self.num_data = num_data
         self.batch_size = batch_size
         self.mode = mode
         self.max_iter = (self.num_data // self.batch_size)
+        self.data_dir = get_mode_dir(mode, config)
 
     def __iter__(self):
         """
@@ -64,14 +68,15 @@ class DatasetReader(object):
         batch_commodities = []
         batch_load_factor = []
 
-        exact_solution_file = f'./data/{self.mode}_data/exact_solution.csv'
+        exact_solution_file = str(self.data_dir / 'exact_solution.csv')
         for i in range(start_idx, end_idx):
+            bucket = i - (i % 10)
             # define file path
-            graph_file = f'./data/{self.mode}_data/graph_file/{i-(i%10)}/graph_{i}.gml'
-            commodity_file = f'./data/{self.mode}_data/commodity_file/{i-(i%10)}/commodity_data_{i}.csv'
-            node_flow_file = f'./data/{self.mode}_data/node_flow_file/{i-(i%10)}/node_flow_{i}.csv'
-            edge_file = f'./data/{self.mode}_data/edge_file/{i-(i%10)}/edge_numbering_{i}.csv'
-            edge_flow_file = f'./data/{self.mode}_data/edge_flow_file/{i-(i%10)}/edge_flow_{i}.csv'
+            graph_file = str(self.data_dir / 'graph_file' / str(bucket) / f'graph_{i}.gml')
+            commodity_file = str(self.data_dir / 'commodity_file' / str(bucket) / f'commodity_data_{i}.csv')
+            node_flow_file = str(self.data_dir / 'node_flow_file' / str(bucket) / f'node_flow_{i}.csv')
+            edge_file = str(self.data_dir / 'edge_file' / str(bucket) / f'edge_numbering_{i}.csv')
+            edge_flow_file = str(self.data_dir / 'edge_flow_file' / str(bucket) / f'edge_flow_{i}.csv')
             
             """ Make a graph """
             G = nx.read_gml(graph_file,destringizer=int)

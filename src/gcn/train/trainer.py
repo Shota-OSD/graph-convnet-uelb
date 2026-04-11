@@ -5,11 +5,13 @@ import numpy as np
 import os
 import hashlib
 import json
+from pathlib import Path
 from fastprogress import master_bar, progress_bar
 from sklearn.utils.class_weight import compute_class_weight
 
 from src.gcn.models.gcn_model import ResidualGatedGCNModel
 from src.common.data_management.dataset_reader import DatasetReader
+from src.common.config.paths import get_model_root
 from src.gcn.models.model_utils import edge_error, update_learning_rate
 from src.gcn.training.supervised_strategy import SupervisedLearningStrategy
 from src.gcn.training.reinforcement_strategy import ReinforcementLearningStrategy
@@ -22,7 +24,11 @@ class Trainer:
         self.config = config
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
-        self.models_dir = config.get('models_dir', './saved_models')
+        models_dir_cfg = config.get('models_dir')
+        if models_dir_cfg:
+            self.models_dir = str(Path(models_dir_cfg).expanduser())
+        else:
+            self.models_dir = str(get_model_root(config))
         self.net, self.optimizer = self._instantiate_model()
 
         # Initialize training strategy
@@ -101,7 +107,7 @@ class Trainer:
         num_data = self.config.get(f'num_{mode}_data')
         batch_size = self.config.batch_size
         accumulation_steps = self.config.accumulation_steps
-        dataset = DatasetReader(num_data, batch_size, mode)
+        dataset = DatasetReader(num_data, batch_size, mode, self.config)
 
         batches_per_epoch = dataset.max_iter
 

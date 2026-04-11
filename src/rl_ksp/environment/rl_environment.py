@@ -13,6 +13,7 @@ import copy
 from typing import List, Tuple, Optional
 
 from src.common.graph.k_shortest_path import KShortestPathFinder
+from src.common.config.paths import get_graph_file, get_commodity_file
 
 
 class MinMaxLoadKSPsEnv(gym.core.Env):
@@ -307,11 +308,11 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             mode: データモード ('train', 'test', 'val')
         """
         # グラフファイルの読み込み（GCNモードと同じ形式）
-        graph_file = f"./data/{mode}_data/graph_file/{data_idx-(data_idx%10)}/graph_{data_idx}.gml"
+        graph_file = str(get_graph_file(mode, data_idx, self.config))
         self.G = nx.read_gml(graph_file, destringizer=int)
-        
+
         # 品種ファイルの読み込み（GCNモードと同じ形式）
-        commodity_file = f"./data/{mode}_data/commodity_file/{data_idx-(data_idx%10)}/commodity_data_{data_idx}.csv"
+        commodity_file = str(get_commodity_file(mode, data_idx, self.config))
         
         # デバッグ出力: RLがどのファイルを読み込んでいるか
         # print(f"    RL loading: graph={graph_file}, commodity={commodity_file}")

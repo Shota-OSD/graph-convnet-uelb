@@ -104,7 +104,7 @@ class BeamSearchComparator:
         batch_size = test_config.get('batch_size') or self.train_config.get('batch_size', 1)
         num_batches = test_config.get('num_batches', 5)
         
-        dataset = DatasetReader(num_test_data, batch_size, data_mode)
+        dataset = DatasetReader(num_test_data, batch_size, data_mode, self.train_config)
         batches_to_test = min(num_batches, dataset.max_iter)
         
         print(f"テストデータ: {data_mode}")
