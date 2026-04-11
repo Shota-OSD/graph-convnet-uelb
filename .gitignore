@@ -6,6 +6,10 @@ configs/events.out.tfevents.*
 **/*.pyc
 repomix-output.xml
 
+# 学習済みモデル（外部管理）
+saved_models/*.pt
+saved_models/*.pth
+
 # macOS 特有のメタファイルを無視
 __MACOSX/
 *.DS_Store
