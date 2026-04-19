@@ -205,8 +205,8 @@ class SequentialRolloutEngine:
         dst_nodes = state['x_commodities'][:, commodity_idx, 1].long()  # [B]
         demands = state['x_commodities'][:, commodity_idx, 2]  # [B]
 
-        # Initialize paths and log probabilities
-        paths = [[] for _ in range(batch_size)]
+        # Initialize paths with src node (needed for correct edge_usage tracking)
+        paths = [[src_nodes[b].item()] for b in range(batch_size)]
         log_probs = torch.zeros(batch_size, device=self.device)
         entropies_sum = torch.zeros(batch_size, device=self.device)
         num_steps = torch.zeros(batch_size, device=self.device)
