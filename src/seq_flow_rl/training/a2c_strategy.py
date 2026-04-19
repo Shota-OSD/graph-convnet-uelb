@@ -273,6 +273,13 @@ class A2CStrategy:
         """
         Collect training metrics.
 
+        Metrics include:
+        - complete_rate: 全コモディティが dst に到達したコモディティの割合 (%)。
+          各バッチ内の全コモディティについて path[-1] == dst かを判定し、
+          (到達数 / 全コモディティ数) * 100 で算出。
+        - approximation_ratio: サンプル単位で (gt_lf / model_lf) * 100 を計算し平均。
+          全コモディティが dst に到達したサンプルのみを対象とする（不完全解は除外）。
+
         Args:
             loss_components: Dictionary of loss components
             rewards: Rewards [B]

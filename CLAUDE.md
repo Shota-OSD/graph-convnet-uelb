@@ -164,6 +164,15 @@ A2C損失 = L_actor + 0.5 * L_critic + 0.01 * L_entropy
 | `SeqFlowRLTrainer` | `training/trainer.py` | 学習ループ（epoch → batch → rollout → A2C更新） |
 | `MaskGenerator` | `utils/mask_utils.py` | 行動マスク（容量・ループ・訪問済み・到達可能性） |
 
+**評価メトリクス:**
+
+| メトリクス | 定義 | 備考 |
+|---|---|---|
+| Load Factor | `max_edge(usage / capacity)` | 全エッジの最大負荷率。小さいほど良い |
+| Complete Rate | `(dst到達コモディティ数 / 全コモディティ数) × 100` | 全コモディティが目的地に到達した割合。100% が理想 |
+| Approximation Ratio | `mean(gt_load_factor_i / model_load_factor_i) × 100` | サンプル単位で最適解との比を取り平均。100% に近いほど良い。**全コモディティが dst に到達したサンプルのみ** で計算（不完全解は除外） |
+| Reward | `2.0 - 2.0 * load_factor` | 連続報酬。容量超過時は追加ペナルティあり |
+
 ---
 
 ### 共通モジュール（`src/common/`）
