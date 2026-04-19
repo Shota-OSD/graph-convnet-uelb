@@ -80,10 +80,12 @@ class SeqFlowRLTrainer:
             'train_load_factor': [],
             'train_approx_ratio': [],
             'train_complete_rate': [],
+            'train_complete_sample_rate': [],
             'val_load_factor': [],
             'val_reward': [],
             'val_approx_ratio': [],
             'val_complete_rate': [],
+            'val_complete_sample_rate': [],
             'learning_rate': [],
             'epoch_times': [],
         }
@@ -285,6 +287,7 @@ class SeqFlowRLTrainer:
             'mean_entropy': [],
             'approximation_ratio': [],
             'complete_rate': [],
+            'complete_sample_rate': [],
         }
 
         # DatasetReader has max_iter attribute
@@ -359,6 +362,7 @@ class SeqFlowRLTrainer:
             'max_load_factor': [],
             'approximation_ratio': [],
             'complete_rate': [],
+            'complete_sample_rate': [],
         }
 
         # Create iterator from DatasetReader
@@ -407,8 +411,9 @@ class SeqFlowRLTrainer:
         """Log epoch summary."""
         print(f"\nEpoch {epoch + 1}/{self.config.get('max_epochs', 50)} | Time: {epoch_time:.2f}s | LR: {lr:.6f}")
 
-        # Training metrics with complete rate and approximation ratio
-        complete_str = f" | Complete: {train_metrics.get('complete_rate', 0):.1f}%"
+        # Training metrics with complete rates and approximation ratio
+        complete_str = (f" | Comp: {train_metrics.get('complete_rate', 0):.1f}%"
+                        f" | CompSample: {train_metrics.get('complete_sample_rate', 0):.1f}%")
         approx_ratio_str = ""
         if train_metrics.get('approximation_ratio') is not None:
             approx_ratio_str = f" | Approx: {train_metrics.get('approximation_ratio'):.2f}%"
@@ -418,9 +423,10 @@ class SeqFlowRLTrainer:
               f"LF: {train_metrics.get('mean_load_factor', 0):.4f}"
               f"{complete_str}{approx_ratio_str}")
 
-        # Validation metrics with complete rate and approximation ratio
+        # Validation metrics with complete rates and approximation ratio
         if val_metrics is not None:
-            val_complete_str = f" | Complete: {val_metrics.get('complete_rate', 0):.1f}%"
+            val_complete_str = (f" | Comp: {val_metrics.get('complete_rate', 0):.1f}%"
+                                f" | CompSample: {val_metrics.get('complete_sample_rate', 0):.1f}%")
             val_approx_str = ""
             if val_metrics.get('approximation_ratio') is not None:
                 val_approx_str = f" | Approx: {val_metrics.get('approximation_ratio'):.2f}%"
@@ -438,7 +444,8 @@ class SeqFlowRLTrainer:
               f"Loss: {metrics.get('total_loss', 0):.4f} | "
               f"Reward: {metrics.get('mean_reward', 0):.4f} | "
               f"LF: {metrics.get('mean_load_factor', 0):.4f} | "
-              f"Comp: {metrics.get('complete_rate', 0):.1f}%")
+              f"Comp: {metrics.get('complete_rate', 0):.1f}% | "
+              f"CompSample: {metrics.get('complete_sample_rate', 0):.1f}%")
 
     def _update_history(self, train_metrics, val_metrics, lr, epoch_time):
         """Update training history."""
@@ -447,6 +454,7 @@ class SeqFlowRLTrainer:
         self.training_history['train_load_factor'].append(train_metrics.get('mean_load_factor', 0))
         self.training_history['train_approx_ratio'].append(train_metrics.get('approximation_ratio', None))
         self.training_history['train_complete_rate'].append(train_metrics.get('complete_rate', 0))
+        self.training_history['train_complete_sample_rate'].append(train_metrics.get('complete_sample_rate', 0))
         self.training_history['learning_rate'].append(lr)
         self.training_history['epoch_times'].append(epoch_time)
 
@@ -455,6 +463,7 @@ class SeqFlowRLTrainer:
             self.training_history['val_reward'].append(val_metrics.get('mean_reward', 0))
             self.training_history['val_approx_ratio'].append(val_metrics.get('approximation_ratio', None))
             self.training_history['val_complete_rate'].append(val_metrics.get('complete_rate', 0))
+            self.training_history['val_complete_sample_rate'].append(val_metrics.get('complete_sample_rate', 0))
 
     def _save_checkpoint(self, epoch, train_metrics, val_metrics, is_best=False):
         """Save model checkpoint."""
@@ -543,8 +552,8 @@ class SeqFlowRLTrainer:
             f.write("=" * 50 + "\n")
             f.write("DETAILED EPOCH RESULTS\n")
             f.write("=" * 50 + "\n")
-            f.write(f"{'Epoch':<8}{'Loss':<12}{'Reward':<12}{'Load Factor':<14}{'Complete %':<12}{'Approx %':<12}{'Time (s)':<10}\n")
-            f.write("-" * 80 + "\n")
+            f.write(f"{'Epoch':<8}{'Loss':<12}{'Reward':<12}{'LF':<10}{'Comp %':<10}{'CompSmp %':<12}{'Approx %':<12}{'Time (s)':<10}\n")
+            f.write("-" * 84 + "\n")
 
             for i in range(len(self.training_history['train_loss'])):
                 epoch = i + 1
@@ -552,13 +561,14 @@ class SeqFlowRLTrainer:
                 reward = self.training_history['train_reward'][i]
                 lf = self.training_history['train_load_factor'][i]
                 comp = self.training_history['train_complete_rate'][i]
+                comp_smp = self.training_history['train_complete_sample_rate'][i]
                 approx = self.training_history['train_approx_ratio'][i]
                 epoch_time = self.training_history['epoch_times'][i]
 
                 approx_str = f"{approx:.2f}" if approx is not None else "N/A"
-                f.write(f"{epoch:<8}{loss:<12.4f}{reward:<12.4f}{lf:<14.4f}{comp:<12.1f}{approx_str:<12}{epoch_time:<10.2f}\n")
+                f.write(f"{epoch:<8}{loss:<12.4f}{reward:<12.4f}{lf:<10.4f}{comp:<10.1f}{comp_smp:<12.1f}{approx_str:<12}{epoch_time:<10.2f}\n")
 
-            f.write("-" * 80 + "\n")
+            f.write("-" * 84 + "\n")
             f.write("\n")
 
             # Summary statistics
@@ -566,7 +576,8 @@ class SeqFlowRLTrainer:
             f.write(f"  Mean Load Factor: {np.mean(self.training_history['train_load_factor']):.4f}\n")
             f.write(f"  Min Load Factor: {np.min(self.training_history['train_load_factor']):.4f}\n")
             f.write(f"  Max Load Factor: {np.max(self.training_history['train_load_factor']):.4f}\n")
-            f.write(f"  Mean Complete Rate: {np.mean(self.training_history['train_complete_rate']):.1f}%\n")
+            f.write(f"  Mean Complete Rate (commodity): {np.mean(self.training_history['train_complete_rate']):.1f}%\n")
+            f.write(f"  Mean Complete Sample Rate (sample): {np.mean(self.training_history['train_complete_sample_rate']):.1f}%\n")
 
             # Filter out None values for approximation ratio
             valid_approx = [x for x in self.training_history['train_approx_ratio'] if x is not None]

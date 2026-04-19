@@ -274,9 +274,11 @@ class A2CStrategy:
         Collect training metrics.
 
         Metrics include:
-        - complete_rate: 全コモディティが dst に到達したコモディティの割合 (%)。
-          各バッチ内の全コモディティについて path[-1] == dst かを判定し、
-          (到達数 / 全コモディティ数) * 100 で算出。
+        - complete_rate: コモディティ単位の到達率 (%)。
+          (dst到達コモディティ数 / 全コモディティ数) * 100 で算出。
+        - complete_sample_rate: サンプル単位の完全到達率 (%)。
+          全コモディティが dst に到達したサンプルの割合。
+          (全コモディティ到達サンプル数 / 全サンプル数) * 100 で算出。
         - approximation_ratio: サンプル単位で (gt_lf / model_lf) * 100 を計算し平均。
           全コモディティが dst に到達したサンプルのみを対象とする（不完全解は除外）。
 
@@ -318,6 +320,7 @@ class A2CStrategy:
                         complete_mask[b] = False
 
         complete_rate = (num_complete / total_commodities * 100) if total_commodities > 0 else 0.0
+        complete_sample_rate = (complete_mask.sum().item() / len(paths) * 100) if len(paths) > 0 else 0.0
 
         # Compute approximation ratio if ground truth is available
         # Only count samples where all commodities reached destination and load_factor is feasible
@@ -360,6 +363,7 @@ class A2CStrategy:
 
             # Path statistics
             'complete_rate': complete_rate,
+            'complete_sample_rate': complete_sample_rate,
             'mean_path_length': np.mean(path_lengths) if path_lengths else 0.0,
             'max_path_length': np.max(path_lengths) if path_lengths else 0.0,
 
@@ -417,6 +421,7 @@ class A2CStrategy:
                         complete_mask[b] = False
 
             complete_rate = (num_complete / total_commodities * 100) if total_commodities > 0 else 0.0
+            complete_sample_rate = (complete_mask.sum().item() / len(paths) * 100) if len(paths) > 0 else 0.0
 
             # Compute approximation ratio if ground truth is available
             # Only count samples where all commodities reached destination
@@ -443,6 +448,7 @@ class A2CStrategy:
                 'mean_path_length': np.mean(path_lengths) if path_lengths else 0.0,
                 'approximation_ratio': approximation_ratio,
                 'complete_rate': complete_rate,
+                'complete_sample_rate': complete_sample_rate,
             }
 
         return metrics
