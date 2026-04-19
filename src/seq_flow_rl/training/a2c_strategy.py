@@ -292,36 +292,42 @@ class A2CStrategy:
         else:
             load_factors = torch.zeros_like(rewards)
 
+        # Path quality metrics and completion check
+        path_lengths = []
+        x_commodities = batch_data['x_commodities'] if batch_data is not None else None
+        num_complete = 0
+        total_commodities = 0
+        complete_mask = torch.ones(len(paths), dtype=torch.bool, device=load_factors.device)
+
+        for b, batch_paths in enumerate(paths):
+            for c_idx, path in enumerate(batch_paths):
+                total_commodities += 1
+                path_lengths.append(len(path))
+                if x_commodities is not None:
+                    dst = int(x_commodities[b, c_idx, 1].item())
+                    if len(path) > 0 and path[-1] == dst:
+                        num_complete += 1
+                    else:
+                        complete_mask[b] = False
+
+        complete_rate = (num_complete / total_commodities * 100) if total_commodities > 0 else 0.0
+
         # Compute approximation ratio if ground truth is available
+        # Only count samples where all commodities reached destination and load_factor is feasible
         approximation_ratio = None
         if batch_data is not None and 'load_factor' in batch_data:
-            gt_load_factors = batch_data['load_factor']  # Ground truth from exact solution
-
-            # Handle device mismatch (gt might be on CPU, load_factors on GPU)
-            if isinstance(gt_load_factors, torch.Tensor):
-                mean_gt_lf = gt_load_factors.mean().item()
+            gt_load_factors = batch_data['load_factor']
+            if not isinstance(gt_load_factors, torch.Tensor):
+                gt_load_factors = torch.tensor(gt_load_factors, dtype=torch.float32, device=load_factors.device)
             else:
-                mean_gt_lf = float(gt_load_factors.mean())
+                gt_load_factors = gt_load_factors.to(load_factors.device)
 
-            mean_model_lf = load_factors.mean().item()
-
-            if mean_model_lf > 0:
-                # approximation_ratio = (gt / model) * 100
-                # 100% = same as optimal (perfect)
-                # < 100% = worse than optimal (lower is worse)
-                # > 100% = theoretically impossible (better than optimal)
-                # Since load factor is lower-is-better, gt/model gives correct ratio
-                approximation_ratio = (mean_gt_lf / mean_model_lf) * 100
+            valid = complete_mask & (load_factors > 1e-8) & (gt_load_factors > 0)
+            if valid.any():
+                per_sample_ratio = (gt_load_factors[valid] / load_factors[valid]) * 100
+                approximation_ratio = per_sample_ratio.mean().item()
             else:
-                approximation_ratio = 0.0
-
-        # Path quality metrics
-        path_lengths = []
-        completion_rates = []
-        for batch_paths in paths:
-            for path in batch_paths:
-                path_lengths.append(len(path))
-            # Completion rate would require dst info (skip for now)
+                approximation_ratio = None
 
         metrics = {
             # Losses
@@ -342,10 +348,11 @@ class A2CStrategy:
             'min_load_factor': load_factors.min().item(),
             'max_load_factor': load_factors.max().item(),
 
-            # Approximation ratio (if available)
+            # Approximation ratio (only for complete, feasible solutions)
             'approximation_ratio': approximation_ratio,
 
             # Path statistics
+            'complete_rate': complete_rate,
             'mean_path_length': np.mean(path_lengths) if path_lengths else 0.0,
             'max_path_length': np.max(path_lengths) if path_lengths else 0.0,
 
@@ -387,32 +394,39 @@ class A2CStrategy:
             # Collect metrics (no loss computation)
             paths = rollout_results['paths']
             path_lengths = []
-            for batch_paths in paths:
-                for path in batch_paths:
+            x_commodities = batch_data['x_commodities']
+            num_complete = 0
+            total_commodities = 0
+            complete_mask = torch.ones(len(paths), dtype=torch.bool, device=load_factors.device)
+
+            for b, batch_paths in enumerate(paths):
+                for c_idx, path in enumerate(batch_paths):
+                    total_commodities += 1
                     path_lengths.append(len(path))
+                    dst = int(x_commodities[b, c_idx, 1].item())
+                    if len(path) > 0 and path[-1] == dst:
+                        num_complete += 1
+                    else:
+                        complete_mask[b] = False
+
+            complete_rate = (num_complete / total_commodities * 100) if total_commodities > 0 else 0.0
 
             # Compute approximation ratio if ground truth is available
+            # Only count samples where all commodities reached destination
             approximation_ratio = None
             if 'load_factor' in batch_data:
-                gt_load_factors = batch_data['load_factor']  # Ground truth from exact solution
-
-                # Handle device mismatch (gt might be on CPU, load_factors on GPU)
-                if isinstance(gt_load_factors, torch.Tensor):
-                    mean_gt_lf = gt_load_factors.mean().item()
+                gt_load_factors = batch_data['load_factor']
+                if not isinstance(gt_load_factors, torch.Tensor):
+                    gt_load_factors = torch.tensor(gt_load_factors, dtype=torch.float32, device=load_factors.device)
                 else:
-                    mean_gt_lf = float(gt_load_factors.mean())
+                    gt_load_factors = gt_load_factors.to(load_factors.device)
 
-                mean_model_lf = load_factors.mean().item()
-
-                if mean_model_lf > 0:
-                    # approximation_ratio = (gt / model) * 100
-                    # 100% = same as optimal (perfect)
-                    # < 100% = worse than optimal (lower is worse)
-                    # > 100% = theoretically impossible (better than optimal)
-                    # Since load factor is lower-is-better, gt/model gives correct ratio
-                    approximation_ratio = (mean_gt_lf / mean_model_lf) * 100
+                valid = complete_mask & (load_factors > 1e-8) & (gt_load_factors > 0)
+                if valid.any():
+                    per_sample_ratio = (gt_load_factors[valid] / load_factors[valid]) * 100
+                    approximation_ratio = per_sample_ratio.mean().item()
                 else:
-                    approximation_ratio = 0.0
+                    approximation_ratio = None
 
             metrics = {
                 'mean_reward': rewards.mean().item(),
@@ -421,6 +435,7 @@ class A2CStrategy:
                 'max_load_factor': load_factors.max().item(),
                 'mean_path_length': np.mean(path_lengths) if path_lengths else 0.0,
                 'approximation_ratio': approximation_ratio,
+                'complete_rate': complete_rate,
             }
 
         return metrics
