@@ -16,6 +16,8 @@ def create_data_files(config, data_mode="test"):
     """
     num_data = getattr(config, f'num_{data_mode}_data')
     solver_type = config.solver_type
+    solver_time_limit = getattr(config, 'solver_time_limit', 30)
+    require_optimal = getattr(config, 'require_optimal', True)
     Maker = DataMaker(config)
 
     mode_dir = get_mode_dir(data_mode, config)
@@ -24,6 +26,7 @@ def create_data_files(config, data_mode="test"):
     exact_file_name = str(mode_dir / "exact_solution.csv")
     infinit_loop_count = 0
     incorrect_value_count = 0
+    non_optimal_count = 0
 
     if os.path.exists(exact_file_name):
         os.remove(exact_file_name)
@@ -68,19 +71,22 @@ def create_data_files(config, data_mode="test"):
             # 厳密解の計算
             try:
                 E = SolveExactSolution(solver_type, commodity_file_name, graph_file_name)
-                flow_var_kakai, edge_list, objective_value, elapsed_time = E.solve_exact_solution_to_env()
+                flow_var_kakai, edge_list, objective_value, elapsed_time, is_optimal = E.solve_exact_solution_to_env(time_limit=solver_time_limit)
                 node_flow_matrix, edge_flow_matrix, infinit_loop = E.generate_flow_matrices(flow_var_kakai)
             except Exception as e:
                 print(f"Error in exact solution calculation for data {data}: {e}")
                 infinit_loop = True
+                is_optimal = False
                 objective_value = 1.0  # エラーの場合は1.0として扱う
             #exact_edges_matrix = E.generate_edges_target()
-            
-            # 厳密解が1以上、または厳密解のフローが正しく導けなかった場合のやり直し
+
+            # 厳密解が1以上、最適性未証明、またはフローが正しく導けなかった場合のやり直し
             if infinit_loop:
                 infinit_loop_count += 1
             elif objective_value >= 1.0:
                 incorrect_value_count += 1
+            elif require_optimal and not is_optimal:
+                non_optimal_count += 1
             else:
                 break
         
@@ -110,7 +116,7 @@ def create_data_files(config, data_mode="test"):
         """
     
     print(f"Data generation completed: {num_data} data created.")
-    print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}")
+    print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}, Non-optimal (discarded): {non_optimal_count} (time_limit={solver_time_limit}s)")
 
     #exact_edges_matrix = exact_edges_matrix.unsqueeze(0) 
     #return exact_edges_matrix
