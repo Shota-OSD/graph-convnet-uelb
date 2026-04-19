@@ -77,7 +77,7 @@ class SolveExactSolution():
             self.G.all_flows.append(f) # all_flowsはリスト
             self.commodity_count +=1
         
-    def solve_exact_solution_to_env(self):
+    def solve_exact_solution_to_env(self, time_limit=30):
         if (self.solver_type == 'mip'): # mip+CBC
             # 問題の定義(全体の下界)
             UELB_kakai = Model('UELB_kakai') # モデルの名前
@@ -171,14 +171,13 @@ class SolveExactSolution():
                         ==sum([(flow_var_kakai[l.get_id()][e])*(l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][1] == v])
 
             start = time.time()
-            # タイムアウト設定を追加（30秒）
-            status = UELB_problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=30)) # 線形計画問題を解く
+            status = UELB_problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit))
             elapsed_time = time.time()-start
 
-            # print(status)
-            # print(UELB_problem) # 制約式を全て出してくれる    
+            # PuLP status=1 (Optimal) かつ時間制限内であれば最適解と判断
+            is_optimal = (pulp.LpStatus[status] == 'Optimal') and (elapsed_time < time_limit - 1.0)
             self.flow_var_kakai = flow_var_kakai
-            return flow_var_kakai, self.r_kakai, L.value(), elapsed_time
+            return flow_var_kakai, self.r_kakai, L.value(), elapsed_time, is_optimal
 
         if (self.solver_type == 'SCIP'): # PySCIPOpt+SCIP
 

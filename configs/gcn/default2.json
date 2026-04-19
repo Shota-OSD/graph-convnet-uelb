@@ -8,6 +8,8 @@
   "val_filepath": "./data/tsp10_val_concorde.txt",
   "test_filepath": "./data/tsp10_test_concorde.txt",
   "solver_type": "pulp",
+  "solver_time_limit": 60,
+  "require_optimal": true,
   "graph_model": "random",
   "num_train_data": 100,
   "num_test_data": 20,
