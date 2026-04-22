@@ -155,6 +155,7 @@ class SeqFlowRLTrainer:
         """
         if num_epochs is None:
             num_epochs = self.config.get('max_epochs', 50)
+        self._val_loader = val_loader
 
         print(f"\n{'='*70}")
         print(f"STARTING TRAINING")
@@ -288,6 +289,8 @@ class SeqFlowRLTrainer:
             'approximation_ratio': [],
             'complete_rate': [],
             'complete_sample_rate': [],
+            'rewards_std': [],
+            'advantages_var': [],
         }
 
         # DatasetReader has max_iter attribute
@@ -422,6 +425,8 @@ class SeqFlowRLTrainer:
               f"Reward: {train_metrics.get('mean_reward', 0):.4f} | "
               f"LF: {train_metrics.get('mean_load_factor', 0):.4f}"
               f"{complete_str}{approx_ratio_str}")
+        print(f"  [DEBUG] rewards_std: {train_metrics.get('rewards_std', 0):.4f} | "
+              f"advantages_var: {train_metrics.get('advantages_var', 0):.4f}")
 
         # Validation metrics with complete rates and approximation ratio
         if val_metrics is not None:
@@ -436,7 +441,12 @@ class SeqFlowRLTrainer:
                   f"max: {val_metrics.get('max_load_factor', 0):.4f})"
                   f"{val_complete_str}{val_approx_str}")
         else:
-            print(f"  Val   - Skipped (insufficient validation data)")
+            val_every = self.config.get('val_every', 5)
+            if self._val_loader:
+                next_val = ((epoch // val_every) + 1) * val_every
+                print(f"  Val   - Skipped (next val at epoch {next_val})")
+            else:
+                print(f"  Val   - Skipped (no validation data)")
 
     def _log_batch(self, epoch, batch_idx, num_batches, metrics):
         """Log batch progress."""
