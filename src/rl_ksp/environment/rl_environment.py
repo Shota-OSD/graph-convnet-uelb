@@ -10,7 +10,8 @@ import numpy as np
 import random
 import csv
 import copy
-from typing import List, Tuple, Optional
+import time
+from typing import List, Tuple, Optional, Dict
 
 from src.common.graph.k_shortest_path import KShortestPathFinder
 from src.common.config.paths import get_graph_file, get_commodity_file
@@ -246,12 +247,17 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
     def reset(self, mode: str = 'train') -> List[float]:
         """エピソードの初期化"""
         self.time = 0
+        self.phase_times: Dict[str, float] = {}
         # 毎エピソードで新しいグラフ・品種を生成
         self.grouping = self.get_random_grouping(mode)
         self.pair_list = self.get_pair_list()
+
+        t0 = time.perf_counter()
         self.observation = self.get_observation()
+        self.phase_times['initial_observation'] = time.perf_counter() - t0
+
         count = 0
-        
+
         # 初期状態から全ての行動のエントリーが一つも存在しない場合
         while all(val == -100.0 for val in self.observation):
             combination = self.search_random_combination(self.allcommodity_ksps)
@@ -260,42 +266,45 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             self.observation = self.get_observation()
             if count == self.count_limit:
                 break
-        
+
         return self.observation
     
     def get_random_grouping(self, mode: str = 'train') -> List[List[int]]:
         """状態の初期化 - 既存データを使用"""
         # 現在のdata_idxを保存（このデータを実際に使用する）
         self.current_used_data_idx = self.data_idx
-        
-        # 既存データを使用（GCNモードと同じデータ範囲）
+
+        # データ読込み
+        t0 = time.perf_counter()
         self.load_data_from_files(self.data_idx, mode)
-        
+        self.phase_times['data_loading'] = time.perf_counter() - t0
+
         # データインデックスの循環処理
         if mode == 'train':
-            # トレーニング時：設定のnum_train_dataを使用して循環
             self.data_idx = (self.data_idx + 1) % self.max_train_data
         elif mode == 'test':
-            # テスト時：設定のnum_test_dataを使用して循環
             max_test_data = self.config.get('num_test_data', 20)
             self.data_idx = (self.data_idx + 1) % max_test_data
         else:
-            # その他（val等）：デフォルトでtrainと同じ
             self.data_idx = (self.data_idx + 1) % self.max_train_data
-        
+
         # K最短経路探索
+        t0 = time.perf_counter()
         self.allcommodity_ksps = self.ksp_finder.search_k_shortest_paths(
             self.G, self.commodity_list, self.K
         )
-        
-        # 初期状態の設定
+        self.phase_times['k_shortest_paths'] = time.perf_counter() - t0
+
+        # 初期解生成
+        t0 = time.perf_counter()
         if self.initial_state == 1:
             combination = self.search_combination(self.allcommodity_ksps)
         elif self.initial_state == 2:
             combination = self.search_random_combination(self.allcommodity_ksps)
         else:
             combination = self.search_combination(self.allcommodity_ksps)
-        
+        self.phase_times['initial_solution'] = time.perf_counter() - t0
+
         self.grouping = combination[0]
         return self.grouping
     

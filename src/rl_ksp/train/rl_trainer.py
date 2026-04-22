@@ -397,32 +397,51 @@ class RLTrainer:
     def test(self, test_episodes: int = 100) -> None:
         """
         テストの実行
-        
+
         Args:
             test_episodes: テストエピソード数
         """
         print(f"Starting RL testing for {test_episodes} episodes")
-        
+
         test_results = []
         total_test_time = 0.0
-        
+        # フェーズ別累積時間
+        phase_totals = {
+            'data_loading': 0.0,
+            'k_shortest_paths': 0.0,
+            'initial_solution': 0.0,
+            'initial_observation': 0.0,
+            'dqn_inference': 0.0,
+            'env_step': 0.0,
+        }
+
         for episode in range(test_episodes):
             start_time = time.time()
             state = self.env.reset('test')  # テストモードを指定
+            # reset 内のフェーズ時間を集計
+            for key in ('data_loading', 'k_shortest_paths', 'initial_solution', 'initial_observation'):
+                phase_totals[key] += self.env.phase_times.get(key, 0.0)
+
             state = np.reshape(state, [1, self.env.observation_space.shape[0]])
             done = False
             total_reward = 0.0
             steps = 0
-            
+
             while not done:
+                t_inf = time.perf_counter()
                 action = self.choose_action(state[0])
+                phase_totals['dqn_inference'] += time.perf_counter() - t_inf
+
+                t_step = time.perf_counter()
                 next_state, reward, done, _, max_load = self.env.step(action)
+                phase_totals['env_step'] += time.perf_counter() - t_step
+
                 next_state = np.reshape(next_state, [1, self.env.observation_space.shape[0]])
-                
+
                 total_reward += reward
                 steps += 1
                 state = next_state
-            
+
             episode_time = time.time() - start_time
             total_test_time += episode_time
             
@@ -493,6 +512,20 @@ class RLTrainer:
         print(f"Average Steps per Episode: {avg_steps:.2f}")
         print(f"Average Time per Episode: {avg_time:.4f}s")
         print(f"Total Test Time: {total_test_time:.2f}s")
+        print(f"="*50)
+
+        # フェーズ別時間の表示
+        print(f"\n" + "="*50)
+        print(f"PHASE TIMING BREAKDOWN ({test_episodes} episodes)")
+        print(f"="*50)
+        for phase, total_sec in phase_totals.items():
+            avg_ms = total_sec / test_episodes * 1000
+            pct = total_sec / total_test_time * 100 if total_test_time > 0 else 0.0
+            print(f"  {phase:<25s}: {total_sec:8.3f}s total, {avg_ms:8.2f}ms/ep, {pct:5.1f}%")
+        accounted = sum(phase_totals.values())
+        other = total_test_time - accounted
+        print(f"  {'other':<25s}: {other:8.3f}s total")
+        print(f"  {'TOTAL':<25s}: {total_test_time:8.3f}s")
         print(f"="*50)
     
     def _save_training_history(self, history: List[Dict]) -> None:
