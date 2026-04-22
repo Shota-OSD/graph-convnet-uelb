@@ -135,13 +135,11 @@ class A2CStrategy:
         """
         Compute rewards from rollout results.
 
-        Uses load factor as the reward signal:
-        reward = 2.0 - 2.0 * load_factor
+        reward = (2.0 - 2.0 * load_factor)
+               - completion_penalty_weight * incomplete_rate
+               - penalty_lambda * capacity_violation  (if rl_use_smooth_penalty)
 
-        This gives:
-        - reward = 2.0 when load_factor = 0 (best)
-        - reward = 0.0 when load_factor = 1 (at capacity)
-        - reward < 0.0 when load_factor > 1 (over capacity, penalized)
+        incomplete_rate = 未到達コモディティ数 / 全コモディティ数 per sample
 
         Args:
             rollout_results: Dictionary from rollout
@@ -153,23 +151,36 @@ class A2CStrategy:
         paths = rollout_results['paths']
         edge_usage = rollout_results['edge_usage']  # [B, V, V]
         x_edges_capacity = batch_data['x_edges_capacity']  # [B, V, V]
+        x_commodities = batch_data['x_commodities']  # [B, C, 3]
 
         batch_size = len(paths)
+        num_commodities = x_commodities.shape[1]
         device = edge_usage.device
 
         # Compute load factor for each batch element
         load_factors = self._compute_load_factors(edge_usage, x_edges_capacity)
 
         # Convert to rewards (continuous reward function)
-        # reward = 2.0 - 2.0 * load_factor
         rewards = 2.0 - 2.0 * load_factors
 
-        # Smooth penalty for infeasible solutions
+        # Completion penalty: penalize incomplete commodity routing
+        if self.config.get('use_completion_penalty', True):
+            penalty_weight = self.config.get('completion_penalty_weight', 2.0)
+            incomplete_rates = torch.zeros(batch_size, device=device)
+            for b in range(batch_size):
+                incomplete = 0
+                for c_idx, path in enumerate(paths[b]):
+                    dst = int(x_commodities[b, c_idx, 1].item())
+                    if not (len(path) > 0 and path[-1] == dst):
+                        incomplete += 1
+                incomplete_rates[b] = incomplete / num_commodities
+            rewards = rewards - penalty_weight * incomplete_rates
+
+        # Smooth penalty for capacity violations
         if self.config.get('rl_use_smooth_penalty', True):
             penalty_lambda = self.config.get('rl_penalty_lambda', 5.0)
             violations = torch.clamp(load_factors - 1.0, min=0.0)
-            penalty = -penalty_lambda * violations
-            rewards = rewards + penalty
+            rewards = rewards - penalty_lambda * violations
 
         return rewards
 
@@ -236,6 +247,7 @@ class A2CStrategy:
         # Compute advantages: A = R - V(s)
         # Use detached values as baseline (don't backprop through baseline)
         advantages = rewards_expanded - state_values.detach()
+        advantages_var_raw = advantages.var().item()  # DEBUG: measure before normalization
 
         # Normalize advantages (reduces variance)
         if self.normalize_advantages:
@@ -265,6 +277,9 @@ class A2CStrategy:
             'total_loss': total_loss.item(),
             'mean_advantage': advantages.mean().item(),
             'mean_value': state_values.mean().item(),
+            # DEBUG: reward/advantage diagnostics (advantages_var is pre-normalization)
+            'advantages_var': advantages_var_raw,
+            'rewards_std': rewards.std().item(),
         }
 
         return total_loss, loss_components
@@ -349,6 +364,9 @@ class A2CStrategy:
             # Values and advantages
             'mean_advantage': loss_components['mean_advantage'],
             'mean_value': loss_components['mean_value'],
+            # DEBUG: reward/advantage diagnostics
+            'advantages_var': loss_components.get('advantages_var', 0.0),
+            'rewards_std': loss_components.get('rewards_std', 0.0),
 
             # Rewards and load factors
             'mean_reward': rewards.mean().item(),

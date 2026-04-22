@@ -317,14 +317,6 @@ class SequentialRolloutEngine:
         num_nodes = edges_capacity.shape[1]
         device = edges_capacity.device
 
-        # For batch elements that already reached destination, mask all actions
-        # (they shouldn't take any more actions)
-        if reached_dst.any():
-            # Create dummy mask (will be overridden for reached elements)
-            valid_mask = torch.ones(batch_size, num_nodes, dtype=torch.bool, device=device)
-            valid_mask[reached_dst] = False  # Mask all actions for reached elements
-            return valid_mask
-
         # Generate full valid mask (with capacity constraints, no reachability check)
         valid_mask = MaskGenerator.create_full_valid_mask(
             current_nodes,
@@ -335,6 +327,10 @@ class SequentialRolloutEngine:
             check_reachability=False,
             edges_usage=edges_usage
         )
+
+        # For batch elements that already reached destination, mask all actions
+        if reached_dst.any():
+            valid_mask[reached_dst] = False
 
         return valid_mask
 
