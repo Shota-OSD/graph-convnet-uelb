@@ -7,7 +7,7 @@
 GNN-ILS (GNN-guided Iterated Local Search) は、GCN・RL-KSP・SeqFlowRL に続く4つ目のアプローチとして、**全コモディティ到達率100%を構造的に保証**しながら最大負荷率を最小化する手法である。
 
 核心となるアイデア:
-- **初期解**: KSP (K Shortest Paths) + Link-disjoint paths でコモディティごとに候補パスプールを構築し、最短パスで初期割当を決定する。この時点で全コモディティの到達が保証される。
+- **初期解**: KSP (K Shortest Paths) + Link-disjoint paths でコモディティごとに候補パスプールを構築し、**容量制約を無視した最短パス (Dijkstra x C)** で初期割当を決定する。容量を無視するからこそ全コモディティの到達が保証される (load_factor > 1.0 でも到達済み状態)。
 - **改善ループ (ILS)**: GNN が学習したポリシーに従い、2段階の意思決定 — (1) どのコモディティのパスを交換するか、(2) どの候補パスに変更するか — を繰り返して max load factor を削減する。
 - **到達率100%保証**: パスプール内の有効パスしか選択できないため、改善ループ中に到達が壊れることは構造的にない。
 
@@ -625,6 +625,11 @@ class ILSEnvironment:
     行動空間:
         - Level1: コモディティ選択 Discrete(C)
         - Level2: パス選択 Discrete(max_candidate_paths)
+
+    step() の粒度:
+        - 1回の step() = 1コモディティ1パス交換
+        - D=2 の場合、外側から step() を2回呼ぶことで 1 ILS ステップを構成
+        - decomposed 報酬モードでは各 step() ごとに中間負荷を記録して局所報酬を計算
     """
 
     def __init__(self, config: dict):
@@ -651,7 +656,8 @@ class ILSEnvironment:
         エピソードの初期化。
 
         1. PathPoolManager で候補パスプール構築
-        2. 最短パスで初期割当を決定
+        2. 容量制約を無視した最短パス (Dijkstra x C) で初期割当を決定
+           → load_factor > 1.0 でも全コモディティが「到達済み」の状態を保証
         3. 初期負荷を計算
 
         Returns:
@@ -674,7 +680,12 @@ class ILSEnvironment:
         selected_path_idx: int,
     ) -> Tuple[Dict, float, bool, Dict]:
         """
-        1ステップ実行: パス交換 → 負荷再計算。
+        1コモディティ1パス交換を実行し、負荷を再計算する。
+
+        D=2 の場合、1 ILS ステップは step() を2回呼ぶことで構成される。
+        decomposed 報酬モードでは各 step() で中間負荷 (lf_1) を記録し、
+        局所改善 -(lf_1 - lf_0) を Level2 報酬として返す。
+        shared モードでは ILS ステップ完了時に最終改善報酬を返す。
 
         Args:
             selected_commodity: 交換対象コモディティ
@@ -684,7 +695,7 @@ class ILSEnvironment:
             state: 更新後の状態辞書
             reward: float (改善ベース報酬)
             done: bool (終了条件)
-            info: Dict (メトリクス)
+            info: Dict (メトリクス、'intermediate_lf' を含む)
         """
         ...
 
@@ -746,10 +757,13 @@ class ILSEnvironment:
 
 ### 4.3 報酬設計
 
-| モード | Level1 報酬 | Level2 報酬 | 備考 |
-|---|---|---|---|
-| **shared** (デフォルト) | `-(new_lf - old_lf)` | 同一 | 両レベルで同一の改善ベース報酬 |
-| **decomposed** | `-(new_lf - old_lf)` | `-(new_lf - old_lf)` | 将来的にレベル別報酬に分離可能 |
+1 ILS ステップ = D 個のコモディティを順次交換する場合 (例: D=2, c1 → c2)。
+`lf_0` = ステップ開始時の負荷、`lf_1` = c1 交換後の中間負荷、`lf_2` = c2 交換後の最終負荷。
+
+| モード | Level1 報酬 | Level2 (c1) 報酬 | Level2 (c2) 報酬 | 備考 |
+|---|---|---|---|---|
+| **shared** (デフォルト) | `-(lf_2 - lf_0)` | `-(lf_2 - lf_0)` | `-(lf_2 - lf_0)` | 全レベル・全コモで同一の最終改善報酬 |
+| **decomposed** | `-(lf_2 - lf_0)` | `-(lf_1 - lf_0)` | `-(lf_2 - lf_1)` | Level2 は各コモ交換の局所改善で報酬 |
 
 - 改善時: `reward > 0`
 - 悪化時: `reward < 0`
@@ -795,7 +809,8 @@ class ILSA2CStrategy:
             model: GNNILSModel instance
             config: 設定辞書
                 - learning_rate: float (default: 0.0005)
-                - entropy_weight: float (default: 0.01)
+                - entropy_weight_l1: float (default: 0.02)
+                - entropy_weight_l2: float (default: 0.01)
                 - value_loss_weight: float (default: 0.5)
                 - gamma: float (default: 0.99)
                 - normalize_advantages: bool (default: True)
@@ -899,13 +914,17 @@ class ILSA2CStrategy:
 ### 5.2 損失関数の詳細
 
 ```
-Total Loss = L_actor_l1 + L_actor_l2 + 0.5 * L_critic - 0.01 * (H_l1 + H_l2)
+Total Loss = L_actor_l1 + L_actor_l2 + 0.5 * L_critic
+             - entropy_weight_l1 * H_l1 - entropy_weight_l2 * H_l2
 
 L_actor_l1 = -mean(log_prob_l1 * advantage)    # Level1: コモディティ選択
 L_actor_l2 = -mean(log_prob_l2 * advantage)    # Level2: パス選択
 L_critic   = MSE(V(s_t), R_t)                  # Critic: 状態価値
-H_l1       = mean(entropy_l1)                   # Level1: エントロピーボーナス
-H_l2       = mean(entropy_l2)                   # Level2: エントロピーボーナス
+H_l1       = mean(entropy_l1)                   # Level1: エントロピーボーナス (weight: 0.02)
+H_l2       = mean(entropy_l2)                   # Level2: エントロピーボーナス (weight: 0.01)
+
+L1 の方が探索空間が小さい (C 択) ため entropy_weight を大きめに設定し、
+L2 はパス数が多いため小さめにして過度な探索を抑制する。
 
 advantage  = R_t - V(s_t).detach()              # V(s_t) は baseline として使用
 R_t        = sum_{k=0}^{T-t} gamma^k * r_{t+k}  # discounted return
@@ -1089,7 +1108,9 @@ class GNNILSTrainer:
     "perturbation_prob": 0.1,
 
     "_comment_rl": "=== RL Algorithm (A2C) ===",
-    "entropy_weight": 0.01,
+    "entropy_weight_l1": 0.02,
+    "entropy_weight_l2": 0.01,
+    "_entropy_note": "L1 (C択) は探索空間が小さいため大きめ、L2 (パス択) は小さめ",
     "value_loss_weight": 0.5,
     "gamma": 0.99,
     "normalize_advantages": true,
