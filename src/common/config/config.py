@@ -47,7 +47,10 @@ class Settings(dict):
             self[key] = config_dict[key]
 
     def __getattr__(self, attr):
-        return self[attr]
+        try:
+            return self[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
     def __setitem__(self, key, value):
         return super().__setitem__(key, value)

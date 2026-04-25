@@ -62,7 +62,7 @@ def main():
     checkpoint = torch.load(args.model, map_location=device)
 
     if 'model_state_dict' in checkpoint:
-        rl_trainer.policy_net.load_state_dict(checkpoint['model_state_dict'])
+        rl_trainer.model.load_state_dict(checkpoint['model_state_dict'])
         print("Model loaded successfully!")
 
         if 'episode' in checkpoint:

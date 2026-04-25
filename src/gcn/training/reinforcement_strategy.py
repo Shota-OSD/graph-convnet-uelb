@@ -618,6 +618,7 @@ class ReinforcementLearningStrategy(BaseTrainingStrategy):
             'avg_path_length': avg_path_length,
             'commodity_success_rate': commodity_success_rate,
             'capacity_violation_rate': capacity_violation_rate,
+            'pred_paths': pred_paths,
             # Add temperature for monitoring
             'temperature': self.get_current_temperature()
         }

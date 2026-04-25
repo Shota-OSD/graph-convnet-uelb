@@ -90,12 +90,12 @@ class HyperparameterTuner:
             master_bar_obj = master_bar(range(1))
 
             # テスト評価
-            test_time, test_loss, test_mean_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(
+            test_time, test_loss, test_mean_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate, test_comp_rate, test_comp_sample_rate = evaluator.evaluate(
                 best_net, master_bar_obj, mode='test'
             )
 
             # 検証評価
-            val_time, val_loss, val_mean_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(
+            val_time, val_loss, val_mean_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate, val_comp_rate, val_comp_sample_rate = evaluator.evaluate(
                 best_net, master_bar_obj, mode='val'
             )
 
