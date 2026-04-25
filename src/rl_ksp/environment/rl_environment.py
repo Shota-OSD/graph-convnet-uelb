@@ -62,6 +62,10 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
         # 状態変数の初期化
         self.time = 0
         self.candidate_list = []
+
+        # step内フェーズ計測用
+        self.enable_step_profiling = False
+        self.step_phase_times: Dict[str, float] = {}
         
         # K最短経路探索器
         self.ksp_finder = KShortestPathFinder()
@@ -181,32 +185,45 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
         difference = new_maxloadfactor - bf_maxloadfactor
         return -1 * difference
     
-    def get_observation(self) -> List[float]:
+    def get_observation(self, _profile_key_prefix: str = "") -> List[float]:
         """観測変数の取得"""
+        p = self.enable_step_profiling and _profile_key_prefix
         grouping = self.grouping.copy()
         candidate_list = []
+
+        t0 = time.perf_counter()
         self.old_maxloadfactor = self.max_load_factor(grouping)
-        
+        if p:
+            self.step_phase_times[f"{_profile_key_prefix}_initial_mlf"] = \
+                self.step_phase_times.get(f"{_profile_key_prefix}_initial_mlf", 0) + (time.perf_counter() - t0)
+
+        t0 = time.perf_counter()
         for pair in self.pair_list:
             c, path = pair
             if self.reward_state == 1:
                 cost = self.get_reward_maxload(self.exchange_path_pair(grouping, c, path))
-                if cost >= -1:  # オーバーフローじゃない場合にエントリー
+                if cost >= -1:
                     candidate_list.append([c, path, cost])
             elif self.reward_state == 2:
                 cost = self.get_difference(self.exchange_path_pair(grouping, c, path))
                 candidate_list.append([c, path, cost])
-        
-        # コストの大きい順に並び替えて個数分取り出す
+        if p:
+            self.step_phase_times[f"{_profile_key_prefix}_pair_loop"] = \
+                self.step_phase_times.get(f"{_profile_key_prefix}_pair_loop", 0) + (time.perf_counter() - t0)
+
+        t0 = time.perf_counter()
         self.candidate_list = sorted(candidate_list, key=lambda x: -x[2])[:self.n_action]
+        if p:
+            self.step_phase_times[f"{_profile_key_prefix}_sort"] = \
+                self.step_phase_times.get(f"{_profile_key_prefix}_sort", 0) + (time.perf_counter() - t0)
+
         mask = [cand[2] for cand in self.candidate_list]
-        
-        # エントリー数が足りない場合
+
         if len(mask) < self.n_action:
             i = self.n_action - len(mask)
             for n in range(i):
                 mask.append(-100.0)
-        
+
         return mask
     
     def check_is_done(self) -> bool:
@@ -217,12 +234,25 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
             return True
         return False
     
+    def reset_step_phase_times(self) -> None:
+        """step内フェーズ計測をリセット"""
+        self.step_phase_times = {}
+
     def step(self, action: int) -> Tuple[List[float], float, bool, dict, float]:
         """1ステップの実行"""
         self.time += 1
-        observation = self.get_observation()
+        p = self.enable_step_profiling
+
+        t0 = time.perf_counter()
+        observation = self.get_observation(_profile_key_prefix="obs1" if p else "")
+        if p:
+            self.step_phase_times["obs1_total"] = self.step_phase_times.get("obs1_total", 0) + (time.perf_counter() - t0)
+
+        t0 = time.perf_counter()
         oldmaxload = self.max_load_factor(self.grouping)
-        
+        if p:
+            self.step_phase_times["oldmaxload"] = self.step_phase_times.get("oldmaxload", 0) + (time.perf_counter() - t0)
+
         if all(val == -100.0 for val in observation):
             done = True
             info = {}
@@ -230,18 +260,34 @@ class MinMaxLoadKSPsEnv(gym.core.Env):
                 self.reward = self.get_reward_maxload(self.grouping)
             elif self.reward_state == 2:
                 self.reward = self.get_reward_difference(self.grouping, oldmaxload)
-            self.observation = self.get_observation()
+            self.observation = self.get_observation(_profile_key_prefix="obs2" if p else "")
         else:
+            t0 = time.perf_counter()
             self.grouping = self.exchange_path_action(self.grouping, action).copy()
+            if p:
+                self.step_phase_times["exchange"] = self.step_phase_times.get("exchange", 0) + (time.perf_counter() - t0)
+
+            t0 = time.perf_counter()
             if self.reward_state == 1:
                 self.reward = self.get_reward_maxload(self.grouping)
             elif self.reward_state == 2:
                 self.reward = self.get_reward_difference(self.grouping, oldmaxload)
-            self.observation = self.get_observation()
+            if p:
+                self.step_phase_times["reward"] = self.step_phase_times.get("reward", 0) + (time.perf_counter() - t0)
+
+            t0 = time.perf_counter()
+            self.observation = self.get_observation(_profile_key_prefix="obs2" if p else "")
+            if p:
+                self.step_phase_times["obs2_total"] = self.step_phase_times.get("obs2_total", 0) + (time.perf_counter() - t0)
+
             done = self.check_is_done()
             info = {}
-        
+
+        t0 = time.perf_counter()
         maxload = self.max_load_factor(self.grouping)
+        if p:
+            self.step_phase_times["final_mlf"] = self.step_phase_times.get("final_mlf", 0) + (time.perf_counter() - t0)
+
         return self.observation, self.reward, done, info, maxload
     
     def reset(self, mode: str = 'train') -> List[float]:
