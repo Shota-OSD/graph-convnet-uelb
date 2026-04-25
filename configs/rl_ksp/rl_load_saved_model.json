@@ -52,9 +52,9 @@
     "episodes": 100,
     "test_episodes": 20,
     "hidden_dims": [
-        32,
-        32,
-        32
+        64,
+        64,
+        64
     ],
     "save_model": false,
     "save_every_episode": false,

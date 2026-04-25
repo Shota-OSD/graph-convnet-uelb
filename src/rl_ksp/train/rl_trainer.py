@@ -403,6 +403,10 @@ class RLTrainer:
         """
         print(f"Starting RL testing for {test_episodes} episodes")
 
+        # step内フェーズ計測を有効化
+        self.env.enable_step_profiling = True
+        self.env.reset_step_phase_times()
+
         test_results = []
         total_test_time = 0.0
         # フェーズ別累積時間
@@ -527,6 +531,36 @@ class RLTrainer:
         print(f"  {'other':<25s}: {other:8.3f}s total")
         print(f"  {'TOTAL':<25s}: {total_test_time:8.3f}s")
         print(f"="*50)
+
+        # step内フェーズ詳細（env_stepのボトルネック内訳）
+        env_step_total = phase_totals['env_step']
+        spt = self.env.step_phase_times
+        if spt:
+            print(f"\n" + "="*50)
+            print(f"ENV_STEP INTERNAL BREAKDOWN ({test_episodes} episodes)")
+            print(f"  (env_step total: {env_step_total:.3f}s)")
+            print(f"="*50)
+            # キーの定義順で表示
+            step_keys = [
+                ("obs1_total",          "get_observation #1 (total)"),
+                ("obs1_initial_mlf",    "  └ initial max_load_factor"),
+                ("obs1_pair_loop",      "  └ pair_list loop"),
+                ("obs1_sort",           "  └ sort"),
+                ("oldmaxload",          "oldmaxload (reward前計算)"),
+                ("exchange",            "exchange_path_action"),
+                ("reward",              "reward calculation"),
+                ("obs2_total",          "get_observation #2 (total)"),
+                ("obs2_initial_mlf",    "  └ initial max_load_factor"),
+                ("obs2_pair_loop",      "  └ pair_list loop"),
+                ("obs2_sort",           "  └ sort"),
+                ("final_mlf",           "final max_load_factor"),
+            ]
+            for key, label in step_keys:
+                val = spt.get(key, 0.0)
+                avg_ms = val / test_episodes * 1000
+                pct = val / env_step_total * 100 if env_step_total > 0 else 0.0
+                print(f"  {label:<40s}: {val:8.3f}s, {avg_ms:7.2f}ms/ep, {pct:5.1f}%")
+            print(f"="*50)
     
     def _save_training_history(self, history: List[Dict]) -> None:
         """学習履歴の保存"""
