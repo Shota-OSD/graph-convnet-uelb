@@ -547,12 +547,13 @@ class Trainer:
             if epoch % val_every == 0 or epoch == max_epochs - 1:
                 # Ensure model is in eval mode and use the current updated model
                 self.net.eval()
-                val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate = evaluator.evaluate(
+                val_time, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate, val_comp_rate, val_comp_sample_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='val'
                 )
-                metrics_logger.log_val_metrics(val_approximation_rate, val_time, epoch=epoch)
+                metrics_logger.log_val_metrics(val_approximation_rate, val_time, epoch=epoch,
+                                               comp_rate=val_comp_rate, comp_sample_rate=val_comp_sample_rate)
 
-                epoch_bar.write('v: ' + metrics_to_str(epoch, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate))
+                epoch_bar.write('v: ' + metrics_to_str(epoch, val_time, learning_rate, val_loss, val_mean_maximum_load_factor, val_gt_load_factor, val_approximation_rate, val_infeasible_rate, val_comp_rate, val_comp_sample_rate))
 
             # 学習率の更新
             if epoch % val_every == 0 and epoch != 0:
@@ -564,12 +565,13 @@ class Trainer:
             if epoch % test_every == 0 or epoch == max_epochs - 1:
                 # Ensure model is in eval mode and use the current updated model
                 self.net.eval()
-                test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate = evaluator.evaluate(
+                test_time, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate, test_comp_rate, test_comp_sample_rate = evaluator.evaluate(
                     self.net, epoch_bar, mode='test'
                 )
-                metrics_logger.log_test_metrics(test_approximation_rate, test_time, epoch=epoch)
+                metrics_logger.log_test_metrics(test_approximation_rate, test_time, epoch=epoch,
+                                                comp_rate=test_comp_rate, comp_sample_rate=test_comp_sample_rate)
 
-                epoch_bar.write('T: ' + metrics_to_str(epoch, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate))
+                epoch_bar.write('T: ' + metrics_to_str(epoch, test_time, learning_rate, test_loss, test_mean_maximum_load_factor, test_gt_load_factor, test_approximation_rate, test_infeasible_rate, test_comp_rate, test_comp_sample_rate))
 
             # モデル保存
             if self.config.get('save_model', True):

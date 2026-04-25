@@ -425,8 +425,9 @@ class SeqFlowRLTrainer:
               f"Reward: {train_metrics.get('mean_reward', 0):.4f} | "
               f"LF: {train_metrics.get('mean_load_factor', 0):.4f}"
               f"{complete_str}{approx_ratio_str}")
-        print(f"  [DEBUG] rewards_std: {train_metrics.get('rewards_std', 0):.4f} | "
-              f"advantages_var: {train_metrics.get('advantages_var', 0):.4f}")
+        if self.config.get('debug_mode', False):
+            print(f"  [DEBUG] rewards_std: {train_metrics.get('rewards_std', 0):.4f} | "
+                  f"advantages_var: {train_metrics.get('advantages_var', 0):.4f}")
 
         # Validation metrics with complete rates and approximation ratio
         if val_metrics is not None:

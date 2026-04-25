@@ -25,6 +25,12 @@ class MetricsLogger:
         self.val_epochs = []  # バリデーションを実行したエポック番号
         self.test_epochs = []  # テストを実行したエポック番号
 
+        # Comp% / CompSample% lists
+        self.val_comp_rate_list = []
+        self.val_comp_sample_rate_list = []
+        self.test_comp_rate_list = []
+        self.test_comp_sample_rate_list = []
+
         # RL-specific metrics (existing)
         self.rl_reward_list = []
         self.rl_advantage_list = []
@@ -54,15 +60,21 @@ class MetricsLogger:
             self.train_time_list.append(train_time)
             self.total_train_time += train_time
     
-    def log_val_metrics(self, approximation_rate: float, val_time: float = None, epoch: int = None):
+    def log_val_metrics(self, approximation_rate: float, val_time: float = None, epoch: int = None,
+                        comp_rate: float = None, comp_sample_rate: float = None):
         """検証メトリクスを記録"""
         self.val_approximation_rate_list.append(approximation_rate)
         if val_time is not None:
             self.val_time_list.append(val_time)
         if epoch is not None:
             self.val_epochs.append(epoch)
+        if comp_rate is not None:
+            self.val_comp_rate_list.append(comp_rate)
+        if comp_sample_rate is not None:
+            self.val_comp_sample_rate_list.append(comp_sample_rate)
 
-    def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None):
+    def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None,
+                         comp_rate: float = None, comp_sample_rate: float = None):
         """テストメトリクスを記録"""
         self.test_approximation_rate_list.append(approximation_rate)
         if test_time is not None:
@@ -70,6 +82,10 @@ class MetricsLogger:
             self.total_test_time += test_time
         if epoch is not None:
             self.test_epochs.append(epoch)
+        if comp_rate is not None:
+            self.test_comp_rate_list.append(comp_rate)
+        if comp_sample_rate is not None:
+            self.test_comp_sample_rate_list.append(comp_sample_rate)
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
@@ -198,9 +214,17 @@ class MetricsLogger:
             if self.val_approximation_rate_list:
                 f.write(f"  Final Val Approximation Rate: {metrics['final_val_approximation_rate']:.2f}%\n")
                 f.write(f"  Best Val Approximation Rate: {metrics['best_val_approximation_rate']:.2f}%\n")
+                if self.val_comp_rate_list:
+                    f.write(f"  Final Val Comp Rate: {self.val_comp_rate_list[-1]:.2f}%\n")
+                if self.val_comp_sample_rate_list:
+                    f.write(f"  Final Val CompSample Rate: {self.val_comp_sample_rate_list[-1]:.2f}%\n")
             if self.test_approximation_rate_list:
                 f.write(f"  Final Test Approximation Rate: {metrics['final_test_approximation_rate']:.2f}%\n")
                 f.write(f"  Best Test Approximation Rate: {metrics['best_test_approximation_rate']:.2f}%\n")
+                if self.test_comp_rate_list:
+                    f.write(f"  Final Test Comp Rate: {self.test_comp_rate_list[-1]:.2f}%\n")
+                if self.test_comp_sample_rate_list:
+                    f.write(f"  Final Test CompSample Rate: {self.test_comp_sample_rate_list[-1]:.2f}%\n")
             
             # 時間関連のメトリクス
             f.write("\nTIME METRICS:\n")
@@ -298,6 +322,10 @@ class MetricsLogger:
                     finite_lf = self.rl_avg_finite_load_factor_list[epoch] if epoch < len(self.rl_avg_finite_load_factor_list) else 0.0
                     cap_viol = self.rl_capacity_violation_rate_list[epoch] if epoch < len(self.rl_capacity_violation_rate_list) else 0.0
 
+                    if hasattr(load_factor, 'item'):
+                        load_factor = load_factor.item()
+                    if hasattr(finite_lf, 'item'):
+                        finite_lf = finite_lf.item()
                     lf_str = f"{load_factor:.4f}" if not np.isinf(load_factor) else "inf"
                     finite_lf_str = f"{finite_lf:.4f}" if finite_lf > 0 else "N/A"
 
@@ -373,18 +401,24 @@ class MetricsLogger:
             print(f"\nUsed Config: {config_info.get('config_file', 'Unknown')}")
             print(f"Model Hash: {config_info.get('model_hash', 'Unknown')}")
 
-def metrics_to_str(epoch: int, time: float, learning_rate: float, loss: float, 
-                  mean_maximum_load_factor: float, gt_load_factor: float, 
-                  approximation_rate: float, infeasible_rate: float) -> str:
+def metrics_to_str(epoch: int, time: float, learning_rate: float, loss: float,
+                   mean_maximum_load_factor: float, gt_load_factor: float,
+                   approximation_rate: float, infeasible_rate: float,
+                   comp_rate: float = None, comp_sample_rate: float = None) -> str:
     """メトリクスを文字列形式で返す関数"""
-    return (f'epoch:{epoch:02d}\t'
-            f'execution time:{time:.8f}s\t'
-            f'lr:{learning_rate:.2e}\t'
-            f'loss:{loss:.4f}\t'
-            f'mean_maximum_load_factor:{mean_maximum_load_factor:.3f}\t'
-            f'gt_load_factor:{gt_load_factor:.3f}\t'
-            f'approximation_rate:{approximation_rate:.3f}\t'
-            f'infeasible_rate:{infeasible_rate:.3f}')
+    s = (f'epoch:{epoch:02d}\t'
+         f'execution time:{time:.8f}s\t'
+         f'lr:{learning_rate:.2e}\t'
+         f'loss:{loss:.4f}\t'
+         f'mean_maximum_load_factor:{mean_maximum_load_factor:.3f}\t'
+         f'gt_load_factor:{gt_load_factor:.3f}\t'
+         f'approximation_rate:{approximation_rate:.3f}\t'
+         f'infeasible_rate:{infeasible_rate:.3f}')
+    if comp_rate is not None:
+        s += f'\tcomp_rate:{comp_rate:.2f}%'
+    if comp_sample_rate is not None:
+        s += f'\tcomp_sample_rate:{comp_sample_rate:.2f}%'
+    return s
 
 def load_training_results(pickle_filepath: str) -> dict:
     """保存されたトレーニング結果を読み込む関数"""
