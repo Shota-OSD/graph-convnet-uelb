@@ -407,24 +407,107 @@ class GNNILSTrainer:
             f.write(f"Timestamp: {datetime.now().strftime('%Y%m%d_%H%M%S')}\n")
             f.write(f"Config: {self.config.get('expt_name', 'gnn_ils_base')}\n\n")
 
+            # Final metrics
             f.write("FINAL METRICS:\n")
             if self.training_history['train_load_factor']:
-                f.write(f"  Final Train LF:    {self.training_history['train_load_factor'][-1]:.4f}\n")
-                f.write(f"  Final Improvement: {self.training_history['train_improvement'][-1]:.2f}%\n")
+                f.write(f"  Final Train LF:       {self.training_history['train_load_factor'][-1]:.4f}\n")
+                f.write(f"  Final Train Improve:  {self.training_history['train_improvement'][-1]:.2f}%\n")
             if self.training_history['val_load_factor']:
-                f.write(f"  Best Val LF:       {self.best_val_load_factor:.4f}\n")
+                f.write(f"  Best Val LF:          {self.best_val_load_factor:.4f}\n")
+            valid_val_approx = [x for x in self.training_history['val_approx_ratio'] if x is not None]
+            if valid_val_approx:
+                f.write(f"  Best Val Approx:      {np.max(valid_val_approx):.2f}%\n")
+            f.write("\n")
 
-            f.write(f"\nTIME METRICS:\n")
-            f.write(f"  Total: {total_training_time:.2f}s\n")
+            # Time metrics
+            f.write("TIME METRICS:\n")
+            f.write(f"  Total Training Time:  {total_training_time:.2f}s\n")
             if self.training_history['epoch_times']:
-                f.write(f"  Avg per epoch: {np.mean(self.training_history['epoch_times']):.2f}s\n")
+                f.write(f"  Avg Time per Epoch:   {np.mean(self.training_history['epoch_times']):.2f}s\n")
+            f.write(f"  Total Epochs:         {len(self.training_history['train_loss'])}\n")
+            f.write("\n")
 
-            f.write(f"\nCONFIGURATION:\n")
-            f.write(f"  max_iterations:     {self.config.get('max_iterations', 50)}\n")
-            f.write(f"  no_improve_patience:{self.config.get('no_improve_patience', 10)}\n")
-            f.write(f"  K:                  {self.config.get('K', 10)}\n")
-            f.write(f"  max_candidate_paths:{self.config.get('max_candidate_paths', 15)}\n")
-            f.write(f"  learning_rate:      {self.config.get('learning_rate', 0.0005)}\n")
-            f.write(f"  hidden_dim:         {self.config.get('hidden_dim', 128)}\n")
+            # Configuration
+            f.write("CONFIGURATION:\n")
+            f.write(f"  max_iterations:       {self.config.get('max_iterations', 50)}\n")
+            f.write(f"  no_improve_patience:  {self.config.get('no_improve_patience', 10)}\n")
+            f.write(f"  K:                    {self.config.get('K', 10)}\n")
+            f.write(f"  max_candidate_paths:  {self.config.get('max_candidate_paths', 15)}\n")
+            f.write(f"  samples_per_epoch:    {self.config.get('samples_per_epoch', 100)}\n")
+            f.write(f"  learning_rate:        {self.config.get('learning_rate', 0.0005)}\n")
+            f.write(f"  hidden_dim:           {self.config.get('hidden_dim', 128)}\n")
+            f.write(f"  num_layers:           {self.config.get('num_layers', 8)}\n")
+            f.write(f"  entropy_weight_l1:    {self.config.get('entropy_weight_l1', 0.02)}\n")
+            f.write(f"  entropy_weight_l2:    {self.config.get('entropy_weight_l2', 0.01)}\n")
+            f.write(f"  value_loss_weight:    {self.config.get('value_loss_weight', 0.5)}\n")
+            f.write(f"  gamma:                {self.config.get('gamma', 0.99)}\n")
+            f.write(f"  grad_clip_norm:       {self.config.get('grad_clip_norm', 1.0)}\n")
+            f.write("\n")
+
+            # Detailed train epoch results table
+            f.write("=" * 50 + "\n")
+            f.write("DETAILED EPOCH RESULTS (TRAIN)\n")
+            f.write("=" * 50 + "\n")
+            header = (f"{'Epoch':<8}{'Loss':<12}{'Reward':<12}{'LF':<10}"
+                      f"{'Improve%':<12}{'Iters':<8}{'Approx%':<12}{'Time(s)':<10}\n")
+            f.write(header)
+            f.write("-" * 84 + "\n")
+
+            for i in range(len(self.training_history['train_loss'])):
+                loss    = self.training_history['train_loss'][i]
+                reward  = self.training_history['train_reward'][i]
+                lf      = self.training_history['train_load_factor'][i]
+                improve = self.training_history['train_improvement'][i]
+                iters   = self.training_history['train_num_iterations'][i]
+                approx  = self.training_history['train_approx_ratio'][i]
+                t       = self.training_history['epoch_times'][i]
+                approx_str = f"{approx:.2f}" if approx is not None else "N/A"
+                f.write(f"{i+1:<8}{loss:<12.4f}{reward:<12.4f}{lf:<10.4f}"
+                        f"{improve:<12.1f}{iters:<8.1f}{approx_str:<12}{t:<10.2f}\n")
+
+            f.write("-" * 84 + "\n")
+            f.write("\n")
+
+            # Detailed val epoch results table
+            if self.training_history['val_load_factor']:
+                val_every = self.config.get('val_every', 5)
+                f.write("=" * 50 + "\n")
+                f.write("DETAILED EPOCH RESULTS (VAL)\n")
+                f.write("=" * 50 + "\n")
+                f.write(f"{'Epoch':<8}{'Val LF':<12}{'Improve%':<12}{'Iters':<8}{'Approx%':<12}\n")
+                f.write("-" * 52 + "\n")
+
+                for i, (lf, improve, iters, approx) in enumerate(zip(
+                    self.training_history['val_load_factor'],
+                    self.training_history['val_improvement'],
+                    self.training_history['val_num_iterations'],
+                    self.training_history['val_approx_ratio'],
+                )):
+                    epoch_num = (i + 1) * val_every
+                    approx_str = f"{approx:.2f}" if approx is not None else "N/A"
+                    f.write(f"{epoch_num:<8}{lf:<12.4f}{improve:<12.1f}{iters:<8.1f}{approx_str:<12}\n")
+
+                f.write("-" * 52 + "\n")
+                f.write("\n")
+
+            # Summary statistics
+            f.write("SUMMARY STATISTICS:\n")
+            lf_hist = self.training_history['train_load_factor']
+            if lf_hist:
+                f.write(f"  Train Mean LF:        {np.mean(lf_hist):.4f}\n")
+                f.write(f"  Train Min LF:         {np.min(lf_hist):.4f}\n")
+                f.write(f"  Train Max LF:         {np.max(lf_hist):.4f}\n")
+            iters_hist = self.training_history['train_num_iterations']
+            if iters_hist:
+                f.write(f"  Train Mean Iters:     {np.mean(iters_hist):.1f}\n")
+            if self.training_history['val_load_factor']:
+                f.write(f"  Best Val LF:          {self.best_val_load_factor:.4f}\n")
+            if valid_val_approx:
+                f.write(f"  Best Val Approx:      {np.max(valid_val_approx):.2f}%\n")
+                f.write(f"  Mean Val Approx:      {np.mean(valid_val_approx):.2f}%\n")
+            valid_train_approx = [x for x in self.training_history['train_approx_ratio'] if x is not None]
+            if valid_train_approx:
+                f.write(f"  Train Mean Approx:    {np.mean(valid_train_approx):.2f}%\n")
+                f.write(f"  Train Best Approx:    {np.max(valid_train_approx):.2f}%\n")
 
         print(f"✓ Training log saved to: {self.log_file}")
