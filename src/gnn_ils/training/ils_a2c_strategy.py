@@ -100,6 +100,7 @@ class ILSA2CStrategy:
             'initial_load_factor': init_lf,
             'improvement': improvement,
             'num_iterations': len(trajectory['rewards']),
+            'best_iteration': trajectory['best_iteration'],
         }
         return metrics
 
@@ -182,6 +183,12 @@ class ILSA2CStrategy:
             state = new_state
 
         trajectory['final_load_factor'] = state['load_factor']
+
+        # Best-so-far 情報を追加
+        best_solution = self.env.get_best_solution()
+        trajectory['best_load_factor'] = best_solution['best_load_factor']
+        trajectory['best_iteration'] = best_solution['best_iteration']
+
         return trajectory
 
     def _compute_a2c_loss(
@@ -261,22 +268,24 @@ class ILSA2CStrategy:
             trajectory = self._run_ils_episode(batch_data, deterministic=True)
 
         init_lf = trajectory['initial_load_factor']
-        final_lf = trajectory['final_load_factor']
+        best_lf = trajectory['best_load_factor']
+        best_iter = trajectory['best_iteration']
         improvement = 0.0
         if init_lf > 1e-8:
-            improvement = (init_lf - final_lf) / init_lf * 100.0
+            improvement = (init_lf - best_lf) / init_lf * 100.0
 
-        # Approximation ratio (グラウンドトゥルースと比較)
+        # Approximation ratio (グラウンドトゥルースと比較、best-so-far を使用)
         approximation_ratio = None
         gt_lf = batch_data.get('load_factor_scalar')
-        if gt_lf is not None and gt_lf > 1e-8 and final_lf > 1e-8:
-            approximation_ratio = (gt_lf / final_lf) * 100.0
+        if gt_lf is not None and gt_lf > 1e-8 and best_lf > 1e-8:
+            approximation_ratio = (gt_lf / best_lf) * 100.0
 
         return {
-            'final_load_factor': final_lf,
+            'final_load_factor': best_lf,
             'initial_load_factor': init_lf,
             'improvement': improvement,
             'num_iterations': len(trajectory['rewards']),
+            'best_iteration': best_iter,
             'complete_rate': 100.0,   # パスプール構造的保証
             'approximation_ratio': approximation_ratio,
         }

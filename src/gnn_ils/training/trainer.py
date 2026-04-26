@@ -63,10 +63,12 @@ class GNNILSTrainer:
             'train_improvement': [],
             'train_num_iterations': [],
             'train_approx_ratio': [],
+            'train_best_iteration': [],
             'val_load_factor': [],
             'val_improvement': [],
             'val_num_iterations': [],
             'val_approx_ratio': [],
+            'val_best_iteration': [],
             'learning_rate': [],
             'epoch_times': [],
         }
@@ -228,6 +230,7 @@ class GNNILSTrainer:
             'improvement': [],
             'num_iterations': [],
             'approximation_ratio': [],
+            'best_iteration': [],
         }
 
         dataset_iter = iter(train_loader)
@@ -275,10 +278,7 @@ class GNNILSTrainer:
         """1エポックの検証。"""
         self.model.eval()
 
-        samples_per_epoch = self.config.get('samples_per_epoch', None)
         num_batches = val_loader.max_iter
-        if samples_per_epoch is not None:
-            num_batches = min(num_batches, max(1, samples_per_epoch // 5))
 
         if num_batches == 0:
             return None
@@ -288,6 +288,7 @@ class GNNILSTrainer:
             'improvement': [],
             'num_iterations': [],
             'approximation_ratio': [],
+            'best_iteration': [],
         }
 
         dataset_iter = iter(val_loader)
@@ -339,7 +340,8 @@ class GNNILSTrainer:
         print(f"  Train - Loss: {train_metrics.get('total_loss', 0):.4f} | "
               f"LF: {train_metrics.get('mean_load_factor', 0):.4f} | "
               f"Improve: {train_metrics.get('improvement', 0):.1f}% | "
-              f"Iters: {train_metrics.get('num_iterations', 0):.1f}"
+              f"Iters: {train_metrics.get('num_iterations', 0):.1f} | "
+              f"BestIter: {train_metrics.get('best_iteration', 0):.1f}"
               f"{approx_str}")
 
         if val_metrics is not None:
@@ -348,7 +350,8 @@ class GNNILSTrainer:
                 val_approx_str = f" | Approx: {val_metrics['approximation_ratio']:.2f}%"
             print(f"  Val   - LF: {val_metrics.get('mean_load_factor', 0):.4f} | "
                   f"Improve: {val_metrics.get('improvement', 0):.1f}% | "
-                  f"Iters: {val_metrics.get('num_iterations', 0):.1f}"
+                  f"Iters: {val_metrics.get('num_iterations', 0):.1f} | "
+                  f"BestIter: {val_metrics.get('best_iteration', 0):.1f}"
                   f"{val_approx_str}")
 
     def _update_history(self, train_metrics, val_metrics, lr, epoch_time):
@@ -358,6 +361,7 @@ class GNNILSTrainer:
         self.training_history['train_improvement'].append(train_metrics.get('improvement', 0.0))
         self.training_history['train_num_iterations'].append(train_metrics.get('num_iterations', 0.0))
         self.training_history['train_approx_ratio'].append(train_metrics.get('approximation_ratio'))
+        self.training_history['train_best_iteration'].append(train_metrics.get('best_iteration', 0.0))
         self.training_history['learning_rate'].append(lr)
         self.training_history['epoch_times'].append(epoch_time)
 
@@ -366,6 +370,7 @@ class GNNILSTrainer:
             self.training_history['val_improvement'].append(val_metrics.get('improvement', 0.0))
             self.training_history['val_num_iterations'].append(val_metrics.get('num_iterations', 0.0))
             self.training_history['val_approx_ratio'].append(val_metrics.get('approximation_ratio'))
+            self.training_history['val_best_iteration'].append(val_metrics.get('best_iteration', 0.0))
 
     def _save_checkpoint(self, epoch, train_metrics, val_metrics, is_best=False):
         config_dict = dict(self.config) if hasattr(self.config, 'items') else self.config
