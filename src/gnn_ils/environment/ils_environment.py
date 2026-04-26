@@ -60,6 +60,11 @@ class ILSEnvironment:
         self.no_improve_count: int = 0
         self.capacity_np: Optional[np.ndarray] = None
 
+        # Best-so-far トラッキング
+        self.best_load_factor: float = float('inf')
+        self.best_assignment: List[List[int]] = []
+        self.best_iteration: int = 0
+
     def reset(
         self,
         G: nx.Graph,
@@ -101,6 +106,11 @@ class ILSEnvironment:
         # カウンタ初期化
         self.iteration = 0
         self.no_improve_count = 0
+
+        # Best-so-far を初期状態で初期化
+        self.best_load_factor = self.current_load_factor
+        self.best_assignment = [list(p) for p in self.current_assignment]
+        self.best_iteration = 0
 
         return self._build_state()
 
@@ -165,6 +175,12 @@ class ILSEnvironment:
         else:
             self.no_improve_count += 1
 
+        # Best-so-far 更新
+        if new_load_factor < self.best_load_factor - 1e-8:
+            self.best_load_factor = new_load_factor
+            self.best_assignment = [list(p) for p in self.current_assignment]
+            self.best_iteration = self.iteration
+
         reward = self._compute_reward(old_load_factor, new_load_factor)
         done = self._check_done()
 
@@ -224,6 +240,14 @@ class ILSEnvironment:
         mask = torch.zeros(1, self.max_candidate_paths, dtype=torch.bool)
         mask[0, :num_valid] = True
         return mask
+
+    def get_best_solution(self) -> Dict:
+        """エピソード中の best-so-far 解を返す。"""
+        return {
+            'best_load_factor': self.best_load_factor,
+            'best_assignment': self.best_assignment,
+            'best_iteration': self.best_iteration,
+        }
 
     def _build_state(self) -> Dict:
         """現在の状態辞書を構築する。"""
