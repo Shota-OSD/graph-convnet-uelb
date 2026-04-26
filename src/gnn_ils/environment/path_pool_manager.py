@@ -54,7 +54,13 @@ class PathPoolManager:
                     fallback = nx.dijkstra_path(G, src, dst, weight='weight')
                     merged = [list(fallback)]
                 except (nx.NetworkXNoPath, nx.NodeNotFound):
-                    merged = [[src]]
+                    raise ValueError(
+                        f"FATAL ERROR: No path found for commodity "
+                        f"(source={src}, target={dst}). "
+                        f"GNN-ILS requires all commodities to be reachable "
+                        f"to guarantee 100% completion rate. "
+                        f"Graph may be disconnected or missing reverse edges."
+                    )
 
             path_pool.append(merged)
 
