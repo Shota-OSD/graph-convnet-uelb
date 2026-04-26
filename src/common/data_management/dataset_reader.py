@@ -1,6 +1,5 @@
 import time
 import numpy as np
-from sklearn.utils import shuffle
 import networkx as nx
 import csv
 import torch
@@ -27,40 +26,50 @@ class DatasetReader(object):
     """Iterator that reads UELB dataset files and yields mini-batches.
     """
 
-    def __init__(self, num_data, batch_size, mode, config):
+    def __init__(self, num_data, batch_size, mode, config, shuffle=False):
         """
         Args:
             num_data: Number of data samples
             batch_size: Batch size
             mode: 'train' / 'val' / 'test'
             config: 設定オブジェクト (dataset_name / data_root 参照に使用)
+            shuffle: エポック毎にサンプル順をシャッフルするか
         """
         self.num_data = num_data
         self.batch_size = batch_size
         self.mode = mode
+        self.shuffle = shuffle
         self.max_iter = (self.num_data // self.batch_size)
         self.data_dir = get_mode_dir(mode, config)
+        self._load_factors = self._load_exact_solutions()
+
+    def _load_exact_solutions(self):
+        """exact_solution.csv を全行読み込んでリストで返す。"""
+        exact_solution_file = str(self.data_dir / 'exact_solution.csv')
+        load_factors = []
+        with open(exact_solution_file, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                load_factors.append(float(row[0]))
+        return load_factors
 
     def __iter__(self):
-        """
-        self.max_iter = 5 で、self.batch_size = 10
-            1回目のループ: start_idx = 0, end_idx = 10
-            2回目のループ: start_idx = 10, end_idx = 20
-            3回目のループ: start_idx = 20, end_idx = 30
-            4回目のループ: start_idx = 30, end_idx = 40
-            5回目のループ: start_idx = 40, end_idx = 50
-        """
+        indices = np.arange(self.num_data)
+        if self.shuffle:
+            np.random.shuffle(indices)
         for batch in range(self.max_iter):
-            start_idx = batch * self.batch_size
-            end_idx = (batch + 1) * self.batch_size
-            yield self.process_batch(start_idx, end_idx)
+            start = batch * self.batch_size
+            end = (batch + 1) * self.batch_size
+            batch_indices = indices[start:end]
+            yield self.process_batch(batch_indices)
 
-    def process_batch(self, start_idx, end_idx):
+    def process_batch(self, batch_indices):
         """Helper function to convert raw lines into a mini-batch as a DotDict.
+
+        Args:
+            batch_indices: サンプルインデックスの配列
         """
-        # define file path
-        
-        batch_edges = []            # Adjacency matrix　
+        batch_edges = []            # Adjacency matrix
         batch_edges_capacity = []   # Capacity of edges
         batch_edges_target = []     # Binary classification targets (0/1)
         batch_nodes = []            # Node feature (Source or target of comodities?)
@@ -68,8 +77,7 @@ class DatasetReader(object):
         batch_commodities = []
         batch_load_factor = []
 
-        exact_solution_file = str(self.data_dir / 'exact_solution.csv')
-        for i in range(start_idx, end_idx):
+        for i in batch_indices:
             bucket = i - (i % 10)
             # define file path
             graph_file = str(self.data_dir / 'graph_file' / str(bucket) / f'graph_{i}.gml')
@@ -142,12 +150,7 @@ class DatasetReader(object):
             batch_commodities.append(commodity_list)
         
         # From list to tensors as a DotDict
-        batch_load_factor = []
-        with open(exact_solution_file, 'r') as exact_solution:
-            reader = csv.reader(exact_solution)
-            for i, row in enumerate(reader):
-                if start_idx <= i < end_idx:
-                    batch_load_factor.append(float(row[0]))
+        batch_load_factor = [self._load_factors[i] for i in batch_indices]
 
         batch = DotDict()
         batch.edges = np.stack(batch_edges, axis=0)                 # 隣接行列 (batch_size, num_nodes, num_nodes)
