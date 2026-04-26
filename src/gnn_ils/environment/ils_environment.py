@@ -105,16 +105,20 @@ class ILSEnvironment:
         return self._build_state()
 
     def _compute_initial_assignment(self) -> List[List[int]]:
-        """Dijkstra で初期パス割当 (容量無視)。全コモディティ到達を保証する。"""
+        """
+        Dijkstra で初期パス割当 (容量無視)。全コモディティ到達を保証する。
+
+        Note: build_path_pool() で到達不能コモディティは既に ValueError になるため、
+        ここでの Dijkstra 失敗はパスプールの先頭パスで代替する。
+        """
         assignment = []
-        for commodity in self.commodity_list:
+        for c_idx, commodity in enumerate(self.commodity_list):
             src, dst = int(commodity[0]), int(commodity[1])
             try:
                 path = list(nx.dijkstra_path(self.G, src, dst, weight='weight'))
             except (nx.NetworkXNoPath, nx.NodeNotFound):
-                # パスが存在しない場合はパスプールの先頭を使用
-                pool = self.path_pool[len(assignment)] if len(assignment) < len(self.path_pool) else []
-                path = pool[0] if pool else [src]
+                # build_path_pool() で到達保証済みなのでパスプール先頭を使用
+                path = self.path_pool[c_idx][0]
             assignment.append(path)
         return assignment
 
