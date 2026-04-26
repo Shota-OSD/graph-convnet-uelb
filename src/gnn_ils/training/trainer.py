@@ -278,10 +278,7 @@ class GNNILSTrainer:
         """1エポックの検証。"""
         self.model.eval()
 
-        samples_per_epoch = self.config.get('samples_per_epoch', None)
         num_batches = val_loader.max_iter
-        if samples_per_epoch is not None:
-            num_batches = min(num_batches, max(1, samples_per_epoch // 5))
 
         if num_batches == 0:
             return None
