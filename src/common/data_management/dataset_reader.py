@@ -26,7 +26,7 @@ class DatasetReader(object):
     """Iterator that reads UELB dataset files and yields mini-batches.
     """
 
-    def __init__(self, num_data, batch_size, mode, config, shuffle=False):
+    def __init__(self, num_data, batch_size, mode, config, shuffle=True):
         """
         Args:
             num_data: Number of data samples
