@@ -70,7 +70,7 @@ class KShortestPathFinder:
                     break
                     
             # K本の経路が見つからない場合は、見つかった分だけ返す
-            if len(ksps_list) < K:
+            if len(ksps_list) <= 1:
                 print(f"Warning: Only {len(ksps_list)} paths found for source {source} to target {target}")
                 
             return ksps_list
