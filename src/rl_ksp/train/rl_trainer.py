@@ -699,7 +699,7 @@ class RLTrainer:
         """
         # データセットリーダーを使用してバッチを取得（GCNと同じ方法）
         batch_size = 1
-        dataset = DatasetReader(self.config.get('num_test_data', 20), batch_size, 'test', self.config)
+        dataset = DatasetReader(self.config.get('num_test_data', 20), batch_size, 'test', self.config, shuffle=False)
         
         # 指定されたdata_idxのデータを取得
         for i, batch in enumerate(dataset):

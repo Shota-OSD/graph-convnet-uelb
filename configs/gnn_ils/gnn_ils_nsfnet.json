@@ -1,6 +1,6 @@
 {
-    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search ===",
-    "expt_name": "gnn_ils_base",
+    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet) ===",
+    "expt_name": "gnn_ils_nsfnet",
     "gpu_id": "0",
     "use_gpu": false,
 
@@ -8,15 +8,15 @@
     "solver_type": "pulp",
     "solver_time_limit": 60,
     "require_optimal": true,
-    "graph_model": "random",
+    "graph_model": "nsfnet",
     "num_train_data": 3200,
     "num_val_data": 320,
     "num_test_data": 320,
     "num_nodes": 14,
     "num_commodities": 5,
     "sample_size": 5,
-    "capacity_lower": 1000,
-    "capacity_higher": 10000,
+    "capacity_lower": 500,
+    "capacity_higher": 2500,
     "demand_lower": 5,
     "demand_higher": 500,
 
@@ -53,7 +53,7 @@
     "reward_mode": "shared",
 
     "_comment_training": "=== Training Configuration ===",
-    "max_epochs": 50,
+    "max_epochs": 10,
     "val_every": 5,
     "batch_size": 1,
     "_batch_size_note": "ILS は1サンプルずつ改善ループを回す",
