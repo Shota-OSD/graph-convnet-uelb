@@ -43,6 +43,7 @@ class ILSEnvironment:
         self.perturbation_prob = config.get('perturbation_prob', 0.1)
         self.max_candidate_paths = config.get('max_candidate_paths', 15)
         self.reward_mode = config.get('reward_mode', 'shared')
+        self.reward_scale = config.get('reward_scale', 100.0)
 
         self.path_pool_manager = PathPoolManager(config)
 
@@ -197,9 +198,9 @@ class ILSEnvironment:
         """
         報酬計算: 改善時は正、悪化時は負。
 
-        shared モード: reward = -(new_lf - old_lf)
+        shared モード: reward = -(new_lf - old_lf) * reward_scale
         """
-        return -(new_load_factor - old_load_factor)
+        return -(new_load_factor - old_load_factor) * self.reward_scale
 
     def _check_done(self) -> bool:
         """終了条件: max_iterations 到達 or no_improve_patience 超過。"""
