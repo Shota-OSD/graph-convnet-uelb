@@ -30,7 +30,7 @@
     "commodity_selector_mlp_layers": 2,
     "path_selector_mlp_layers": 2,
     "value_head_mlp_layers": 3,
-    "use_graph_embedding_value": false,
+    "use_graph_embedding_value": true,
 
     "_comment_path_pool": "=== Path Pool Configuration ===",
     "K": 10,
@@ -47,10 +47,11 @@
     "entropy_weight_l2": 0.003,
     "_entropy_note": "L1 (C択) は探索空間が小さいため大きめ、L2 (パス択) は小さめ",
     "value_loss_weight": 0.5,
-    "gamma": 0.99,
+    "gamma": 0.95,
     "normalize_advantages": true,
     "grad_clip_norm": 1.0,
     "reward_mode": "shared",
+    "reward_scale": 100.0,
 
     "_comment_training": "=== Training Configuration ===",
     "max_epochs": 50,
