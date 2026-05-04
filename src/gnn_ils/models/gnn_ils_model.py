@@ -35,6 +35,8 @@ class GNNILSModel(nn.Module):
         super().__init__()
         self.dtypeFloat = dtypeFloat
         self.dtypeLong = dtypeLong
+        self.demand_max = config.get('demand_higher', 500)
+        self.path_aggregation = config.get('path_aggregation', 'mean')
 
         self.encoder = GNNILSEncoder(config)
 
@@ -78,9 +80,10 @@ class GNNILSModel(nn.Module):
 
     def select_commodity(
         self,
-        node_features: Tensor,   # [B, V, C, H]
-        graph_embedding: Tensor, # [B, H]
-        commodity_mask: Tensor,  # [B, C]
+        edge_features: Tensor,                        # [B, V, V, C, H]
+        current_assignment: List[List[List[int]]],     # [B][C][path_length]
+        demands: Tensor,                               # [B, C]
+        commodity_mask: Tensor,                        # [B, C]
         deterministic: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """
@@ -91,8 +94,11 @@ class GNNILSModel(nn.Module):
             log_prob:           [B] - 選択されたコモディティの対数確率
             entropy:            [B]
         """
+        path_commodity_features = self._build_commodity_path_features(
+            edge_features, current_assignment, demands
+        )
         action_probs, log_probs_all, entropy = self.commodity_selector(
-            node_features, graph_embedding, commodity_mask
+            path_commodity_features, commodity_mask
         )
 
         if deterministic:
@@ -146,3 +152,37 @@ class GNNILSModel(nn.Module):
             state_value: [B]
         """
         return self.value_head(node_features, graph_embedding)
+
+    def _build_commodity_path_features(
+        self,
+        edge_features: Tensor,                     # [B, V, V, C, H]
+        current_assignment: List[List[List[int]]],  # [B][C][path_length]
+        demands: Tensor,                            # [B, C]
+    ) -> Tensor:
+        """
+        各コモディティの現パス上 edge_features を集約し、
+        正規化 demand と結合して [B, C, H+1] を返す。
+        """
+        B, V, _, C, H = edge_features.shape
+        device = edge_features.device
+
+        path_feats = torch.zeros(B, C, H, device=device)
+        for b in range(B):
+            for c in range(C):
+                path = current_assignment[b][c]
+                if len(path) < 2:
+                    continue
+                edge_list = []
+                for i in range(len(path) - 1):
+                    u, v = path[i], path[i + 1]
+                    edge_list.append(edge_features[b, u, v, c, :])
+                stacked = torch.stack(edge_list)  # [num_edges, H]
+                if self.path_aggregation == 'max':
+                    path_feats[b, c] = stacked.max(dim=0).values
+                else:
+                    path_feats[b, c] = stacked.mean(dim=0)
+
+        # demand 正規化: [B, C] → [B, C, 1]
+        demand_norm = (demands / self.demand_max).unsqueeze(-1)
+
+        return torch.cat([path_feats, demand_norm], dim=-1)  # [B, C, H+1]
