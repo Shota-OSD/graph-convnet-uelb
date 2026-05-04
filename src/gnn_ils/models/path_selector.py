@@ -12,22 +12,25 @@ class PathSelector(nn.Module):
     Level2 Policy: パス選択。
 
     選択されたコモディティに対し、候補パスプールから最適なパスを選択する。
-    パス特徴量はパス上のエッジ特徴量の mean-pooling で表現する。
+    各候補パスについて concat(cand_feat [H], current_feat [H], demand_norm [1]) -> [2H+1]
+    を MLP に通してスコアを計算する。
 
     入力処理:
-        各候補パスについて: edge_features[b, u, v, c, :] を mean-pool → [H]
-        path_feat [H] + graph_embedding [H] → concat [2H] → MLP → スコア
+        各候補パスについて: edge_features[b, u, v, c, :] を aggregation → [H]
+        concat(cand_feat [H], current_feat [H], demand_norm [1]) → [2H+1] → MLP → スコア
         masked softmax → probabilities [B, max_paths]
     """
 
-    def __init__(self, hidden_dim: int, max_paths: int, mlp_layers: int = 2):
+    def __init__(self, hidden_dim: int, max_paths: int, mlp_layers: int = 2,
+                 path_aggregation: str = 'mean'):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.max_paths = max_paths
+        self.path_aggregation = path_aggregation
 
         hidden_dims = [128] * (mlp_layers - 1)
         self.path_score_mlp = MLP(
-            hidden_dim * 2,
+            hidden_dim * 2 + 1,
             1,
             num_layers=mlp_layers,
             hidden_dims=hidden_dims,
@@ -36,9 +39,10 @@ class PathSelector(nn.Module):
     def forward(
         self,
         edge_features: Tensor,                       # [B, V, V, C, H]
-        graph_embedding: Tensor,                     # [B, H]
         selected_commodity: Tensor,                  # [B] - int
         candidate_paths: List[List[List[int]]],      # [B][P_c][path_length]
+        current_paths: List[List[int]],              # [B][path_length] (選択コモディティの現パス)
+        demands: Tensor,                             # [B] (正規化済み demand)
         path_mask: Tensor,                           # [B, max_paths] - bool
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """
@@ -48,19 +52,20 @@ class PathSelector(nn.Module):
             entropy:      [B]
         """
         B = edge_features.shape[0]
-        H = self.hidden_dim
         scores = torch.full((B, self.max_paths), float('-inf'), device=edge_features.device)
 
         for b in range(B):
             c_idx = selected_commodity[b].item()
             paths = candidate_paths[b]  # List[List[int]]
-            g_emb = graph_embedding[b]  # [H]
+            # 現パスの特徴量を1回だけ計算
+            current_feat = self._encode_path(edge_features, current_paths[b], c_idx, b)  # [H]
+            demand_val = demands[b].unsqueeze(0)  # [1]
 
             for p_idx, path in enumerate(paths):
                 if p_idx >= self.max_paths:
                     break
-                path_feat = self._encode_path(edge_features, path, c_idx, b)  # [H]
-                inp = torch.cat([path_feat, g_emb], dim=0).unsqueeze(0)       # [1, 2H]
+                cand_feat = self._encode_path(edge_features, path, c_idx, b)  # [H]
+                inp = torch.cat([cand_feat, current_feat, demand_val], dim=0).unsqueeze(0)  # [1, 2H+1]
                 scores[b, p_idx] = self.path_score_mlp(inp).squeeze()
 
         # パスマスク適用
@@ -96,4 +101,7 @@ class PathSelector(nn.Module):
             u, v = path[i], path[i + 1]
             edge_feats.append(edge_features[batch_idx, u, v, commodity_idx, :])
 
-        return torch.stack(edge_feats).mean(dim=0)  # [H]
+        stacked = torch.stack(edge_feats)  # [num_edges, H]
+        if self.path_aggregation == 'max':
+            return stacked.max(dim=0).values
+        return stacked.mean(dim=0)  # [H]
