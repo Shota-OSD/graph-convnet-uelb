@@ -11,13 +11,12 @@ class CommoditySelector(nn.Module):
     """
     Level1 Policy: コモディティ選択。
 
-    各コモディティのノード集約特徴量 + グラフ埋め込みから
+    各コモディティの現パス上エッジ特徴量の mean-pooling + demand から
     交換対象コモディティを選択する。
 
     入力処理:
-        node_features [B, V, C, H] → mean over V → [B, C, H]
-        graph_embedding [B, H] → expand → [B, C, H]
-        concat → [B, C, 2H] → MLP per commodity → scores [B, C]
+        path_commodity_features [B, C, H+1] (呼び出し側で構築済み)
+        → MLP per commodity → scores [B, C]
         masked softmax → probabilities [B, C]
     """
 
@@ -28,7 +27,7 @@ class CommoditySelector(nn.Module):
 
         hidden_dims = [128] * (mlp_layers - 1)
         self.commodity_mlp = MLP(
-            hidden_dim * 2,
+            hidden_dim + 1,
             1,
             num_layers=mlp_layers,
             hidden_dims=hidden_dims,
@@ -36,9 +35,8 @@ class CommoditySelector(nn.Module):
 
     def forward(
         self,
-        node_features: Tensor,   # [B, V, C, H]
-        graph_embedding: Tensor, # [B, H]
-        commodity_mask: Tensor,  # [B, C] - bool (True = 交換可能)
+        path_commodity_features: Tensor,  # [B, C, H+1]
+        commodity_mask: Tensor,           # [B, C] - bool (True = 交換可能)
     ) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Returns:
@@ -48,17 +46,8 @@ class CommoditySelector(nn.Module):
         """
         B, C = commodity_mask.shape
 
-        # コモディティ毎のノード集約特徴量: [B, V, C, H] → [B, C, H]
-        commodity_feats = node_features.mean(dim=1)  # [B, C, H]
-
-        # グラフ埋め込みをコモディティ次元に展開: [B, H] → [B, C, H]
-        graph_exp = graph_embedding.unsqueeze(1).expand(-1, C, -1)
-
-        # 結合: [B, C, 2H]
-        combined = torch.cat([commodity_feats, graph_exp], dim=-1)
-
-        # MLP でスコア算出: [B*C, 2H] → [B*C, 1] → [B, C]
-        scores = self.commodity_mlp(combined.view(B * C, -1)).view(B, C)
+        # MLP でスコア算出: [B*C, H+1] → [B*C, 1] → [B, C]
+        scores = self.commodity_mlp(path_commodity_features.view(B * C, -1)).view(B, C)
 
         # マスク適用 (交換不可コモディティを -inf に)
         scores = scores.masked_fill(~commodity_mask, float('-inf'))

@@ -154,8 +154,11 @@ class ILSA2CStrategy:
             state_value = self.model.get_value(node_features, graph_embedding)
 
             # Level1: コモディティ選択
+            demands = state['x_commodities'][:, :, 2].to(self.device)  # [1, C]
+            current_assignment_batch = [state['current_assignment']]     # [1][C][path_length]
             selected_commodity, log_prob_l1, entropy_l1 = self.model.select_commodity(
-                node_features, graph_embedding, commodity_mask, deterministic=deterministic
+                edge_features, current_assignment_batch, demands,
+                commodity_mask, deterministic=deterministic
             )
             c_idx = selected_commodity[0].item()
 
