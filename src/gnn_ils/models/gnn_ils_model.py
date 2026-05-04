@@ -54,6 +54,7 @@ class GNNILSModel(nn.Module):
             hidden_dim=hidden_dim,
             max_paths=max_paths,
             mlp_layers=config.get('path_selector_mlp_layers', 2),
+            path_aggregation=self.path_aggregation,
         )
         self.value_head = ILSValueHead(
             hidden_dim=hidden_dim,
@@ -113,9 +114,10 @@ class GNNILSModel(nn.Module):
     def select_path(
         self,
         edge_features: Tensor,                   # [B, V, V, C, H]
-        graph_embedding: Tensor,                 # [B, H]
         selected_commodity: Tensor,              # [B]
         candidate_paths: List[List[List[int]]],  # [B][P_c][path_length]
+        current_paths: List[List[int]],          # [B][path_length] (選択コモディティの現パス)
+        demands: Tensor,                         # [B] (生の demand、正規化はモデル内で行う)
         path_mask: Tensor,                       # [B, max_paths]
         deterministic: bool = False,
     ) -> Tuple[Tensor, Tensor, Tensor]:
@@ -127,8 +129,9 @@ class GNNILSModel(nn.Module):
             log_prob:          [B]
             entropy:           [B]
         """
+        demands_norm = demands / self.demand_max
         action_probs, log_probs_all, entropy = self.path_selector(
-            edge_features, graph_embedding, selected_commodity, candidate_paths, path_mask
+            edge_features, selected_commodity, candidate_paths, current_paths, demands_norm, path_mask
         )
 
         if deterministic:

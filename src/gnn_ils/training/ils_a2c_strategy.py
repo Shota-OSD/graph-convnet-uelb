@@ -166,9 +166,12 @@ class ILSA2CStrategy:
             path_mask = self.env.get_path_mask(c_idx).to(self.device)
             candidate_paths = [state['path_pool'][c_idx]]  # [1][P_c][path_length]
 
+            current_paths_batch = [state['current_assignment'][c_idx]]  # [1][path_length]
+            demand_c = demands[:, c_idx]  # [1] (生の demand、正規化はモデル内で行う)
             selected_path_idx, log_prob_l2, entropy_l2 = self.model.select_path(
-                edge_features, graph_embedding, selected_commodity,
-                candidate_paths, path_mask, deterministic=deterministic
+                edge_features, selected_commodity,
+                candidate_paths, current_paths_batch, demand_c,
+                path_mask, deterministic=deterministic
             )
 
             # 環境を1ステップ進める
