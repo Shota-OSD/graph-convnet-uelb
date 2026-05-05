@@ -33,11 +33,22 @@ class GNNILSTrainer:
         self.model = self._instantiate_model()
         self.strategy = ILSA2CStrategy(self.model, config)
 
-        print(f"✓ Using 2-Level A2C Training Strategy (GNN-ILS)")
+        use_ppo = config.get('use_ppo', False)
+        algo_name = "PPO" if use_ppo else "A2C"
+        print(f"✓ Using 2-Level {algo_name} Training Strategy (GNN-ILS)")
         print(f"  - entropy_weight_l1: {config.get('entropy_weight_l1', 0.02)}")
         print(f"  - entropy_weight_l2: {config.get('entropy_weight_l2', 0.01)}")
         print(f"  - value_loss_weight: {config.get('value_loss_weight', 0.5)}")
         print(f"  - max_iterations:    {config.get('max_iterations', 50)}")
+        if use_ppo:
+            print(f"  - ppo_clip_eps:      {config.get('ppo_clip_eps', 0.2)}")
+            print(f"  - ppo_update_epochs: {config.get('ppo_update_epochs', 1)}")
+        warmup = config.get('warmup_epochs', 0)
+        if warmup > 0:
+            print(f"  - warmup_epochs:     {warmup}")
+        bias_init = config.get('value_head_bias_init', 0.0)
+        if bias_init != 0.0:
+            print(f"  - value_head_bias:   {bias_init}")
 
         checkpoint_dir_cfg = config.get('checkpoint_dir')
         if checkpoint_dir_cfg:
@@ -73,6 +84,12 @@ class GNNILSTrainer:
             'train_critic_loss': [],
             'train_advantage_mean': [],
             'train_advantage_std': [],
+            'train_ratio_l1_mean': [],
+            'train_ratio_l2_mean': [],
+            'train_clip_frac_l1': [],
+            'train_clip_frac_l2': [],
+            'train_ratio_l1_max': [],
+            'train_ratio_l2_max': [],
             'val_load_factor': [],
             'val_improvement': [],
             'val_num_iterations': [],
@@ -240,6 +257,12 @@ class GNNILSTrainer:
             'grad_norm_l2': [],
             'advantage_mean': [],
             'advantage_std': [],
+            'ratio_l1_mean': [],
+            'ratio_l2_mean': [],
+            'clip_frac_l1': [],
+            'clip_frac_l2': [],
+            'ratio_l1_max': [],
+            'ratio_l2_max': [],
             'mean_reward': [],
             'final_load_factor': [],
             'improvement': [],
@@ -247,6 +270,12 @@ class GNNILSTrainer:
             'approximation_ratio': [],
             'best_iteration': [],
         }
+
+        self.strategy.set_epoch(epoch)
+
+        warmup_epochs = self.config.get('warmup_epochs', 0)
+        if epoch < warmup_epochs:
+            print(f"  [Warm-up {epoch + 1}/{warmup_epochs}] Critic only")
 
         dataset_iter = iter(train_loader)
 
@@ -386,6 +415,12 @@ class GNNILSTrainer:
         self.training_history['train_critic_loss'].append(train_metrics.get('critic_loss', 0.0))
         self.training_history['train_advantage_mean'].append(train_metrics.get('advantage_mean', 0.0))
         self.training_history['train_advantage_std'].append(train_metrics.get('advantage_std', 0.0))
+        self.training_history['train_ratio_l1_mean'].append(train_metrics.get('ratio_l1_mean', 0.0))
+        self.training_history['train_ratio_l2_mean'].append(train_metrics.get('ratio_l2_mean', 0.0))
+        self.training_history['train_clip_frac_l1'].append(train_metrics.get('clip_frac_l1', 0.0))
+        self.training_history['train_clip_frac_l2'].append(train_metrics.get('clip_frac_l2', 0.0))
+        self.training_history['train_ratio_l1_max'].append(train_metrics.get('ratio_l1_max', 0.0))
+        self.training_history['train_ratio_l2_max'].append(train_metrics.get('ratio_l2_max', 0.0))
         self.training_history['learning_rate'].append(lr)
         self.training_history['epoch_times'].append(epoch_time)
 
@@ -504,9 +539,10 @@ class GNNILSTrainer:
             f.write("=" * 50 + "\n")
             diag_header = (f"{'Epoch':<8}{'ActorL1':<10}{'ActorL2':<10}{'CriticL':<10}"
                            f"{'EntL1':<8}{'EntL2':<8}{'AdvMean':<10}{'AdvStd':<10}"
-                           f"{'GradL1':<10}{'GradL2':<10}\n")
+                           f"{'GradL1':<10}{'GradL2':<10}"
+                           f"{'RatL1':<8}{'RatL2':<8}{'RmxL1':<8}{'RmxL2':<8}{'ClpL1':<8}{'ClpL2':<8}\n")
             f.write(diag_header)
-            f.write("-" * 94 + "\n")
+            f.write("-" * 142 + "\n")
 
             def _h(key, i): return self.training_history[key][i] if i < len(self.training_history[key]) else 0.0
 
@@ -521,10 +557,16 @@ class GNNILSTrainer:
                     f"{_h('train_advantage_mean',i):<10.4f}"
                     f"{_h('train_advantage_std', i):<10.4f}"
                     f"{_h('train_grad_norm_l1',  i):<10.4f}"
-                    f"{_h('train_grad_norm_l2',  i):<10.4f}\n"
+                    f"{_h('train_grad_norm_l2',  i):<10.4f}"
+                    f"{_h('train_ratio_l1_mean', i):<8.4f}"
+                    f"{_h('train_ratio_l2_mean', i):<8.4f}"
+                    f"{_h('train_ratio_l1_max',  i):<8.4f}"
+                    f"{_h('train_ratio_l2_max',  i):<8.4f}"
+                    f"{_h('train_clip_frac_l1',  i):<8.4f}"
+                    f"{_h('train_clip_frac_l2',  i):<8.4f}\n"
                 )
 
-            f.write("-" * 94 + "\n")
+            f.write("-" * 142 + "\n")
             f.write("\n")
 
             # Detailed val epoch results table

@@ -42,7 +42,17 @@
     "no_improve_patience": 10,
     "perturbation_prob": 0.1,
 
-    "_comment_rl": "=== RL Algorithm (A2C) ===",
+    "_comment_rl": "=== RL Algorithm (A2C / PPO) ===",
+    "_comment_critic_stability": "=== Critic Stability ===",
+    "value_head_bias_init": -2.0,
+    "warmup_epochs": 3,
+
+    "_comment_ppo": "=== PPO Configuration ===",
+    "use_ppo": false,
+    "ppo_clip_eps": 0.2,
+    "ppo_update_epochs": 1,
+    "_ppo_update_epochs_note": "start=1, increase if clip_frac stays < 0.1",
+
     "entropy_weight_l1": 0.005,
     "entropy_weight_l2": 0.003,
     "_entropy_note": "L1 (C択) は探索空間が小さいため大きめ、L2 (パス択) は小さめ",

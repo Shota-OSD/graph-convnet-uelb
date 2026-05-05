@@ -62,6 +62,7 @@ class GNNILSModel(nn.Module):
             num_commodities=num_commodities,
             mlp_layers=config.get('value_head_mlp_layers', 3),
             use_graph_embedding=config.get('use_graph_embedding_value', False),
+            bias_init_value=config.get('value_head_bias_init', 0.0),
         )
 
     def encode(
