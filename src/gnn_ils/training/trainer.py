@@ -88,6 +88,8 @@ class GNNILSTrainer:
             'train_ratio_l2_mean': [],
             'train_clip_frac_l1': [],
             'train_clip_frac_l2': [],
+            'train_ratio_l1_max': [],
+            'train_ratio_l2_max': [],
             'val_load_factor': [],
             'val_improvement': [],
             'val_num_iterations': [],
@@ -259,6 +261,8 @@ class GNNILSTrainer:
             'ratio_l2_mean': [],
             'clip_frac_l1': [],
             'clip_frac_l2': [],
+            'ratio_l1_max': [],
+            'ratio_l2_max': [],
             'mean_reward': [],
             'final_load_factor': [],
             'improvement': [],
@@ -268,6 +272,10 @@ class GNNILSTrainer:
         }
 
         self.strategy.set_epoch(epoch)
+
+        warmup_epochs = self.config.get('warmup_epochs', 0)
+        if epoch < warmup_epochs:
+            print(f"  [Warm-up {epoch + 1}/{warmup_epochs}] Critic only")
 
         dataset_iter = iter(train_loader)
 
@@ -411,6 +419,8 @@ class GNNILSTrainer:
         self.training_history['train_ratio_l2_mean'].append(train_metrics.get('ratio_l2_mean', 0.0))
         self.training_history['train_clip_frac_l1'].append(train_metrics.get('clip_frac_l1', 0.0))
         self.training_history['train_clip_frac_l2'].append(train_metrics.get('clip_frac_l2', 0.0))
+        self.training_history['train_ratio_l1_max'].append(train_metrics.get('ratio_l1_max', 0.0))
+        self.training_history['train_ratio_l2_max'].append(train_metrics.get('ratio_l2_max', 0.0))
         self.training_history['learning_rate'].append(lr)
         self.training_history['epoch_times'].append(epoch_time)
 
@@ -530,9 +540,9 @@ class GNNILSTrainer:
             diag_header = (f"{'Epoch':<8}{'ActorL1':<10}{'ActorL2':<10}{'CriticL':<10}"
                            f"{'EntL1':<8}{'EntL2':<8}{'AdvMean':<10}{'AdvStd':<10}"
                            f"{'GradL1':<10}{'GradL2':<10}"
-                           f"{'RatL1':<8}{'RatL2':<8}{'ClpL1':<8}{'ClpL2':<8}\n")
+                           f"{'RatL1':<8}{'RatL2':<8}{'RmxL1':<8}{'RmxL2':<8}{'ClpL1':<8}{'ClpL2':<8}\n")
             f.write(diag_header)
-            f.write("-" * 126 + "\n")
+            f.write("-" * 142 + "\n")
 
             def _h(key, i): return self.training_history[key][i] if i < len(self.training_history[key]) else 0.0
 
@@ -550,11 +560,13 @@ class GNNILSTrainer:
                     f"{_h('train_grad_norm_l2',  i):<10.4f}"
                     f"{_h('train_ratio_l1_mean', i):<8.4f}"
                     f"{_h('train_ratio_l2_mean', i):<8.4f}"
+                    f"{_h('train_ratio_l1_max',  i):<8.4f}"
+                    f"{_h('train_ratio_l2_max',  i):<8.4f}"
                     f"{_h('train_clip_frac_l1',  i):<8.4f}"
                     f"{_h('train_clip_frac_l2',  i):<8.4f}\n"
                 )
 
-            f.write("-" * 126 + "\n")
+            f.write("-" * 142 + "\n")
             f.write("\n")
 
             # Detailed val epoch results table

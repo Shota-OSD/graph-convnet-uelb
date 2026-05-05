@@ -137,8 +137,12 @@ class ILSA2CStrategy:
         returns_t = torch.tensor(returns, dtype=torch.float32, device=self.device)
 
         last_loss_components = None
+        first_loss_components = None
 
-        for ppo_epoch in range(self.ppo_update_epochs):
+        # Warm-up 中は Critic only なので多回更新不要
+        update_epochs = 1 if self.current_epoch < self.warmup_epochs else self.ppo_update_epochs
+
+        for ppo_epoch in range(update_epochs):
             # 現在のポリシーで re-forward
             (log_probs_l1_new, log_probs_l2_new,
              entropies_l1, entropies_l2, state_values) = self._recompute_log_probs_and_values(trajectory)
@@ -156,7 +160,14 @@ class ILSA2CStrategy:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
             self.optimizer.step()
 
+            if first_loss_components is None:
+                first_loss_components = loss_components
             last_loss_components = loss_components
+
+        # 初回と最終の ratio を比較できるようにする
+        if update_epochs > 1 and first_loss_components is not None:
+            last_loss_components['ratio_l1_mean_first'] = first_loss_components.get('ratio_l1_mean', 0.0)
+            last_loss_components['ratio_l2_mean_first'] = first_loss_components.get('ratio_l2_mean', 0.0)
 
         return self._build_train_metrics(trajectory, last_loss_components)
 
@@ -417,20 +428,24 @@ class ILSA2CStrategy:
         entropy_l1_mean = entropies_l1.mean()
         entropy_l2_mean = entropies_l2.mean()
 
-        # Warm-up: Actor 損失を無効化
+        # Warm-up: Actor 損失 + エントロピー項を無効化 (Critic only)
         if is_warmup:
             actor_l1_loss_effective = torch.tensor(0.0, device=self.device)
             actor_l2_loss_effective = torch.tensor(0.0, device=self.device)
+            entropy_l1_effective = torch.tensor(0.0, device=self.device)
+            entropy_l2_effective = torch.tensor(0.0, device=self.device)
         else:
             actor_l1_loss_effective = actor_l1_loss
             actor_l2_loss_effective = actor_l2_loss
+            entropy_l1_effective = entropy_l1_mean
+            entropy_l2_effective = entropy_l2_mean
 
         total_loss = (
             actor_l1_loss_effective
             + actor_l2_loss_effective
             + self.value_loss_weight * critic_loss
-            - self.entropy_weight_l1 * entropy_l1_mean
-            - self.entropy_weight_l2 * entropy_l2_mean
+            - self.entropy_weight_l1 * entropy_l1_effective
+            - self.entropy_weight_l2 * entropy_l2_effective
         )
 
         # 診断メトリクス
@@ -450,6 +465,8 @@ class ILSA2CStrategy:
             'is_warmup': is_warmup,
             'ratio_l1_mean': ratio_l1.mean().item(),
             'ratio_l2_mean': ratio_l2.mean().item(),
+            'ratio_l1_max': ratio_l1.max().item(),
+            'ratio_l2_max': ratio_l2.max().item(),
             'clip_frac_l1': clip_frac_l1,
             'clip_frac_l2': clip_frac_l2,
         }
@@ -504,20 +521,24 @@ class ILSA2CStrategy:
         entropy_l1_mean = entropies_l1.mean()
         entropy_l2_mean = entropies_l2.mean()
 
-        # Warm-up: Actor 損失を無効化
+        # Warm-up: Actor 損失 + エントロピー項を無効化 (Critic only)
         if is_warmup:
             actor_l1_loss_effective = torch.tensor(0.0, device=self.device)
             actor_l2_loss_effective = torch.tensor(0.0, device=self.device)
+            entropy_l1_effective = torch.tensor(0.0, device=self.device)
+            entropy_l2_effective = torch.tensor(0.0, device=self.device)
         else:
             actor_l1_loss_effective = actor_l1_loss
             actor_l2_loss_effective = actor_l2_loss
+            entropy_l1_effective = entropy_l1_mean
+            entropy_l2_effective = entropy_l2_mean
 
         total_loss = (
             actor_l1_loss_effective
             + actor_l2_loss_effective
             + self.value_loss_weight * critic_loss
-            - self.entropy_weight_l1 * entropy_l1_mean
-            - self.entropy_weight_l2 * entropy_l2_mean
+            - self.entropy_weight_l1 * entropy_l1_effective
+            - self.entropy_weight_l2 * entropy_l2_effective
         )
 
         l1_params = list(self.model.commodity_selector.commodity_mlp.parameters())

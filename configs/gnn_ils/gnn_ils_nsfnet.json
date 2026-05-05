@@ -50,7 +50,8 @@
     "_comment_ppo": "=== PPO Configuration ===",
     "use_ppo": false,
     "ppo_clip_eps": 0.2,
-    "ppo_update_epochs": 4,
+    "ppo_update_epochs": 1,
+    "_ppo_update_epochs_note": "start=1, increase if clip_frac stays < 0.1",
 
     "entropy_weight_l1": 0.005,
     "entropy_weight_l2": 0.003,
