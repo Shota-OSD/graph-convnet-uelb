@@ -42,7 +42,7 @@ class GNNILSTrainer:
         print(f"  - max_iterations:    {config.get('max_iterations', 50)}")
         if use_ppo:
             print(f"  - ppo_clip_eps:      {config.get('ppo_clip_eps', 0.2)}")
-            print(f"  - ppo_update_epochs: {config.get('ppo_update_epochs', 4)}")
+            print(f"  - ppo_update_epochs: {config.get('ppo_update_epochs', 1)}")
         warmup = config.get('warmup_epochs', 0)
         if warmup > 0:
             print(f"  - warmup_epochs:     {warmup}")

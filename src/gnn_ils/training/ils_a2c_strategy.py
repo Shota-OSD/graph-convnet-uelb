@@ -54,7 +54,7 @@ class ILSA2CStrategy:
         # PPO
         self.use_ppo = config.get('use_ppo', False)
         self.ppo_clip_eps = config.get('ppo_clip_eps', 0.2)
-        self.ppo_update_epochs = config.get('ppo_update_epochs', 4)
+        self.ppo_update_epochs = config.get('ppo_update_epochs', 1)
 
         self.optimizer = torch.optim.Adam(
             model.parameters(),
