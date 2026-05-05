@@ -52,21 +52,25 @@ class PathSelector(nn.Module):
             entropy:      [B]
         """
         B = edge_features.shape[0]
-        scores = torch.full((B, self.max_paths), float('-inf'), device=edge_features.device)
+        neg_inf = torch.tensor(float('-inf'), device=edge_features.device)
 
+        batch_scores = []
         for b in range(B):
             c_idx = selected_commodity[b].item()
             paths = candidate_paths[b]  # List[List[int]]
-            # 現パスの特徴量を1回だけ計算
             current_feat = self._encode_path(edge_features, current_paths[b], c_idx, b)  # [H]
             demand_val = demands[b].unsqueeze(0)  # [1]
 
-            for p_idx, path in enumerate(paths):
-                if p_idx >= self.max_paths:
-                    break
-                cand_feat = self._encode_path(edge_features, path, c_idx, b)  # [H]
-                inp = torch.cat([cand_feat, current_feat, demand_val], dim=0).unsqueeze(0)  # [1, 2H+1]
-                scores[b, p_idx] = self.path_score_mlp(inp).squeeze()
+            path_scores = []
+            for p_idx in range(self.max_paths):
+                if p_idx < len(paths):
+                    cand_feat = self._encode_path(edge_features, paths[p_idx], c_idx, b)  # [H]
+                    inp = torch.cat([cand_feat, current_feat, demand_val], dim=0).unsqueeze(0)  # [1, 2H+1]
+                    path_scores.append(self.path_score_mlp(inp).squeeze())
+                else:
+                    path_scores.append(neg_inf)
+            batch_scores.append(torch.stack(path_scores))
+        scores = torch.stack(batch_scores)  # [B, max_paths] - maintains grad_fn
 
         # パスマスク適用
         scores = scores.masked_fill(~path_mask, float('-inf'))

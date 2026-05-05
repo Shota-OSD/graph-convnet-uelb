@@ -64,6 +64,15 @@ class GNNILSTrainer:
             'train_num_iterations': [],
             'train_approx_ratio': [],
             'train_best_iteration': [],
+            'train_actor_l1_loss': [],
+            'train_actor_l2_loss': [],
+            'train_entropy_l1': [],
+            'train_entropy_l2': [],
+            'train_grad_norm_l1': [],
+            'train_grad_norm_l2': [],
+            'train_critic_loss': [],
+            'train_advantage_mean': [],
+            'train_advantage_std': [],
             'val_load_factor': [],
             'val_improvement': [],
             'val_num_iterations': [],
@@ -225,6 +234,12 @@ class GNNILSTrainer:
             'actor_l1_loss': [],
             'actor_l2_loss': [],
             'critic_loss': [],
+            'entropy_l1': [],
+            'entropy_l2': [],
+            'grad_norm_l1': [],
+            'grad_norm_l2': [],
+            'advantage_mean': [],
+            'advantage_std': [],
             'mean_reward': [],
             'final_load_factor': [],
             'improvement': [],
@@ -362,6 +377,15 @@ class GNNILSTrainer:
         self.training_history['train_num_iterations'].append(train_metrics.get('num_iterations', 0.0))
         self.training_history['train_approx_ratio'].append(train_metrics.get('approximation_ratio'))
         self.training_history['train_best_iteration'].append(train_metrics.get('best_iteration', 0.0))
+        self.training_history['train_actor_l1_loss'].append(train_metrics.get('actor_l1_loss', 0.0))
+        self.training_history['train_actor_l2_loss'].append(train_metrics.get('actor_l2_loss', 0.0))
+        self.training_history['train_entropy_l1'].append(train_metrics.get('entropy_l1', 0.0))
+        self.training_history['train_entropy_l2'].append(train_metrics.get('entropy_l2', 0.0))
+        self.training_history['train_grad_norm_l1'].append(train_metrics.get('grad_norm_l1', 0.0))
+        self.training_history['train_grad_norm_l2'].append(train_metrics.get('grad_norm_l2', 0.0))
+        self.training_history['train_critic_loss'].append(train_metrics.get('critic_loss', 0.0))
+        self.training_history['train_advantage_mean'].append(train_metrics.get('advantage_mean', 0.0))
+        self.training_history['train_advantage_std'].append(train_metrics.get('advantage_std', 0.0))
         self.training_history['learning_rate'].append(lr)
         self.training_history['epoch_times'].append(epoch_time)
 
@@ -453,6 +477,7 @@ class GNNILSTrainer:
             f.write("=" * 50 + "\n")
             f.write("DETAILED EPOCH RESULTS (TRAIN)\n")
             f.write("=" * 50 + "\n")
+            # メインテーブル
             header = (f"{'Epoch':<8}{'Loss':<12}{'Reward':<12}{'LF':<10}"
                       f"{'Improve%':<12}{'Iters':<8}{'Approx%':<12}{'Time(s)':<10}\n")
             f.write(header)
@@ -471,6 +496,35 @@ class GNNILSTrainer:
                         f"{improve:<12.1f}{iters:<8.1f}{approx_str:<12}{t:<10.2f}\n")
 
             f.write("-" * 84 + "\n")
+            f.write("\n")
+
+            # 診断テーブル
+            f.write("=" * 50 + "\n")
+            f.write("DETAILED EPOCH RESULTS (TRAIN DIAGNOSTICS)\n")
+            f.write("=" * 50 + "\n")
+            diag_header = (f"{'Epoch':<8}{'ActorL1':<10}{'ActorL2':<10}{'CriticL':<10}"
+                           f"{'EntL1':<8}{'EntL2':<8}{'AdvMean':<10}{'AdvStd':<10}"
+                           f"{'GradL1':<10}{'GradL2':<10}\n")
+            f.write(diag_header)
+            f.write("-" * 94 + "\n")
+
+            def _h(key, i): return self.training_history[key][i] if i < len(self.training_history[key]) else 0.0
+
+            for i in range(len(self.training_history['train_loss'])):
+                f.write(
+                    f"{i+1:<8}"
+                    f"{_h('train_actor_l1_loss', i):<10.4f}"
+                    f"{_h('train_actor_l2_loss', i):<10.4f}"
+                    f"{_h('train_critic_loss',   i):<10.4f}"
+                    f"{_h('train_entropy_l1',    i):<8.4f}"
+                    f"{_h('train_entropy_l2',    i):<8.4f}"
+                    f"{_h('train_advantage_mean',i):<10.4f}"
+                    f"{_h('train_advantage_std', i):<10.4f}"
+                    f"{_h('train_grad_norm_l1',  i):<10.4f}"
+                    f"{_h('train_grad_norm_l2',  i):<10.4f}\n"
+                )
+
+            f.write("-" * 94 + "\n")
             f.write("\n")
 
             # Detailed val epoch results table
