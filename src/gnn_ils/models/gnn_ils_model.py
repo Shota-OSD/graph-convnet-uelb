@@ -169,21 +169,22 @@ class GNNILSModel(nn.Module):
         B, V, _, C, H = edge_features.shape
         device = edge_features.device
 
-        path_feats = torch.zeros(B, C, H, device=device)
+        batch_feats = []
         for b in range(B):
+            commodity_feats = []
             for c in range(C):
                 path = current_assignment[b][c]
                 if len(path) < 2:
+                    commodity_feats.append(torch.zeros(H, device=device))
                     continue
-                edge_list = []
-                for i in range(len(path) - 1):
-                    u, v = path[i], path[i + 1]
-                    edge_list.append(edge_features[b, u, v, c, :])
+                edge_list = [edge_features[b, path[i], path[i + 1], c, :] for i in range(len(path) - 1)]
                 stacked = torch.stack(edge_list)  # [num_edges, H]
                 if self.path_aggregation == 'max':
-                    path_feats[b, c] = stacked.max(dim=0).values
+                    commodity_feats.append(stacked.max(dim=0).values)
                 else:
-                    path_feats[b, c] = stacked.mean(dim=0)
+                    commodity_feats.append(stacked.mean(dim=0))
+            batch_feats.append(torch.stack(commodity_feats))
+        path_feats = torch.stack(batch_feats)  # [B, C, H] - maintains grad_fn
 
         # demand 正規化: [B, C] → [B, C, 1]
         demand_norm = (demands / self.demand_max).unsqueeze(-1)

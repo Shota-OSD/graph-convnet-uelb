@@ -49,10 +49,17 @@ class ILSA2CStrategy:
             betas=(config.get('adam_beta1', 0.9), config.get('adam_beta2', 0.999)),
         )
 
-        if config.get('lr_scheduler', None) == 'step':
+        scheduler_type = config.get('lr_scheduler', None)
+        if scheduler_type == 'step':
             decay_rate = config.get('decay_rate', 1.2)
             self.scheduler = torch.optim.lr_scheduler.StepLR(
                 self.optimizer, step_size=10, gamma=1.0 / decay_rate
+            )
+        elif scheduler_type == 'cosine':
+            self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                self.optimizer,
+                T_max=config.get('max_epochs', 30),
+                eta_min=config.get('lr_eta_min', 1e-5),
             )
         else:
             self.scheduler = None
@@ -229,6 +236,8 @@ class ILSA2CStrategy:
 
         # Advantage
         advantages = returns_t - state_values.detach()
+        adv_mean_raw = advantages.mean().item()
+        adv_std_raw  = advantages.std().item() if T > 1 else 0.0
         if self.normalize_advantages and T > 1:
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
@@ -251,6 +260,16 @@ class ILSA2CStrategy:
             - self.entropy_weight_l2 * entropy_l2_mean
         )
 
+        l1_params = list(self.model.commodity_selector.commodity_mlp.parameters())
+        l2_params = list(self.model.path_selector.path_score_mlp.parameters())
+
+        def _grad_norm(loss, params):
+            grads = torch.autograd.grad(loss, params, retain_graph=True, allow_unused=True)
+            return float(sum(g.norm().item() for g in grads if g is not None))
+
+        grad_norm_l1 = _grad_norm(actor_l1_loss, l1_params)
+        grad_norm_l2 = _grad_norm(actor_l2_loss, l2_params)
+
         loss_components = {
             'total_loss': total_loss.item(),
             'actor_l1_loss': actor_l1_loss.item(),
@@ -258,6 +277,10 @@ class ILSA2CStrategy:
             'critic_loss': critic_loss.item(),
             'entropy_l1': entropy_l1_mean.item(),
             'entropy_l2': entropy_l2_mean.item(),
+            'grad_norm_l1': grad_norm_l1,
+            'grad_norm_l2': grad_norm_l2,
+            'advantage_mean': adv_mean_raw,
+            'advantage_std':  adv_std_raw,
         }
         return total_loss, loss_components
 
