@@ -25,7 +25,13 @@ class CommoditySelector(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_commodities = num_commodities
 
-        hidden_dims = [128] * (mlp_layers - 1)
+        # 漏斗型: 入力次元に近い層から段階的に絞る
+        if mlp_layers >= 3:
+            hidden_dims = [128, 64][:mlp_layers - 1]
+        elif mlp_layers == 2:
+            hidden_dims = [128]
+        else:
+            hidden_dims = []
         self.commodity_mlp = MLP(
             hidden_dim + 1,
             1,
