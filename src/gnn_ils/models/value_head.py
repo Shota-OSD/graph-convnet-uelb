@@ -30,16 +30,14 @@ class ILSValueHead(nn.Module):
         self.use_graph_embedding = use_graph_embedding
 
         if use_graph_embedding:
-            # 漏斗型: 128 → 128 → 64 → 1
             input_dim = hidden_dim
             if mlp_layers >= 3:
-                hidden_dims = [128, 64][:mlp_layers - 1]
+                hidden_dims = [256, 128][:mlp_layers - 1]
             elif mlp_layers == 2:
-                hidden_dims = [64]
+                hidden_dims = [128]
             else:
                 hidden_dims = []
         else:
-            # flatten モード: 8960 → 512 → 256 → 1 (変更なし)
             input_dim = num_nodes * num_commodities * hidden_dim
             if mlp_layers >= 3:
                 hidden_dims = [512, 256][:mlp_layers - 1]
