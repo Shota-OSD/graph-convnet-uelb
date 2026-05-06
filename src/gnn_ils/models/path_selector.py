@@ -28,7 +28,14 @@ class PathSelector(nn.Module):
         self.max_paths = max_paths
         self.path_aggregation = path_aggregation
 
-        hidden_dims = [128] * (mlp_layers - 1)
+        # 漏斗型: 入力次元(2H+1)に近い層から段階的に絞る
+        if mlp_layers >= 3:
+            hidden_dims = [hidden_dim * 2, 64][:mlp_layers - 1]
+        elif mlp_layers == 2:
+            # 従来は [128] (257→128→1) だが漏斗型原則に合わせて変更。後方互換なし
+            hidden_dims = [128]
+        else:
+            hidden_dims = []
         self.path_score_mlp = MLP(
             hidden_dim * 2 + 1,
             1,

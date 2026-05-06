@@ -27,8 +27,8 @@
     "dropout_rate": 0.3,
 
     "_comment_selector": "=== Selector Networks ===",
-    "commodity_selector_mlp_layers": 2,
-    "path_selector_mlp_layers": 2,
+    "commodity_selector_mlp_layers": 3,
+    "path_selector_mlp_layers": 3,
     "value_head_mlp_layers": 3,
     "use_graph_embedding_value": true,
 
