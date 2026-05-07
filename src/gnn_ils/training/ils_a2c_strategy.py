@@ -1,3 +1,4 @@
+import contextlib
 import copy
 import torch
 import torch.nn.functional as F
@@ -121,8 +122,13 @@ class ILSA2CStrategy:
         return self._build_train_metrics(trajectory, loss_components)
 
     def _ppo_update(self, trajectory: Dict) -> Dict[str, float]:
-        """PPO 複数回更新パス。"""
-        # old log_probs を detach
+        """PPO 複数回更新パス。
+
+        eval モード (dropout OFF) で log_prob_new を再計算し、
+        log_prob_old (同じく eval で計算済み) との ratio を正確に算出する。
+        eval() は dropout を無効化するだけで backward() は正常に動作する。
+        """
+        # old log_probs (eval モードで計算済み、detach 済み)
         log_probs_l1_old = torch.stack(trajectory['log_probs_l1']).detach()  # [T]
         log_probs_l2_old = torch.stack(trajectory['log_probs_l2']).detach()  # [T]
 
@@ -142,27 +148,33 @@ class ILSA2CStrategy:
         # Warm-up 中は Critic only なので多回更新不要
         update_epochs = 1 if self.current_epoch < self.warmup_epochs else self.ppo_update_epochs
 
-        for ppo_epoch in range(update_epochs):
-            # 現在のポリシーで re-forward
-            (log_probs_l1_new, log_probs_l2_new,
-             entropies_l1, entropies_l2, state_values) = self._recompute_log_probs_and_values(trajectory)
+        # eval モードで recompute (dropout OFF → log_prob_old と同条件)
+        # no_grad は使わない (backward に勾配が必要)
+        self.model.eval()
+        try:
+            for ppo_epoch in range(update_epochs):
+                # 現在のポリシーで re-forward (eval モード → dropout OFF)
+                (log_probs_l1_new, log_probs_l2_new,
+                 entropies_l1, entropies_l2, state_values) = self._recompute_log_probs_and_values(trajectory)
 
-            loss, loss_components = self._compute_ppo_loss(
-                log_probs_l1_old, log_probs_l2_old,
-                log_probs_l1_new, log_probs_l2_new,
-                entropies_l1, entropies_l2,
-                state_values, returns_t,
-            )
+                loss, loss_components = self._compute_ppo_loss(
+                    log_probs_l1_old, log_probs_l2_old,
+                    log_probs_l1_new, log_probs_l2_new,
+                    entropies_l1, entropies_l2,
+                    state_values, returns_t,
+                )
 
-            self.optimizer.zero_grad()
-            loss.backward()
-            if self.grad_clip_norm > 0:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
-            self.optimizer.step()
+                self.optimizer.zero_grad()
+                loss.backward()
+                if self.grad_clip_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_norm)
+                self.optimizer.step()
 
-            if first_loss_components is None:
-                first_loss_components = loss_components
-            last_loss_components = loss_components
+                if first_loss_components is None:
+                    first_loss_components = loss_components
+                last_loss_components = loss_components
+        finally:
+            self.model.train()
 
         # 初回と最終の ratio を比較できるようにする
         if update_epochs > 1 and first_loss_components is not None:
@@ -196,7 +208,13 @@ class ILSA2CStrategy:
         """
         ILS エピソードを実行し、trajectory を収集する。
 
-        PPO モードでは各ステップの中間状態も保存する。
+        PPO モード (use_ppo=True, deterministic=False):
+            - 行動選択: model.train() + no_grad (dropout ON → 探索ノイズ)
+            - log_prob_old / value: エピソード後に model.eval() + no_grad で一括計算
+              (dropout OFF → 決定論的で一貫した値、PPO ratio の正確性を保証)
+
+        A2C モード:
+            - 従来通り model.train() で勾配ありの forward
 
         Returns:
             trajectory 辞書 (log_probs, values, rewards, states など)
@@ -208,6 +226,8 @@ class ILSA2CStrategy:
             x_commodities=batch_data['x_commodities'],
             x_edges_capacity=batch_data['x_edges_capacity'],
         )
+
+        is_ppo_train = self.use_ppo and not deterministic
 
         trajectory: Dict[str, Any] = {
             'log_probs_l1': [],
@@ -221,7 +241,7 @@ class ILSA2CStrategy:
         }
 
         # PPO: 不変入力と各ステップの状態を保存
-        if self.use_ppo and not deterministic:
+        if is_ppo_train:
             trajectory['static_inputs'] = {
                 'x_nodes': batch_data['x_nodes'].detach().clone(),
                 'x_commodities': batch_data['x_commodities'].detach().clone(),
@@ -229,78 +249,85 @@ class ILSA2CStrategy:
             }
             trajectory['states'] = []
 
+        # PPO train: no_grad で行動選択 (log_prob はエピソード後に eval で計算)
+        # A2C / eval: 勾配ありで forward (log_prob を直接使用)
+        grad_ctx = torch.no_grad() if is_ppo_train else contextlib.nullcontext()
+
         done = False
-        while not done:
-            # デバイスへ転送
-            x_nodes = state['x_nodes'].to(self.device)
-            x_commodities = state['x_commodities'].to(self.device)
-            x_edges_capacity = state['x_edges_capacity'].to(self.device)
-            x_edges_usage = state['x_edges_usage'].to(self.device)
-            commodity_mask = state['commodity_mask'].to(self.device)
+        with grad_ctx:
+            while not done:
+                # デバイスへ転送
+                x_nodes = state['x_nodes'].to(self.device)
+                x_commodities = state['x_commodities'].to(self.device)
+                x_edges_capacity = state['x_edges_capacity'].to(self.device)
+                x_edges_usage = state['x_edges_usage'].to(self.device)
+                commodity_mask = state['commodity_mask'].to(self.device)
 
-            # 全コモディティが交換不可なら終了
-            if not commodity_mask.any():
-                break
+                # 全コモディティが交換不可なら終了
+                if not commodity_mask.any():
+                    break
 
-            # GNN エンコード
-            node_features, edge_features, graph_embedding = self.model.encode(
-                x_nodes, x_commodities, x_edges_capacity, x_edges_usage
-            )
+                # GNN エンコード
+                node_features, edge_features, graph_embedding = self.model.encode(
+                    x_nodes, x_commodities, x_edges_capacity, x_edges_usage
+                )
 
-            # Critic: 状態価値
-            state_value = self.model.get_value(node_features, graph_embedding)
+                # Critic: 状態価値
+                state_value = self.model.get_value(node_features, graph_embedding)
 
-            # Level1: コモディティ選択
-            demands = state['x_commodities'][:, :, 2].to(self.device)  # [1, C]
-            current_assignment_batch = [state['current_assignment']]     # [1][C][path_length]
-            selected_commodity, log_prob_l1, entropy_l1 = self.model.select_commodity(
-                edge_features, current_assignment_batch, demands,
-                commodity_mask, deterministic=deterministic
-            )
-            c_idx = selected_commodity[0].item()
+                # Level1: コモディティ選択
+                demands = state['x_commodities'][:, :, 2].to(self.device)  # [1, C]
+                current_assignment_batch = [state['current_assignment']]     # [1][C][path_length]
+                selected_commodity, log_prob_l1, entropy_l1 = self.model.select_commodity(
+                    edge_features, current_assignment_batch, demands,
+                    commodity_mask, deterministic=deterministic
+                )
+                c_idx = selected_commodity[0].item()
 
-            # Level2: パス選択
-            path_mask = self.env.get_path_mask(c_idx).to(self.device)
-            candidate_paths = [state['path_pool'][c_idx]]  # [1][P_c][path_length]
+                # Level2: パス選択
+                path_mask = self.env.get_path_mask(c_idx).to(self.device)
+                candidate_paths = [state['path_pool'][c_idx]]  # [1][P_c][path_length]
 
-            current_paths_batch = [state['current_assignment'][c_idx]]  # [1][path_length]
-            demand_c = demands[:, c_idx]  # [1] (生の demand、正規化はモデル内で行う)
-            selected_path_idx, log_prob_l2, entropy_l2 = self.model.select_path(
-                edge_features, selected_commodity,
-                candidate_paths, current_paths_batch, demand_c,
-                path_mask, deterministic=deterministic
-            )
+                current_paths_batch = [state['current_assignment'][c_idx]]  # [1][path_length]
+                demand_c = demands[:, c_idx]  # [1] (生の demand、正規化はモデル内で行う)
+                selected_path_idx, log_prob_l2, entropy_l2 = self.model.select_path(
+                    edge_features, selected_commodity,
+                    candidate_paths, current_paths_batch, demand_c,
+                    path_mask, deterministic=deterministic
+                )
 
-            # PPO: 中間状態を保存
-            if self.use_ppo and not deterministic:
-                step_state = {
-                    'x_edges_usage': x_edges_usage.detach().clone(),
-                    'commodity_mask': commodity_mask.detach().clone(),
-                    'current_assignment': copy.deepcopy(state['current_assignment']),
-                    'demands': demands.detach().clone(),
-                    'selected_commodity_idx': c_idx,
-                    'path_mask': path_mask.detach().clone(),
-                    'candidate_paths': copy.deepcopy(candidate_paths),
-                    'current_paths': copy.deepcopy(current_paths_batch),
-                    'demand_c': demand_c.detach().clone(),
-                    'action_l1': selected_commodity.detach().clone(),  # [1]
-                    'action_l2': selected_path_idx.detach().clone(),   # [1]
-                }
-                trajectory['states'].append(step_state)
+                # PPO: 中間状態を保存 (log_prob はエピソード後に eval で計算)
+                if is_ppo_train:
+                    step_state = {
+                        'x_edges_usage': x_edges_usage.detach().clone(),
+                        'commodity_mask': commodity_mask.detach().clone(),
+                        'current_assignment': copy.deepcopy(state['current_assignment']),
+                        'demands': demands.detach().clone(),
+                        'selected_commodity_idx': c_idx,
+                        'path_mask': path_mask.detach().clone(),
+                        'candidate_paths': copy.deepcopy(candidate_paths),
+                        'current_paths': copy.deepcopy(current_paths_batch),
+                        'demand_c': demand_c.detach().clone(),
+                        'action_l1': selected_commodity.detach().clone(),  # [1]
+                        'action_l2': selected_path_idx.detach().clone(),   # [1]
+                    }
+                    trajectory['states'].append(step_state)
 
-            # 環境を1ステップ進める
-            new_state, reward, done, info = self.env.step(
-                c_idx, selected_path_idx[0].item()
-            )
+                # 環境を1ステップ進める
+                new_state, reward, done, info = self.env.step(
+                    c_idx, selected_path_idx[0].item()
+                )
 
-            trajectory['log_probs_l1'].append(log_prob_l1[0])
-            trajectory['log_probs_l2'].append(log_prob_l2[0])
-            trajectory['entropies_l1'].append(entropy_l1[0])
-            trajectory['entropies_l2'].append(entropy_l2[0])
-            trajectory['state_values'].append(state_value[0])
-            trajectory['rewards'].append(reward)
+                # A2C: log_prob / entropy / value を直接保存 (勾配あり)
+                if not is_ppo_train:
+                    trajectory['log_probs_l1'].append(log_prob_l1[0])
+                    trajectory['log_probs_l2'].append(log_prob_l2[0])
+                    trajectory['entropies_l1'].append(entropy_l1[0])
+                    trajectory['entropies_l2'].append(entropy_l2[0])
+                    trajectory['state_values'].append(state_value[0])
 
-            state = new_state
+                trajectory['rewards'].append(reward)
+                state = new_state
 
         trajectory['final_load_factor'] = state['load_factor']
 
@@ -308,6 +335,19 @@ class ILSA2CStrategy:
         best_solution = self.env.get_best_solution()
         trajectory['best_load_factor'] = best_solution['best_load_factor']
         trajectory['best_iteration'] = best_solution['best_iteration']
+
+        # PPO: eval モードで log_prob_old / value を一括計算 (dropout OFF → 一貫性保証)
+        if is_ppo_train and trajectory['states']:
+            self.model.eval()
+            with torch.no_grad():
+                (lp_l1, lp_l2, ent_l1, ent_l2, sv) = \
+                    self._recompute_log_probs_and_values(trajectory)
+            trajectory['log_probs_l1'] = list(lp_l1.detach())
+            trajectory['log_probs_l2'] = list(lp_l2.detach())
+            trajectory['entropies_l1'] = list(ent_l1.detach())
+            trajectory['entropies_l2'] = list(ent_l2.detach())
+            trajectory['state_values'] = list(sv.detach())
+            self.model.train()
 
         return trajectory
 
