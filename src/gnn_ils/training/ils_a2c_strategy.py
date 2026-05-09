@@ -448,6 +448,17 @@ class ILSA2CStrategy:
             - self.entropy_weight_l2 * entropy_l2_effective
         )
 
+        # L1/L2 個別 grad norm
+        l1_params = list(self.model.commodity_selector.commodity_mlp.parameters())
+        l2_params = list(self.model.path_selector.path_score_mlp.parameters())
+
+        def _grad_norm(loss, params):
+            grads = torch.autograd.grad(loss, params, retain_graph=True, allow_unused=True)
+            return float(sum(g.norm().item() for g in grads if g is not None))
+
+        grad_norm_l1 = _grad_norm(actor_l1_loss, l1_params) if not is_warmup else 0.0
+        grad_norm_l2 = _grad_norm(actor_l2_loss, l2_params) if not is_warmup else 0.0
+
         # 診断メトリクス
         with torch.no_grad():
             clip_frac_l1 = ((ratio_l1 - 1.0).abs() > eps).float().mean().item()
@@ -460,6 +471,8 @@ class ILSA2CStrategy:
             'critic_loss': critic_loss.item(),
             'entropy_l1': entropy_l1_mean.item(),
             'entropy_l2': entropy_l2_mean.item(),
+            'grad_norm_l1': grad_norm_l1,
+            'grad_norm_l2': grad_norm_l2,
             'advantage_mean': adv_mean_raw,
             'advantage_std': adv_std_raw,
             'is_warmup': is_warmup,
