@@ -20,7 +20,8 @@ class CommoditySelector(nn.Module):
         masked softmax → probabilities [B, C]
     """
 
-    def __init__(self, hidden_dim: int, num_commodities: int, mlp_layers: int = 2):
+    def __init__(self, hidden_dim: int, num_commodities: int, mlp_layers: int = 2,
+                 dropout_rate: float = 0.0):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.num_commodities = num_commodities
@@ -37,6 +38,7 @@ class CommoditySelector(nn.Module):
             1,
             num_layers=mlp_layers,
             hidden_dims=hidden_dims,
+            dropout_rate=dropout_rate,
         )
 
     def forward(

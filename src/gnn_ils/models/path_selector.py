@@ -22,7 +22,7 @@ class PathSelector(nn.Module):
     """
 
     def __init__(self, hidden_dim: int, max_paths: int, mlp_layers: int = 2,
-                 path_aggregation: str = 'mean'):
+                 path_aggregation: str = 'mean', dropout_rate: float = 0.0):
         super().__init__()
         self.hidden_dim = hidden_dim
         self.max_paths = max_paths
@@ -41,6 +41,7 @@ class PathSelector(nn.Module):
             1,
             num_layers=mlp_layers,
             hidden_dims=hidden_dims,
+            dropout_rate=dropout_rate,
         )
 
     def forward(
