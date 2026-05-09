@@ -1,0 +1,119 @@
+{
+  "description": "Hyperparameter tuning configuration for GNN-ILS model",
+
+  "grid_search": {
+    "description": "Grid search configuration with predefined parameter combinations",
+    "parameters": {
+      "num_layers": [4, 8],
+      "hidden_dim": [64, 128],
+      "max_iterations": [35, 50],
+      "no_improve_patience": [5, 7, 10]
+    }
+  },
+
+  "random_search": {
+    "description": "Random search configuration with parameter ranges",
+    "n_trials": 20,
+    "parameters": {
+      "num_layers": {
+        "type": "int",
+        "min": 3,
+        "max": 16
+      },
+      "hidden_dim": {
+        "type": "choice",
+        "choices": [64, 96, 128, 192, 256]
+      },
+      "max_iterations": {
+        "type": "choice",
+        "choices": [20, 30, 50, 80, 100]
+      },
+      "no_improve_patience": {
+        "type": "int",
+        "min": 3,
+        "max": 20
+      },
+      "learning_rate": {
+        "type": "float",
+        "min": 0.00005,
+        "max": 0.005,
+        "log_scale": true
+      },
+      "K": {
+        "type": "choice",
+        "choices": [5, 8, 10, 15, 20]
+      },
+      "max_candidate_paths": {
+        "type": "choice",
+        "choices": [10, 15, 20, 25]
+      },
+      "entropy_weight_l1": {
+        "type": "float",
+        "min": 0.001,
+        "max": 0.05,
+        "log_scale": true
+      },
+      "entropy_weight_l2": {
+        "type": "float",
+        "min": 0.001,
+        "max": 0.03,
+        "log_scale": true
+      },
+      "gamma": {
+        "type": "choice",
+        "choices": [0.9, 0.95, 0.99]
+      },
+      "reward_scale": {
+        "type": "choice",
+        "choices": [10.0, 50.0, 100.0, 200.0]
+      },
+      "perturbation_prob": {
+        "type": "float",
+        "min": 0.05,
+        "max": 0.3,
+        "log_scale": false
+      },
+      "max_epochs": {
+        "type": "choice",
+        "choices": [30, 50, 80]
+      }
+    }
+  },
+
+  "evaluation": {
+    "primary_metric": "best_val_load_factor",
+    "secondary_metrics": [
+      "best_val_approx_ratio",
+      "final_train_load_factor",
+      "final_val_improvement"
+    ],
+    "optimization_direction": "minimize"
+  },
+
+  "resource_constraints": {
+    "max_epochs_per_trial": 100,
+    "timeout_per_trial_minutes": 180,
+    "max_memory_gb": 8
+  },
+
+  "priority_parameters": {
+    "high_impact": [
+      "num_layers",
+      "hidden_dim",
+      "learning_rate",
+      "max_iterations"
+    ],
+    "medium_impact": [
+      "no_improve_patience",
+      "K",
+      "max_candidate_paths",
+      "gamma",
+      "reward_scale"
+    ],
+    "low_impact": [
+      "entropy_weight_l1",
+      "entropy_weight_l2",
+      "perturbation_prob"
+    ]
+  }
+}
