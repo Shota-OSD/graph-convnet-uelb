@@ -30,7 +30,7 @@ class GNNILSEncoder(nn.Module):
                 - hidden_dim: int (default: 128)
                 - num_layers: int (default: 8)
                 - aggregation: str (default: 'mean')
-                - dropout_rate: float (default: 0.3)
+                - encoder_dropout_rate: float (default: 0.0)
         """
         super().__init__()
 
@@ -39,7 +39,7 @@ class GNNILSEncoder(nn.Module):
         self.hidden_dim = config['hidden_dim']
         self.num_layers = config['num_layers']
         self.aggregation = config.get('aggregation', 'mean')
-        self.dropout_rate = config.get('dropout_rate', 0.3)
+        self.encoder_dropout_rate = config.get('encoder_dropout_rate', 0.0)
 
         voc_nodes_in = self.num_commodities * 3
         self.nodes_embedding = nn.Embedding(voc_nodes_in, self.hidden_dim // 2)
@@ -48,10 +48,10 @@ class GNNILSEncoder(nn.Module):
         self.edge_usage_embedding = nn.Linear(1, self.hidden_dim // 2, bias=False)
 
         self.gcn_layers = nn.ModuleList([
-            ResidualGatedGCNLayer(self.hidden_dim, self.aggregation)
+            ResidualGatedGCNLayer(self.hidden_dim, self.aggregation, dropout_rate=self.encoder_dropout_rate)
             for _ in range(self.num_layers)
         ])
-        self.dropout = nn.Dropout(self.dropout_rate)
+        self.dropout = nn.Dropout(self.encoder_dropout_rate)
 
     def forward(
         self,

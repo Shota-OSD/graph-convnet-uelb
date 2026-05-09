@@ -25,7 +25,7 @@ class GNNILSModel(nn.Module):
         Args:
             config:
                 - num_nodes, num_commodities, hidden_dim, num_layers
-                - aggregation, dropout_rate
+                - aggregation, encoder_dropout_rate, mlp_dropout_rate
                 - max_candidate_paths (default: 15)
                 - commodity_selector_mlp_layers (default: 2)
                 - path_selector_mlp_layers (default: 2)
@@ -44,17 +44,20 @@ class GNNILSModel(nn.Module):
         num_nodes = config['num_nodes']
         hidden_dim = config['hidden_dim']
         max_paths = config.get('max_candidate_paths', 15)
+        mlp_dropout = config.get('mlp_dropout_rate', 0.0)
 
         self.commodity_selector = CommoditySelector(
             hidden_dim=hidden_dim,
             num_commodities=num_commodities,
             mlp_layers=config.get('commodity_selector_mlp_layers', 2),
+            dropout_rate=mlp_dropout,
         )
         self.path_selector = PathSelector(
             hidden_dim=hidden_dim,
             max_paths=max_paths,
             mlp_layers=config.get('path_selector_mlp_layers', 2),
             path_aggregation=self.path_aggregation,
+            dropout_rate=mlp_dropout,
         )
         self.value_head = ILSValueHead(
             hidden_dim=hidden_dim,
@@ -63,6 +66,7 @@ class GNNILSModel(nn.Module):
             mlp_layers=config.get('value_head_mlp_layers', 3),
             use_graph_embedding=config.get('use_graph_embedding_value', False),
             bias_init_value=config.get('value_head_bias_init', 0.0),
+            dropout_rate=mlp_dropout,
         )
 
     def encode(

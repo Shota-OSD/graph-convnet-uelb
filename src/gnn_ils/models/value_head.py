@@ -25,6 +25,7 @@ class ILSValueHead(nn.Module):
         mlp_layers: int = 3,
         use_graph_embedding: bool = False,
         bias_init_value: float = 0.0,
+        dropout_rate: float = 0.0,
     ):
         super().__init__()
         self.use_graph_embedding = use_graph_embedding
@@ -47,7 +48,7 @@ class ILSValueHead(nn.Module):
             else:
                 hidden_dims = []
 
-        self.value_mlp = MLP(input_dim, 1, num_layers=mlp_layers, hidden_dims=hidden_dims)
+        self.value_mlp = MLP(input_dim, 1, num_layers=mlp_layers, hidden_dims=hidden_dims, dropout_rate=dropout_rate)
 
         if bias_init_value != 0.0:
             nn.init.constant_(self.value_mlp.output_layer.bias, bias_init_value)
