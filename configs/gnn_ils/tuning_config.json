@@ -4,9 +4,9 @@
   "grid_search": {
     "description": "Grid search configuration with predefined parameter combinations",
     "parameters": {
-      "num_layers": [4, 8, 12],
+      "num_layers": [4, 8],
       "hidden_dim": [64, 128],
-      "max_iterations": [35, 50, 70],
+      "max_iterations": [35, 50],
       "no_improve_patience": [5, 7, 10]
     }
   },
