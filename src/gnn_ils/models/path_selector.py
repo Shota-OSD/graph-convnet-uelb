@@ -32,7 +32,6 @@ class PathSelector(nn.Module):
         if mlp_layers >= 3:
             hidden_dims = [hidden_dim * 2, 64][:mlp_layers - 1]
         elif mlp_layers == 2:
-            # 従来は [128] (257→128→1) だが漏斗型原則に合わせて変更。後方互換なし
             hidden_dims = [128]
         else:
             hidden_dims = []
@@ -44,12 +43,76 @@ class PathSelector(nn.Module):
             dropout_rate=dropout_rate,
         )
 
+    def _batch_encode_paths(
+        self,
+        edge_features: Tensor,       # [B, V, V, C, H]
+        paths_list: List[List[int]],  # flat list of paths (total N paths)
+        commodity_indices: List[int], # commodity index for each path (length N)
+        batch_indices: List[int],     # batch index for each path (length N)
+        num_output: int,              # total number of output slots
+        output_indices: List[int],    # which output slot each path maps to (length N)
+    ) -> Tensor:
+        """
+        複数パスのエッジ特徴量を一括取得し集約する。
+
+        Returns:
+            path_features: [num_output, H]
+        """
+        H = self.hidden_dim
+        device = edge_features.device
+
+        if not paths_list:
+            return torch.zeros(num_output, H, device=device)
+
+        max_edges = max(len(p) - 1 for p in paths_list)
+        if max_edges <= 0:
+            return torch.zeros(num_output, H, device=device)
+
+        N = len(paths_list)
+
+        # インデックステンソル構築
+        src_idx = torch.zeros(N, max_edges, dtype=torch.long, device=device)
+        dst_idx = torch.zeros(N, max_edges, dtype=torch.long, device=device)
+        mask = torch.zeros(N, max_edges, dtype=torch.bool, device=device)
+
+        for i, path in enumerate(paths_list):
+            n_edges = len(path) - 1
+            for j in range(n_edges):
+                src_idx[i, j] = path[j]
+                dst_idx[i, j] = path[j + 1]
+                mask[i, j] = True
+
+        # バッチ・コモディティインデックス [N, max_edges]
+        b_t = torch.tensor(batch_indices, dtype=torch.long, device=device).unsqueeze(1).expand(N, max_edges)
+        c_t = torch.tensor(commodity_indices, dtype=torch.long, device=device).unsqueeze(1).expand(N, max_edges)
+
+        # 一括 indexing [N, max_edges, H]
+        all_feats = edge_features[b_t, src_idx, dst_idx, c_t, :]
+
+        # マスク付き集約 [N, H]
+        if self.path_aggregation == 'max':
+            all_feats = all_feats.masked_fill(~mask.unsqueeze(-1), float('-inf'))
+            encoded = all_feats.max(dim=1).values
+            no_edges = ~mask.any(dim=1)
+            encoded = encoded.masked_fill(no_edges.unsqueeze(-1), 0.0)
+        else:
+            all_feats = all_feats * mask.unsqueeze(-1).float()
+            edge_counts = mask.sum(dim=1, keepdim=True).clamp(min=1).float()
+            encoded = all_feats.sum(dim=1) / edge_counts
+
+        # 出力スロットに配置 [num_output, H]
+        result = torch.zeros(num_output, H, device=device)
+        out_t = torch.tensor(output_indices, dtype=torch.long, device=device)
+        result[out_t] = encoded
+
+        return result
+
     def forward(
         self,
         edge_features: Tensor,                       # [B, V, V, C, H]
         selected_commodity: Tensor,                  # [B] - int
         candidate_paths: List[List[List[int]]],      # [B][P_c][path_length]
-        current_paths: List[List[int]],              # [B][path_length] (選択コモディティの現パス)
+        current_paths: List[List[int]],              # [B][path_length]
         demands: Tensor,                             # [B] (正規化済み demand)
         path_mask: Tensor,                           # [B, max_paths] - bool
     ) -> Tuple[Tensor, Tensor, Tensor]:
@@ -60,60 +123,65 @@ class PathSelector(nn.Module):
             entropy:      [B]
         """
         B = edge_features.shape[0]
-        neg_inf = torch.tensor(float('-inf'), device=edge_features.device)
+        H = self.hidden_dim
 
-        batch_scores = []
+        # --- 1. 現パスの一括エンコード [B, H] ---
+        curr_paths_flat = []
+        curr_c_indices = []
+        curr_b_indices = []
+        curr_out_indices = []
         for b in range(B):
             c_idx = selected_commodity[b].item()
-            paths = candidate_paths[b]  # List[List[int]]
-            current_feat = self._encode_path(edge_features, current_paths[b], c_idx, b)  # [H]
-            demand_val = demands[b].unsqueeze(0)  # [1]
+            path = current_paths[b]
+            if len(path) >= 2:
+                curr_paths_flat.append(path)
+                curr_c_indices.append(c_idx)
+                curr_b_indices.append(b)
+                curr_out_indices.append(b)
 
-            path_scores = []
-            for p_idx in range(self.max_paths):
-                if p_idx < len(paths):
-                    cand_feat = self._encode_path(edge_features, paths[p_idx], c_idx, b)  # [H]
-                    inp = torch.cat([cand_feat, current_feat, demand_val], dim=0).unsqueeze(0)  # [1, 2H+1]
-                    path_scores.append(self.path_score_mlp(inp).squeeze())
-                else:
-                    path_scores.append(neg_inf)
-            batch_scores.append(torch.stack(path_scores))
-        scores = torch.stack(batch_scores)  # [B, max_paths] - maintains grad_fn
+        current_feats = self._batch_encode_paths(
+            edge_features, curr_paths_flat, curr_c_indices, curr_b_indices,
+            num_output=B, output_indices=curr_out_indices
+        )  # [B, H]
 
-        # パスマスク適用
+        # --- 2. 候補パスの一括エンコード [B * max_paths, H] ---
+        cand_paths_flat = []
+        cand_c_indices = []
+        cand_b_indices = []
+        cand_out_indices = []
+        for b in range(B):
+            c_idx = selected_commodity[b].item()
+            paths = candidate_paths[b]
+            for p_idx in range(min(len(paths), self.max_paths)):
+                path = paths[p_idx]
+                if len(path) >= 2:
+                    cand_paths_flat.append(path)
+                    cand_c_indices.append(c_idx)
+                    cand_b_indices.append(b)
+                    cand_out_indices.append(b * self.max_paths + p_idx)
+
+        cand_feats = self._batch_encode_paths(
+            edge_features, cand_paths_flat, cand_c_indices, cand_b_indices,
+            num_output=B * self.max_paths, output_indices=cand_out_indices
+        ).view(B, self.max_paths, H)  # [B, max_paths, H]
+
+        # --- 3. MLP 一括 forward ---
+        current_expanded = current_feats.unsqueeze(1).expand(B, self.max_paths, H)  # [B, max_paths, H]
+        demand_expanded = demands.view(B, 1, 1).expand(B, self.max_paths, 1)  # [B, max_paths, 1]
+
+        mlp_input = torch.cat([cand_feats, current_expanded, demand_expanded], dim=-1)  # [B, max_paths, 2H+1]
+        mlp_input_flat = mlp_input.view(B * self.max_paths, 2 * H + 1)
+
+        scores_flat = self.path_score_mlp(mlp_input_flat).squeeze(-1)  # [B * max_paths]
+        scores = scores_flat.view(B, self.max_paths)  # [B, max_paths]
+
+        # --- 4. マスク適用 + softmax ---
         scores = scores.masked_fill(~path_mask, float('-inf'))
 
         action_probs = F.softmax(scores, dim=-1)
         log_probs = F.log_softmax(scores, dim=-1)
 
-        # masked 位置では log_probs = -inf なので torch.where で 0 に置換し 0*(-inf)=NaN を防ぐ
         log_probs_safe = torch.where(path_mask, log_probs, torch.zeros_like(log_probs))
         entropy = -(action_probs * log_probs_safe).sum(dim=-1)  # [B]
 
         return action_probs, log_probs, entropy
-
-    def _encode_path(
-        self,
-        edge_features: Tensor,  # [B, V, V, C, H]
-        path: List[int],
-        commodity_idx: int,
-        batch_idx: int,
-    ) -> Tensor:
-        """
-        パスをエッジ特徴量の mean-pooling で表現する。
-
-        path 上の各エッジ (u, v) の edge_features[b, u, v, c, :] を
-        mean-pooling してパス全体の特徴量 [H] を得る。
-        """
-        if len(path) < 2:
-            return torch.zeros(self.hidden_dim, device=edge_features.device)
-
-        edge_feats = []
-        for i in range(len(path) - 1):
-            u, v = path[i], path[i + 1]
-            edge_feats.append(edge_features[batch_idx, u, v, commodity_idx, :])
-
-        stacked = torch.stack(edge_feats)  # [num_edges, H]
-        if self.path_aggregation == 'max':
-            return stacked.max(dim=0).values
-        return stacked.mean(dim=0)  # [H]

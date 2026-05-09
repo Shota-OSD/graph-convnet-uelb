@@ -1,6 +1,8 @@
+import copy
+
 import networkx as nx
 import torch
-from typing import List
+from typing import Dict, List, Tuple
 
 from src.common.graph.k_shortest_path import KShortestPathFinder
 
@@ -25,6 +27,7 @@ class PathPoolManager:
         self.max_disjoint = config.get('max_disjoint', 5)
         self.max_candidate_paths = config.get('max_candidate_paths', 15)
         self.ksp_finder = KShortestPathFinder()
+        self._cache: Dict[Tuple, List[List[List[int]]]] = {}
 
     def build_path_pool(
         self,
@@ -41,6 +44,10 @@ class PathPoolManager:
         Returns:
             path_pool: [C][P_c][path_length]
         """
+        cache_key = self._make_cache_key(G, commodity_list)
+        if cache_key in self._cache:
+            return copy.deepcopy(self._cache[cache_key])
+
         path_pool = []
         for commodity in commodity_list:
             src, dst = int(commodity[0]), int(commodity[1])
@@ -64,7 +71,24 @@ class PathPoolManager:
 
             path_pool.append(merged)
 
+        self._cache[cache_key] = copy.deepcopy(path_pool)
         return path_pool
+
+    def _make_cache_key(
+        self,
+        G: nx.Graph,
+        commodity_list: List[List[int]],
+    ) -> Tuple:
+        """グラフ構造 + commodity_list からキャッシュキーを生成する。"""
+        edges = tuple(sorted(
+            (u, v, G[u][v].get('weight', 1.0)) for u, v in G.edges()
+        ))
+        commodities = tuple(tuple(int(x) for x in c) for c in commodity_list)
+        return (edges, commodities, self.K, self.max_disjoint, self.max_candidate_paths)
+
+    def clear_cache(self):
+        """キャッシュをクリアする。"""
+        self._cache.clear()
 
     def _find_link_disjoint_paths(
         self,
