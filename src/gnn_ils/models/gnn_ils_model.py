@@ -174,22 +174,48 @@ class GNNILSModel(nn.Module):
         B, V, _, C, H = edge_features.shape
         device = edge_features.device
 
-        batch_feats = []
+        # Step 1: 全パスの最大エッジ数を計算
+        max_edges = 0
         for b in range(B):
-            commodity_feats = []
+            for c in range(C):
+                n = len(current_assignment[b][c]) - 1
+                if n > max_edges:
+                    max_edges = n
+
+        if max_edges <= 0:
+            path_feats = torch.zeros(B, C, H, device=device)
+            demand_norm = (demands / self.demand_max).unsqueeze(-1)
+            return torch.cat([path_feats, demand_norm], dim=-1)
+
+        # Step 2: パディング付きインデックステンソルを構築
+        src_indices = torch.zeros(B, C, max_edges, dtype=torch.long, device=device)
+        dst_indices = torch.zeros(B, C, max_edges, dtype=torch.long, device=device)
+        edge_mask = torch.zeros(B, C, max_edges, dtype=torch.bool, device=device)
+
+        for b in range(B):
             for c in range(C):
                 path = current_assignment[b][c]
-                if len(path) < 2:
-                    commodity_feats.append(torch.zeros(H, device=device))
-                    continue
-                edge_list = [edge_features[b, path[i], path[i + 1], c, :] for i in range(len(path) - 1)]
-                stacked = torch.stack(edge_list)  # [num_edges, H]
-                if self.path_aggregation == 'max':
-                    commodity_feats.append(stacked.max(dim=0).values)
-                else:
-                    commodity_feats.append(stacked.mean(dim=0))
-            batch_feats.append(torch.stack(commodity_feats))
-        path_feats = torch.stack(batch_feats)  # [B, C, H] - maintains grad_fn
+                n_edges = len(path) - 1
+                for i in range(n_edges):
+                    src_indices[b, c, i] = path[i]
+                    dst_indices[b, c, i] = path[i + 1]
+                    edge_mask[b, c, i] = True
+
+        # Step 3: 一括 advanced indexing [B, C, max_edges, H]
+        b_idx = torch.arange(B, device=device).view(B, 1, 1).expand(B, C, max_edges)
+        c_idx = torch.arange(C, device=device).view(1, C, 1).expand(B, C, max_edges)
+        all_feats = edge_features[b_idx, src_indices, dst_indices, c_idx, :]  # [B, C, max_edges, H]
+
+        # Step 4: マスク付き集約
+        if self.path_aggregation == 'max':
+            all_feats = all_feats.masked_fill(~edge_mask.unsqueeze(-1), float('-inf'))
+            path_feats = all_feats.max(dim=2).values  # [B, C, H]
+            no_edges = ~edge_mask.any(dim=2)  # [B, C]
+            path_feats = path_feats.masked_fill(no_edges.unsqueeze(-1), 0.0)
+        else:
+            all_feats = all_feats * edge_mask.unsqueeze(-1).float()
+            edge_counts = edge_mask.sum(dim=2, keepdim=True).clamp(min=1).float()  # [B, C, 1]
+            path_feats = all_feats.sum(dim=2) / edge_counts  # [B, C, H]
 
         # demand 正規化: [B, C] → [B, C, 1]
         demand_norm = (demands / self.demand_max).unsqueeze(-1)
