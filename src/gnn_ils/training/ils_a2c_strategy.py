@@ -302,6 +302,11 @@ class ILSA2CStrategy:
 
             state = new_state
 
+            # Perturbation チェック: RL学習対象外（報酬・log_prob を記録しない）
+            if not done and self.env.should_perturb():
+                self.env.apply_perturbation()
+                state = self.env._build_state()  # perturbation 後の状態を取得
+
         trajectory['final_load_factor'] = state['load_factor']
 
         # Best-so-far 情報を追加

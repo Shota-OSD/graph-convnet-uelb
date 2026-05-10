@@ -1,3 +1,5 @@
+import random
+
 import torch
 import networkx as nx
 import numpy as np
@@ -249,6 +251,107 @@ class ILSEnvironment:
             'best_assignment': self.best_assignment,
             'best_iteration': self.best_iteration,
         }
+
+    def perturbation_congestion_aware(self) -> bool:
+        """
+        ボトルネックリンクを通る commodity を代替パスにリルートする。
+
+        1. edge_usage / capacity が最大のリンク (u, v) を特定
+        2. そのリンクを通る commodity を抽出
+        3. 各対象 commodity を perturbation_prob の確率でリルート
+        4. 1本もリルートできなければランダムに1本変更（フォールバック）
+        5. edge_usage と load_factor を再計算
+
+        Returns:
+            リルートが発生したか
+        """
+        # 現在の edge_usage を計算
+        usage_np = compute_edge_usage(
+            self.current_assignment, self.commodity_list, self.num_nodes
+        )
+
+        # ボトルネックリンクの特定: usage / capacity が最大の (u, v)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            load_ratio = np.where(
+                self.capacity_np > 0,
+                usage_np / self.capacity_np,
+                0.0,
+            )
+        bottleneck_idx = np.unravel_index(np.argmax(load_ratio), load_ratio.shape)
+        bn_u, bn_v = int(bottleneck_idx[0]), int(bottleneck_idx[1])
+
+        # 対象 commodity の抽出: 現在のパスがボトルネックリンクを通るもの
+        target_commodities = []
+        for c_idx, path in enumerate(self.current_assignment):
+            for i in range(len(path) - 1):
+                if (path[i] == bn_u and path[i + 1] == bn_v) or \
+                   (path[i] == bn_v and path[i + 1] == bn_u):
+                    target_commodities.append(c_idx)
+                    break
+
+        # 確率的リルート
+        rerouted = False
+        for c_idx in target_commodities:
+            if random.random() >= self.perturbation_prob:
+                continue
+            current_path = tuple(self.current_assignment[c_idx])
+            # ボトルネックリンクを含まず、現在のパスと異なる代替パスを探す
+            alternatives = []
+            for p in self.path_pool[c_idx]:
+                if tuple(p) == current_path:
+                    continue
+                contains_bn = False
+                for i in range(len(p) - 1):
+                    if (p[i] == bn_u and p[i + 1] == bn_v) or \
+                       (p[i] == bn_v and p[i + 1] == bn_u):
+                        contains_bn = True
+                        break
+                if not contains_bn:
+                    alternatives.append(p)
+            if alternatives:
+                self.current_assignment[c_idx] = random.choice(alternatives)
+                rerouted = True
+
+        # フォールバック: 1本もリルートできなかった場合
+        if not rerouted:
+            candidates = []
+            for c_idx in range(len(self.current_assignment)):
+                current_path = tuple(self.current_assignment[c_idx])
+                alts = [p for p in self.path_pool[c_idx] if tuple(p) != current_path]
+                if alts:
+                    candidates.append((c_idx, alts))
+            if candidates:
+                c_idx, alts = random.choice(candidates)
+                self.current_assignment[c_idx] = random.choice(alts)
+                rerouted = True
+
+        # 内部状態を再計算
+        usage_np = compute_edge_usage(
+            self.current_assignment, self.commodity_list, self.num_nodes
+        )
+        self.x_edges_usage = torch.tensor(
+            usage_np, dtype=torch.float32
+        ).unsqueeze(0)  # [1, V, V]
+        self.current_load_factor = compute_load_factor(usage_np, self.capacity_np)
+
+        return rerouted
+
+    def apply_perturbation(self) -> None:
+        """
+        Perturbation を適用し、no_improve_count をリセットする。
+
+        - best_load_factor の更新は行わない（悪化しても best は保持）
+        - iteration カウンタはインクリメントしない
+        """
+        self.perturbation_congestion_aware()
+        self.no_improve_count = 0
+
+    def should_perturb(self) -> bool:
+        """改善停滞時かつ探索途中なら True を返す。"""
+        return (
+            self.no_improve_count >= self.no_improve_patience // 2
+            and self.iteration < self.max_iterations
+        )
 
     def _build_state(self) -> Dict:
         """現在の状態辞書を構築する。"""
