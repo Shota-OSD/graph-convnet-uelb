@@ -334,6 +334,7 @@ class GNNILSTrainer:
             'approximation_ratio': [],
             'best_iteration': [],
         }
+        sample_times: list = []
 
         dataset_iter = iter(val_loader)
 
@@ -349,7 +350,9 @@ class GNNILSTrainer:
                 for k, v in batch_data.items()
             }
 
+            sample_start = time.time()
             metrics = self.strategy.eval_step(batch_data)
+            sample_times.append(time.time() - sample_start)
 
             for key in epoch_metrics:
                 if key in metrics and metrics[key] is not None:
@@ -371,6 +374,9 @@ class GNNILSTrainer:
         avg['mean_load_factor'] = avg.get('final_load_factor', 0.0)
         avg['complete_rate'] = 100.0
         avg['complete_sample_rate'] = 100.0
+        avg['mean_time_per_sample'] = float(np.mean(sample_times)) if sample_times else 0.0
+        avg['std_time_per_sample'] = float(np.std(sample_times)) if sample_times else 0.0
+        avg['total_time'] = float(np.sum(sample_times)) if sample_times else 0.0
         return avg
 
     def _log_epoch(self, epoch, train_metrics, val_metrics, lr, epoch_time):

@@ -59,6 +59,10 @@ def main():
             print(f"  Approx Ratio:       {test_metrics['approximation_ratio']:.2f}%")
         else:
             print(f"  Approx Ratio:       N/A")
+        print(f"  ---")
+        print(f"  Total Time:         {test_metrics.get('total_time', 0):.2f}s")
+        print(f"  Mean Time/Sample:   {test_metrics.get('mean_time_per_sample', 0):.4f}s")
+        print(f"  Std  Time/Sample:   {test_metrics.get('std_time_per_sample', 0):.4f}s")
     else:
         print("  No test results.")
     print(f"{'='*70}\n")
