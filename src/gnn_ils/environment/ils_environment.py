@@ -43,6 +43,7 @@ class ILSEnvironment:
         self.max_iterations = config.get('max_iterations', 50)
         self.no_improve_patience = config.get('no_improve_patience', 10)
         self.perturbation_prob = config.get('perturbation_prob', 0.1)
+        self.max_perturbations = config.get('max_perturbations', 3)
         self.max_candidate_paths = config.get('max_candidate_paths', 15)
         self.reward_mode = config.get('reward_mode', 'shared')
         self.reward_scale = config.get('reward_scale', 100.0)
@@ -67,6 +68,7 @@ class ILSEnvironment:
         self.best_load_factor: float = float('inf')
         self.best_assignment: List[List[int]] = []
         self.best_iteration: int = 0
+        self.perturbation_count: int = 0
 
     def reset(
         self,
@@ -109,6 +111,7 @@ class ILSEnvironment:
         # カウンタ初期化
         self.iteration = 0
         self.no_improve_count = 0
+        self.perturbation_count = 0
 
         # Best-so-far を初期状態で初期化
         self.best_load_factor = self.current_load_factor
@@ -265,10 +268,8 @@ class ILSEnvironment:
         Returns:
             リルートが発生したか
         """
-        # 現在の edge_usage を計算
-        usage_np = compute_edge_usage(
-            self.current_assignment, self.commodity_list, self.num_nodes
-        )
+        # 既存の edge_usage テンソルを流用（直前の env.step() で更新済み）
+        usage_np = self.x_edges_usage[0].numpy()
 
         # ボトルネックリンクの特定: usage / capacity が最大の (u, v)
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -336,21 +337,27 @@ class ILSEnvironment:
 
         return rerouted
 
-    def apply_perturbation(self) -> None:
+    def apply_perturbation(self) -> Dict:
         """
         Perturbation を適用し、no_improve_count をリセットする。
 
         - best_load_factor の更新は行わない（悪化しても best は保持）
         - iteration カウンタはインクリメントしない
+
+        Returns:
+            perturbation 後の状態辞書
         """
         self.perturbation_congestion_aware()
         self.no_improve_count = 0
+        self.perturbation_count += 1
+        return self._build_state()
 
     def should_perturb(self) -> bool:
-        """改善停滞時かつ探索途中なら True を返す。"""
+        """改善停滞時かつ探索途中かつ perturbation 上限未到達なら True を返す。"""
         return (
             self.no_improve_count >= self.no_improve_patience // 2
             and self.iteration < self.max_iterations
+            and self.perturbation_count < self.max_perturbations
         )
 
     def _build_state(self) -> Dict:
