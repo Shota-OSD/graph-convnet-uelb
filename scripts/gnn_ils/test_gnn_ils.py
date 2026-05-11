@@ -55,6 +55,7 @@ def main():
         print(f"  Complete Rate:      {test_metrics.get('complete_rate', 100):.1f}%")
         print(f"  Mean Improvement:   {test_metrics.get('improvement', 0):.2f}%")
         print(f"  Mean Iterations:    {test_metrics.get('num_iterations', 0):.1f}")
+        print(f"  Best Found at Iter: {test_metrics.get('best_iteration', 0):.1f}")
         if test_metrics.get('approximation_ratio') is not None:
             print(f"  Approx Ratio:       {test_metrics['approximation_ratio']:.2f}%")
         else:

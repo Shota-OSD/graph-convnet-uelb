@@ -4,10 +4,9 @@
   "grid_search": {
     "description": "Grid search configuration with predefined parameter combinations",
     "parameters": {
-      "num_layers": [4, 8],
-      "hidden_dim": [64, 128],
-      "max_iterations": [35, 50],
-      "no_improve_patience": [5, 7, 10]
+      "reward_scale": [30.0, 50.0],
+      "entropy_weight_l1": [0.035, 0.05],
+      "perturbation_prob": [0.2, 0.3, 0.5]
     }
   },
 

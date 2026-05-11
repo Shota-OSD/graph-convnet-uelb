@@ -1,6 +1,6 @@
 {
-    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet) ===",
-    "expt_name": "gnn_ils_nsfnet",
+    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet, 10 commodities) ===",
+    "expt_name": "gnn_ils_nsfnet_c10",
     "gpu_id": "0",
     "use_gpu": false,
 
@@ -13,8 +13,8 @@
     "num_val_data": 320,
     "num_test_data": 320,
     "num_nodes": 14,
-    "num_commodities": 5,
-    "sample_size": 5,
+    "num_commodities": 10,
+    "sample_size": 10,
     "capacity_lower": 500,
     "capacity_higher": 2500,
     "demand_lower": 5,
@@ -39,9 +39,9 @@
     "max_candidate_paths": 15,
 
     "_comment_ils": "=== ILS Configuration ===",
-    "max_iterations": 35,
+    "max_iterations": 50,
     "no_improve_patience": 10,
-    "perturbation_prob": 0.5,
+    "perturbation_prob": 0.1,
     "max_perturbations": 3,
 
     "_comment_rl": "=== RL Algorithm (A2C / PPO) ===",
@@ -55,12 +55,12 @@
     "ppo_update_epochs": 2,
     "_ppo_update_epochs_note": "start=1, increase if clip_frac stays < 0.1",
 
-    "entropy_weight_l1": 0.05,
+    "entropy_weight_l1": 0.035,
     "entropy_weight_l2": 0.05,
     "_entropy_note": "L1 (C択) は探索空間が小さいため大きめ、L2 (パス択) は小さめ",
     "value_loss_weight": 0.5,
     "gamma": 0.95,
-    "reward_scale": 10.0,
+    "reward_scale": 30.0,
     "normalize_advantages": true,
     "grad_clip_norm": 1.0,
     "reward_mode": "shared",
