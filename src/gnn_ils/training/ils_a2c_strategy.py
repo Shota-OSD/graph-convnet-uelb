@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Tuple
 
 from src.gnn_ils.models.gnn_ils_model import GNNILSModel
 from src.gnn_ils.environment.ils_environment import ILSEnvironment
+from src.gnn_ils.training.return_normalizer import RunningReturnNormalizer
 
 
 class ILSA2CStrategy:
@@ -80,6 +81,12 @@ class ILSA2CStrategy:
 
         self.env = ILSEnvironment(config)
 
+        # Return normalization
+        self.normalize_returns = config.get('normalize_returns', False)
+        self.return_normalizer = RunningReturnNormalizer(
+            momentum=config.get('return_norm_momentum', 0.99),
+        )
+
     def set_epoch(self, epoch: int):
         """現在のエポック番号を設定する (warm-up 判定用)。"""
         self.current_epoch = epoch
@@ -135,6 +142,10 @@ class ILSA2CStrategy:
             R = r + self.gamma * R
             returns.insert(0, R)
         returns_t = torch.tensor(returns, dtype=torch.float32, device=self.device)
+
+        # Return normalization
+        if self.normalize_returns:
+            returns_t = self.return_normalizer.normalize(returns_t)
 
         last_loss_components = None
         first_loss_components = None
@@ -513,6 +524,10 @@ class ILSA2CStrategy:
             R = r + self.gamma * R
             returns.insert(0, R)
         returns_t = torch.tensor(returns, dtype=torch.float32, device=self.device)
+
+        # Return normalization
+        if self.normalize_returns:
+            returns_t = self.return_normalizer.normalize(returns_t)
 
         log_probs_l1 = torch.stack(trajectory['log_probs_l1'])  # [T]
         log_probs_l2 = torch.stack(trajectory['log_probs_l2'])  # [T]
