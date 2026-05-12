@@ -1,6 +1,6 @@
 {
-    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet, 10 commodities) ===",
-    "expt_name": "gnn_ils_nsfnet_c10",
+    "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet, 20 commodities) ===",
+    "expt_name": "gnn_ils_nsfnet_c20",
     "gpu_id": "0",
     "use_gpu": false,
 
@@ -13,8 +13,8 @@
     "num_val_data": 320,
     "num_test_data": 320,
     "num_nodes": 14,
-    "num_commodities": 10,
-    "sample_size": 10,
+    "num_commodities": 20,
+    "sample_size": 20,
     "capacity_lower": 500,
     "capacity_higher": 2500,
     "demand_lower": 5,
@@ -40,7 +40,7 @@
 
     "_comment_ils": "=== ILS Configuration ===",
     "max_iterations": 75,
-    "no_improve_patience": 10,
+    "no_improve_patience": 15,
     "perturbation_prob": 0.7,
     "max_perturbations": 3,
 
