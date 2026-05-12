@@ -54,7 +54,8 @@ class GNNILSTrainer:
         if checkpoint_dir_cfg:
             self.checkpoint_dir = Path(checkpoint_dir_cfg).expanduser()
         else:
-            self.checkpoint_dir = get_model_root(config) / 'gnn_ils'
+            expt_name = config.get('expt_name', 'default')
+            self.checkpoint_dir = get_model_root(config) / 'gnn_ils' / expt_name
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         self.save_every = config.get('save_every', 10)
