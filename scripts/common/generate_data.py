@@ -27,9 +27,15 @@ def main():
                        help='生成するデータモード (default: train val test)')
     parser.add_argument('--force', action='store_true',
                        help='確認なしで既存データを削除して再生成')
+    parser.add_argument('--resume', action='store_true',
+                       help='既存データを保持し、途中から再開')
     parser.add_argument('--clean-only', action='store_true',
                        help='データを削除するのみ（再生成しない）')
     args = parser.parse_args()
+
+    if args.force and args.resume:
+        print("Error: --force と --resume は同時に指定できません。")
+        sys.exit(1)
     
     print("\n" + "="*60)
     print("DATASET GENERATION")
@@ -58,7 +64,7 @@ def main():
         if data_dir.exists():
             existing_dirs.append(data_dir)
 
-    if existing_dirs:
+    if existing_dirs and not args.resume:
         print(f"\n既存のデータディレクトリが見つかりました:")
         for dir_path in existing_dirs:
             print(f"  - {dir_path}")
@@ -69,12 +75,14 @@ def main():
                 print("データ生成をキャンセルしました。")
                 sys.exit(0)
 
-    # 既存データの削除
-    for mode in args.modes:
-        data_dir = get_mode_dir(mode, config)
-        if data_dir.exists():
-            shutil.rmtree(data_dir)
-            print(f"削除: {data_dir}")
+        # 既存データの削除
+        for mode in args.modes:
+            data_dir = get_mode_dir(mode, config)
+            if data_dir.exists():
+                shutil.rmtree(data_dir)
+                print(f"削除: {data_dir}")
+    elif args.resume and existing_dirs:
+        print(f"\n--resume: 既存データを保持し、途中から再開します。")
     
     if args.clean_only:
         print("\nデータ削除が完了しました。")

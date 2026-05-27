@@ -45,7 +45,7 @@ def run_single_case(config_path: str, results_dir: Path, args) -> dict:
 
     # --- データ生成 ---
     if not args.skip_data_gen:
-        if not dataset_exists(config):
+        if not dataset_exists(config, check_count=True):
             print(f"\n  Generating data for {expt_name}...")
             quick_generate(config_path)
         else:
@@ -188,6 +188,7 @@ def main():
         'cases': [],
     }
 
+    interrupted = False
     for i, config_path in enumerate(args.configs):
         print(f"\n{'='*70}")
         print(f"[{i + 1}/{len(args.configs)}] {config_path}")
@@ -196,6 +197,13 @@ def main():
         try:
             result = run_single_case(config_path, results_dir, args)
             summary['cases'].append(result)
+        except KeyboardInterrupt:
+            print(f"\n  Interrupted by user. Saving partial results...")
+            summary['cases'].append({
+                'config_path': config_path,
+                'status': 'interrupted',
+            })
+            interrupted = True
         except Exception as e:
             print(f"\n  ERROR: {e}")
             traceback.print_exc()
@@ -207,6 +215,9 @@ def main():
 
         # 中間保存
         save_summary(summary, results_dir)
+
+        if interrupted:
+            break
 
     # 最終サマリー表示
     print(f"\n{'='*70}")
