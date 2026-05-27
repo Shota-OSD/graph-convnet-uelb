@@ -4,7 +4,7 @@ import networkx as nx
 import csv
 import torch
 
-from src.common.config.paths import get_mode_dir
+from src.common.config.paths import get_mode_dir, BUCKET_SIZE
 
 class DotDict(dict):
     """Wrapper around in-built dict class to access members through the dot operation.
@@ -78,7 +78,7 @@ class DatasetReader(object):
         batch_load_factor = []
 
         for i in batch_indices:
-            bucket = i - (i % 10)
+            bucket = i - (i % BUCKET_SIZE)
             # define file path
             graph_file = str(self.data_dir / 'graph_file' / str(bucket) / f'graph_{i}.gml')
             commodity_file = str(self.data_dir / 'commodity_file' / str(bucket) / f'commodity_data_{i}.csv')

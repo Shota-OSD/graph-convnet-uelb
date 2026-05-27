@@ -3,8 +3,74 @@ import csv
 import networkx as nx
 from .data_maker import DataMaker
 from .exact_solution import SolveExactSolution
-from src.common.config.paths import get_mode_dir
+from src.common.config.paths import get_mode_dir, get_graph_file, get_commodity_file, get_node_flow_file, BUCKET_SIZE
 import torch
+
+
+def _count_completed_data(mode_dir, num_data):
+    """完了済みデータの連続インデックス数を返す。
+
+    exact_solution.csv の行数と、各インデックスの 3 ファイル
+    (graph, commodity, node_flow) の存在を確認し、
+    連続して揃っている最大インデックス+1 を返す。
+    """
+    exact_file = mode_dir / "exact_solution.csv"
+    if not exact_file.exists():
+        return 0
+
+    # exact_solution.csv の行数を取得
+    try:
+        with open(exact_file, 'r') as f:
+            csv_rows = list(csv.reader(f))
+        num_csv_rows = len(csv_rows)
+    except Exception:
+        return 0
+
+    if num_csv_rows == 0:
+        return 0
+
+    # 各インデックスの 3 ファイルが揃っているか確認
+    completed = 0
+    for i in range(min(num_csv_rows, num_data)):
+        bucket = i - (i % BUCKET_SIZE)
+        graph_path = mode_dir / "graph_file" / str(bucket) / f"graph_{i}.gml"
+        commodity_path = mode_dir / "commodity_file" / str(bucket) / f"commodity_data_{i}.csv"
+        node_flow_path = mode_dir / "node_flow_file" / str(bucket) / f"node_flow_{i}.csv"
+        if graph_path.exists() and commodity_path.exists() and node_flow_path.exists():
+            completed = i + 1
+        else:
+            break
+
+    return completed
+
+
+def _cleanup_incomplete(mode_dir, completed, num_data):
+    """completed 以降の不完全データを削除し、exact_solution.csv を切り詰める。"""
+    exact_file = mode_dir / "exact_solution.csv"
+
+    # exact_solution.csv を completed 行に切り詰め
+    if exact_file.exists():
+        try:
+            with open(exact_file, 'r') as f:
+                rows = list(csv.reader(f))
+            with open(exact_file, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(rows[:completed])
+        except Exception:
+            pass
+
+    # completed 以降の個別ファイルを削除
+    for i in range(completed, num_data):
+        bucket = i - (i % BUCKET_SIZE)
+        for subdir, prefix, suffix in [
+            ("graph_file", "graph_", ".gml"),
+            ("commodity_file", "commodity_data_", ".csv"),
+            ("node_flow_file", "node_flow_", ".csv"),
+        ]:
+            path = mode_dir / subdir / str(bucket) / f"{prefix}{i}{suffix}"
+            if path.exists():
+                path.unlink()
+
 
 def create_data_files(config, data_mode="test"):
     """
@@ -28,16 +94,27 @@ def create_data_files(config, data_mode="test"):
     incorrect_value_count = 0
     non_optimal_count = 0
 
-    if os.path.exists(exact_file_name):
-        os.remove(exact_file_name)
+    # 再開ロジック: 完了済みデータ数を確認
+    start_index = _count_completed_data(mode_dir, num_data)
 
-    for i in range(num_data):
+    if start_index >= num_data:
+        print(f"All {num_data} {data_mode} data already completed. Skipping.")
+        return
+
+    if start_index > 0:
+        print(f"Resuming {data_mode} data generation from index {start_index}/{num_data}")
+        _cleanup_incomplete(mode_dir, start_index, num_data)
+    else:
+        if os.path.exists(exact_file_name):
+            os.remove(exact_file_name)
+
+    for i in range(start_index, num_data):
         data = i
-        if data % 10 == 0:
+        if data % BUCKET_SIZE == 0:
             print(f"{data} data was created.")
 
         # ディレクトリ番号の定義
-        file_number = data - (data % 10)
+        file_number = data - (data % BUCKET_SIZE)
 
         # ディレクトリ作成
         directories = ["graph_file", "commodity_file", "node_flow_file"]

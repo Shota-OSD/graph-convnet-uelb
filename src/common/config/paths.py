@@ -22,9 +22,13 @@
 
 from __future__ import annotations
 
+import csv
 import os
 from pathlib import Path
 from typing import Any, Optional
+
+# データファイルをグループ化するバケットサイズ (0/, 10/, 20/, ...)
+BUCKET_SIZE = 10
 
 ENV_DATA_ROOT = "GCN_UELB_DATA_ROOT"
 ENV_MODEL_ROOT = "GCN_UELB_MODEL_ROOT"
@@ -101,12 +105,12 @@ def get_exact_solution_file(mode: str, config: Any) -> Path:
 
 def get_graph_file(mode: str, idx: int, config: Any) -> Path:
     """個別グラフファイルのパスを返す (10件ごとに番号付けされたサブディレクトリ)."""
-    bucket = idx - (idx % 10)
+    bucket = idx - (idx % BUCKET_SIZE)
     return get_mode_dir(mode, config) / "graph_file" / str(bucket) / f"graph_{idx}.gml"
 
 
 def get_commodity_file(mode: str, idx: int, config: Any) -> Path:
-    bucket = idx - (idx % 10)
+    bucket = idx - (idx % BUCKET_SIZE)
     return (
         get_mode_dir(mode, config)
         / "commodity_file"
@@ -116,7 +120,7 @@ def get_commodity_file(mode: str, idx: int, config: Any) -> Path:
 
 
 def get_node_flow_file(mode: str, idx: int, config: Any) -> Path:
-    bucket = idx - (idx % 10)
+    bucket = idx - (idx % BUCKET_SIZE)
     return (
         get_mode_dir(mode, config)
         / "node_flow_file"
@@ -125,11 +129,18 @@ def get_node_flow_file(mode: str, idx: int, config: Any) -> Path:
     )
 
 
-def dataset_exists(config: Any, modes: tuple = ("train", "val", "test")) -> bool:
+def dataset_exists(
+    config: Any,
+    modes: tuple = ("train", "val", "test"),
+    check_count: bool = False,
+) -> bool:
     """指定 config のデータセットが存在するかを確認する.
 
     各モードディレクトリと必要なサブディレクトリ (commodity_file,
     graph_file, node_flow_file) の存在をチェック。
+
+    ``check_count=True`` の場合、各モードの exact_solution.csv の行数が
+    ``num_{mode}_data`` 以上かも追加で確認する。
     """
     required_subdirs = ("commodity_file", "graph_file", "node_flow_file")
     for mode in modes:
@@ -145,5 +156,19 @@ def dataset_exists(config: Any, modes: tuple = ("train", "val", "test")) -> bool
                 d for d in sub_dir.iterdir() if d.is_dir() and d.name.isdigit()
             ]
             if not numeric_subs:
+                return False
+        if check_count:
+            expected = _config_get(config, f"num_{mode}_data")
+            if expected is None:
+                continue
+            exact_csv = mode_dir / "exact_solution.csv"
+            if not exact_csv.exists():
+                return False
+            try:
+                with open(exact_csv, 'r') as f:
+                    row_count = sum(1 for _ in csv.reader(f))
+                if row_count < int(expected):
+                    return False
+            except Exception:
                 return False
     return True
