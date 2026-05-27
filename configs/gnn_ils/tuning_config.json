@@ -4,9 +4,10 @@
   "grid_search": {
     "description": "Grid search configuration with predefined parameter combinations",
     "parameters": {
-      "reward_scale": [30.0, 50.0],
-      "entropy_weight_l1": [0.035, 0.05],
-      "perturbation_prob": [0.2, 0.3, 0.5]
+      "value_loss_weight": [0.5, 1.0],
+      "entropy_weight_l1": [0.02, 0.05],
+      "perturbation_prob": [0.5, 0.7],
+      "max_epochs": [50]
     }
   },
 

@@ -176,16 +176,15 @@ class ILSEnvironment:
 
         # カウンタ更新
         self.iteration += 1
-        if new_load_factor < old_load_factor - 1e-8:
-            self.no_improve_count = 0
-        else:
-            self.no_improve_count += 1
 
-        # Best-so-far 更新
+        # Best-so-far 更新 & patience リセット（best LF 更新時のみリセット）
         if new_load_factor < self.best_load_factor - 1e-8:
             self.best_load_factor = new_load_factor
             self.best_assignment = [list(p) for p in self.current_assignment]
             self.best_iteration = self.iteration
+            self.no_improve_count = 0
+        else:
+            self.no_improve_count += 1
 
         reward = self._compute_reward(old_load_factor, new_load_factor)
         done = self._check_done()

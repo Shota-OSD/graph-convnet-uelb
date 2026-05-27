@@ -1,6 +1,7 @@
 {
     "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet, 15 commodities) ===",
     "expt_name": "gnn_ils_nsfnet_c15",
+    "dataset_name": "nsfnet_c15",
     "gpu_id": "0",
     "use_gpu": false,
 
@@ -18,7 +19,7 @@
     "capacity_lower": 500,
     "capacity_higher": 2500,
     "demand_lower": 5,
-    "demand_higher": 500,
+    "demand_higher": 335,
 
     "_comment_model": "=== Model Architecture ===",
     "hidden_dim": 128,
@@ -39,7 +40,7 @@
     "max_candidate_paths": 15,
 
     "_comment_ils": "=== ILS Configuration ===",
-    "max_iterations": 75,
+    "max_iterations": 120,
     "no_improve_patience": 12,
     "perturbation_prob": 0.7,
     "max_perturbations": 3,
@@ -48,7 +49,7 @@
     "normalize_returns": true,
     "return_norm_momentum": 0.99,
     "_comment_critic_stability": "=== Critic Stability ===",
-    "value_head_bias_init": -2.0,
+    "value_head_bias_init": 0.0,
     "warmup_epochs": 0,
 
     "_comment_ppo": "=== PPO Configuration ===",
@@ -68,7 +69,7 @@
     "reward_mode": "shared",
 
     "_comment_training": "=== Training Configuration ===",
-    "max_epochs": 50,
+    "max_epochs": 80,
     "val_every": 5,
     "batch_size": 1,
     "_batch_size_note": "ILS は1サンプルずつ改善ループを回す",

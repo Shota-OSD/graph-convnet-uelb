@@ -1,6 +1,7 @@
 {
     "_comment_meta": "=== GNN-ILS: GNN-guided Iterated Local Search (NSFNet, 20 commodities) ===",
     "expt_name": "gnn_ils_nsfnet_c20",
+    "dataset_name": "nsfnet_c20",
     "gpu_id": "0",
     "use_gpu": false,
 
@@ -18,7 +19,7 @@
     "capacity_lower": 500,
     "capacity_higher": 2500,
     "demand_lower": 5,
-    "demand_higher": 500,
+    "demand_higher": 250,
 
     "_comment_model": "=== Model Architecture ===",
     "hidden_dim": 128,
@@ -39,8 +40,8 @@
     "max_candidate_paths": 15,
 
     "_comment_ils": "=== ILS Configuration ===",
-    "max_iterations": 75,
-    "no_improve_patience": 15,
+    "max_iterations": 150,
+    "no_improve_patience": 10,
     "perturbation_prob": 0.7,
     "max_perturbations": 3,
 
@@ -48,17 +49,17 @@
     "normalize_returns": true,
     "return_norm_momentum": 0.99,
     "_comment_critic_stability": "=== Critic Stability ===",
-    "value_head_bias_init": -2.0,
+    "value_head_bias_init": 0.0,
     "warmup_epochs": 0,
 
     "_comment_ppo": "=== PPO Configuration ===",
     "use_ppo": true,
-    "ppo_clip_eps": 0.3,
+    "ppo_clip_eps": 0.2,
     "ppo_update_epochs": 2,
     "_ppo_update_epochs_note": "start=1, increase if clip_frac stays < 0.1",
 
-    "entropy_weight_l1": 0.05,
-    "entropy_weight_l2": 0.05,
+    "entropy_weight_l1": 0.02,
+    "entropy_weight_l2": 0.01,
     "_entropy_note": "L1 (C択) は探索空間が小さいため大きめ、L2 (パス択) は小さめ",
     "value_loss_weight": 0.5,
     "gamma": 0.95,
@@ -68,7 +69,7 @@
     "reward_mode": "shared",
 
     "_comment_training": "=== Training Configuration ===",
-    "max_epochs": 50,
+    "max_epochs": 70,
     "val_every": 5,
     "batch_size": 1,
     "_batch_size_note": "ILS は1サンプルずつ改善ループを回す",
