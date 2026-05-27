@@ -256,25 +256,40 @@ class RLTrainer:
         
     def choose_action(self, state: np.ndarray) -> int:
         """
-        ニューラルネットワークの予測値に基づく行動選択
-        
+        行動選択（action_mode設定で切り替え可能）
+
+        action_mode:
+            "dqn" (default): DQNによるQ値ベースの行動選択
+            "greedy_index0": 常にindex 0を選択（候補リストは降順ソート済みなので最大改善量）
+
         Args:
             state: 現在の状態
-            
+
         Returns:
             選択された行動
         """
+        action_mode = self.config.get('action_mode', 'dqn')
+
+        if action_mode == 'greedy_index0':
+            # 降順ソート済みなのでindex 0が最大改善量
+            # ただし-100.0（無効候補）の場合はスキップ
+            for i, val in enumerate(state):
+                if val != -100.0:
+                    return i
+            return 0
+
+        # DQNによる行動選択
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q_values = self.model(state_tensor)
-            
+
             # 観測変数が-100.0の場合は、その行動を選択しない
             filtered_q_values = torch.where(
                 torch.FloatTensor(state).to(self.device) == -100.0,
                 torch.FloatTensor([-float('inf')]).to(self.device),
                 q_values.squeeze(0)
             )
-            
+
             action = torch.argmax(filtered_q_values).item()
             return action
     

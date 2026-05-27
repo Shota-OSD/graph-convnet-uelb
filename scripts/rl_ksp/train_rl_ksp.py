@@ -22,6 +22,9 @@ def main():
     parser = argparse.ArgumentParser(description='RL-KSP Training and Testing')
     parser.add_argument('--config', type=str, default='configs/rl_ksp/rl_config.json',
                        help='設定ファイルのパス (default: configs/rl_ksp/rl_config.json)')
+    parser.add_argument('--action-mode', type=str, default=None,
+                       choices=['dqn', 'greedy_index0'],
+                       help='テスト時の行動選択モード (default: dqn)')
     args = parser.parse_args()
 
     print("\n" + "="*60)
@@ -38,14 +41,22 @@ def main():
         print(f"python scripts/common/generate_data.py --config {args.config}")
         sys.exit(1)
 
-    # RL トレーナーの初期化
-    rl_trainer = RLTrainer(dict(config))
+    # action-mode の上書き（テスト時に適用）
+    config_dict = dict(config)
+    if args.action_mode:
+        config_dict['action_mode'] = args.action_mode
 
-    # 学習の実行
-    print("\n" + "="*60)
-    print("TRAINING PHASE")
-    print("="*60)
-    rl_trainer.train()
+    # RL トレーナーの初期化
+    rl_trainer = RLTrainer(config_dict)
+
+    # 学習の実行（greedy_index0 の場合はNNを使わないのでスキップ）
+    if config_dict.get('action_mode') == 'greedy_index0':
+        print("\n[action_mode=greedy_index0] Training skipped (no NN used)")
+    else:
+        print("\n" + "="*60)
+        print("TRAINING PHASE")
+        print("="*60)
+        rl_trainer.train()
 
     # テストの実行
     print("\n" + "="*60)

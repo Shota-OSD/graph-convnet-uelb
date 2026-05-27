@@ -27,6 +27,9 @@ def main():
                        help='Path to trained model file')
     parser.add_argument('--episodes', type=int, default=None,
                        help='Number of test episodes (default: from config)')
+    parser.add_argument('--action-mode', type=str, default=None,
+                       choices=['dqn', 'greedy_index0'],
+                       help='Action selection mode (default: dqn)')
     args = parser.parse_args()
 
     # Load configuration
@@ -52,6 +55,8 @@ def main():
     # Update config to load the specified model
     config['load_saved_model'] = True
     config['saved_model_path'] = args.model
+    if args.action_mode:
+        config['action_mode'] = args.action_mode
 
     # Initialize RL trainer
     print("\nInitializing RL trainer...")
