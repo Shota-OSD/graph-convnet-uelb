@@ -3,6 +3,7 @@ import csv
 import networkx as nx
 from .data_maker import DataMaker
 from .exact_solution import SolveExactSolution
+from .ksp_lp_solution import SolveKspLpSolution
 from src.common.config.paths import get_mode_dir, get_graph_file, get_commodity_file, get_node_flow_file, BUCKET_SIZE
 import torch
 
@@ -42,6 +43,18 @@ def _count_completed_data(mode_dir, num_data):
             break
 
     return completed
+
+
+def _truncate_csv(filepath, num_rows):
+    """CSV ファイルを先頭 num_rows 行に切り詰める。"""
+    try:
+        with open(filepath, 'r') as f:
+            rows = list(csv.reader(f))
+        with open(filepath, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(rows[:num_rows])
+    except Exception:
+        pass
 
 
 def _cleanup_incomplete(mode_dir, completed, num_data):
@@ -86,10 +99,17 @@ def create_data_files(config, data_mode="test"):
     require_optimal = getattr(config, 'require_optimal', True)
     Maker = DataMaker(config)
 
+    # KSP-LP 設定の読み込み
+    ksp_lp_config = getattr(config, 'ksp_lp', None) or {}
+    ksp_lp_enabled = ksp_lp_config.get('enabled', False) if isinstance(ksp_lp_config, dict) else False
+    ksp_lp_K = ksp_lp_config.get('K', 10) if isinstance(ksp_lp_config, dict) else 10
+    ksp_lp_time_limit = ksp_lp_config.get('solver_time_limit', None) if isinstance(ksp_lp_config, dict) else None
+
     mode_dir = get_mode_dir(data_mode, config)
     mode_dir.mkdir(parents=True, exist_ok=True)
 
     exact_file_name = str(mode_dir / "exact_solution.csv")
+    ksp_lp_file_name = str(mode_dir / "ksp_lp_solution.csv")
     infinit_loop_count = 0
     incorrect_value_count = 0
     non_optimal_count = 0
@@ -104,9 +124,14 @@ def create_data_files(config, data_mode="test"):
     if start_index > 0:
         print(f"Resuming {data_mode} data generation from index {start_index}/{num_data}")
         _cleanup_incomplete(mode_dir, start_index, num_data)
+        # KSP-LP の CSV も切り詰め
+        if ksp_lp_enabled and os.path.exists(ksp_lp_file_name):
+            _truncate_csv(ksp_lp_file_name, start_index)
     else:
         if os.path.exists(exact_file_name):
             os.remove(exact_file_name)
+        if ksp_lp_enabled and os.path.exists(ksp_lp_file_name):
+            os.remove(ksp_lp_file_name)
 
     for i in range(start_index, num_data):
         data = i
@@ -170,28 +195,50 @@ def create_data_files(config, data_mode="test"):
         # 厳密解保存
         with open(exact_file_name, 'a', newline='') as f:
             out = csv.writer(f)
-            out.writerow([objective_value, elapsed_time]) 
+            out.writerow([objective_value, elapsed_time])
 
         # 厳密解ノードフロー保存
         with open(node_flow_file_name, 'w', newline='') as file:
             writer = csv.writer(file)
             for row in node_flow_matrix:
                 writer.writerow(row)
-        
+
+        # KSP-LP 計算
+        if ksp_lp_enabled:
+            try:
+                ksp_lp_solver = SolveKspLpSolution(
+                    G, commodity_list, K=ksp_lp_K,
+                    solver_time_limit=ksp_lp_time_limit
+                )
+                ksp_lp_result = ksp_lp_solver.solve()
+                with open(ksp_lp_file_name, 'a', newline='') as f:
+                    out = csv.writer(f)
+                    out.writerow([
+                        ksp_lp_result['objective_value'],
+                        ksp_lp_result['elapsed_time'],
+                        ksp_lp_result['ksp_elapsed_time'],
+                        1 if ksp_lp_result['is_optimal'] else 0,
+                    ])
+            except Exception as e:
+                print(f"Warning: KSP-LP failed for data {data}: {e}")
+                with open(ksp_lp_file_name, 'a', newline='') as f:
+                    out = csv.writer(f)
+                    out.writerow([1.0, 0.0, 0.0, 0])
+
         """必要ないので一旦スキップ
         # 厳密解エッジフロー保存
         with open(edge_flow_file_name, 'w', newline='') as file:
             writer = csv.writer(file)
             for row in edge_flow_matrix:
                 writer.writerow(row)
-        
+
         # エッジ保存
         with open(edge_file_name, 'w', newline='') as file:
             writer = csv.writer(file)
             for item in edge_list:
                 writer.writerow([item[0], item[1][0], item[1][1]])
         """
-    
+
     print(f"Data generation completed: {num_data} data created.")
     print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}, Non-optimal (discarded): {non_optimal_count} (time_limit={solver_time_limit}s)")
 
