@@ -199,7 +199,8 @@ def create_data_files(config, data_mode="test"):
     # KSP-ILP 事前計算
     K = getattr(config, 'K', None)
     if K is not None:
-        compute_ksp_ilp_solutions(config, data_mode, num_data, K, solver_time_limit)
+        ksp_ilp_time_limit = getattr(config, 'ksp_ilp_time_limit', 300)
+        compute_ksp_ilp_solutions(config, data_mode, num_data, K, ksp_ilp_time_limit)
 
 
 def compute_ksp_ilp_solutions(config, data_mode, num_data, K, time_limit=30):

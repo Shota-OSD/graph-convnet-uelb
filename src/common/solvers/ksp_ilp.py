@@ -36,7 +36,7 @@ class KspIlpResult:
 class KspIlpSolver:
     """KSP 候補パス内で ILP を解いて最適パス割当を求めるソルバー."""
 
-    def __init__(self, solver_name: str = 'HiGHS', time_limit: int = 30):
+    def __init__(self, solver_name: str = 'HiGHS', time_limit: int = 300):
         self.solver_name = solver_name
         self.time_limit = time_limit
         self._solver = self._resolve_solver()
