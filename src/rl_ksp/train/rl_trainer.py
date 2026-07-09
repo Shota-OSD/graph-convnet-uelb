@@ -422,7 +422,15 @@ class RLTrainer:
         self.env.enable_step_profiling = True
         self.env.reset_step_phase_times()
 
+        # gt_load_factor をテスト開始前に一括キャッシュ（エピソード毎の O(N) 走査を排除）
+        num_test_data = self.config.get('num_test_data', 20)
+        gt_load_factor_cache: Dict[int, float] = {}
+        dataset_for_cache = DatasetReader(num_test_data, 1, 'test', self.config, shuffle=False)
+        for i, batch in enumerate(dataset_for_cache):
+            gt_load_factor_cache[i] = float(np.mean(batch.load_factor))
+
         test_results = []
+        episode_approx_rates: List[float] = []
         total_test_time = 0.0
         # フェーズ別累積時間
         phase_totals = {
@@ -463,25 +471,20 @@ class RLTrainer:
 
             episode_time = time.time() - start_time
             total_test_time += episode_time
-            
+
             # 実際にRLが使用したデータのインデックスを取得
             current_data_idx = getattr(self.env, 'current_used_data_idx', self.env.data_idx - 1)
-            gt_load_factor = self._get_actual_load_factor(current_data_idx)
-            
-            # RLが実際に使用したファイルパスをデバッグ出力
-            graph_file = str(get_graph_file('test', current_data_idx, self.config))
-            commodity_file = str(get_commodity_file('test', current_data_idx, self.config))
-            # print(f"    RL actually used files: {graph_file}, {commodity_file}")
-            
+            gt_load_factor = gt_load_factor_cache.get(current_data_idx, 0.0)
+
             # GCNと同じ計算方法: gt_load_factor / predicted_load_factor * 100
             if max_load > 0:
                 approximation_rate = gt_load_factor / max_load * 100
             else:
                 approximation_rate = 0.0
-            
+
             # デバッグ情報
             print(f"  Debug: data_idx={current_data_idx}, gt_load={gt_load_factor:.6f}, rl_load={max_load:.6f}, approx_rate={approximation_rate:.2f}%")
-            
+
             # Approximation Rateが100%を明確に超えた場合のみ異常とみなして強制終了
             # 浮動小数点の精度を考慮して100.01%以上を異常とする
             if approximation_rate > 100.01:
@@ -491,13 +494,11 @@ class RLTrainer:
                 print(f"   Data Index: {current_data_idx}")
                 print(f"   GT Load Factor: {gt_load_factor:.6f}")
                 print(f"   RL Max Load: {max_load:.6f}")
-                print(f"   Files used: {graph_file}")
-                print(f"                {commodity_file}")
                 print(f"\nProgram terminated to prevent invalid results.")
                 exit(1)
-            
-            self.metrics_logger.log_test_metrics(approximation_rate, episode_time)
-            
+
+            episode_approx_rates.append(approximation_rate)
+
             test_results.append({
                 'episode': episode + 1,
                 'total_reward': total_reward,
@@ -516,18 +517,23 @@ class RLTrainer:
         
         # テスト結果の保存
         self._save_test_results(test_results)
-        
+
+        # 全エピソードの平均 approximation rate を1回だけ記録（GCN と同じ粒度）
+        mean_approx_rate = float(np.mean(episode_approx_rates)) if episode_approx_rates else 0.0
+        self.metrics_logger.log_test_metrics(mean_approx_rate, total_test_time)
+
         # 統計の表示（GCNと同じスタイル）
         avg_reward = np.mean([r['total_reward'] for r in test_results])
         avg_max_load = np.mean([r['max_load'] for r in test_results])
         avg_steps = np.mean([r['steps'] for r in test_results])
         avg_time = total_test_time / test_episodes
-        
+
         print(f"\n" + "="*50)
         print(f"RL TEST RESULTS SUMMARY")
         print(f"="*50)
         print(f"Average Total Reward: {avg_reward:.6f}")
         print(f"Average Max Load Factor: {avg_max_load:.6f}")
+        print(f"Average Approximation Rate: {mean_approx_rate:.2f}%")
         print(f"Average Steps per Episode: {avg_steps:.2f}")
         print(f"Average Time per Episode: {avg_time:.4f}s")
         print(f"Total Test Time: {total_test_time:.2f}s")
