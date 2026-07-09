@@ -1,0 +1,17 @@
+{
+    "expt_name": "rl_training",
+    "gpu_id": "0",
+    "use_gpu": false,
+    "solver_type": "pulp",
+    "graph_model": "nsfnet",
+    "num_train_data": 100,
+    "num_test_data": 20,
+    "num_val_data": 20,
+    "num_nodes": 40,
+    "num_commodities": 5,
+    "capacity_lower": 1000,
+    "capacity_higher": 10000,
+    "demand_lower": 1,
+    "demand_higher": 500,
+    "K": 10
+}

@@ -103,6 +103,11 @@ def get_exact_solution_file(mode: str, config: Any) -> Path:
     return get_mode_dir(mode, config) / "exact_solution.csv"
 
 
+def get_ksp_ilp_solution_file(mode: str, config: Any, K: int) -> Path:
+    """モード毎の ksp_ilp_K{K}_solution.csv のパスを返す."""
+    return get_mode_dir(mode, config) / f"ksp_ilp_K{K}_solution.csv"
+
+
 def get_graph_file(mode: str, idx: int, config: Any) -> Path:
     """個別グラフファイルのパスを返す (10件ごとに番号付けされたサブディレクトリ)."""
     bucket = idx - (idx % BUCKET_SIZE)

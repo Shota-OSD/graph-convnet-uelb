@@ -1,6 +1,6 @@
 import networkx as nx
 import csv
-from .exact_solution import SolveExactSolution
+from src.common.solvers.exact_ilp import SolveExactSolution
 from src.common.graph.graph_utils import *
 from src.common.graph.graph_making import Graphs
 
