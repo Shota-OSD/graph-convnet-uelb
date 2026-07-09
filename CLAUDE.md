@@ -31,23 +31,42 @@ python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/rl_config.json
 python scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
 ```
 
+### KSP-ILP ベースライン事前計算
+```bash
+# 既存データに対して KSP-ILP を一括計算（train/val/test 全モード）
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10
+
+# K を変えて追加計算（ksp_ilp_K{K}_solution.csv に別ファイル保存）
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 20
+
+# 強制再計算
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10 --recompute
+```
+
 ### 評価
 ```bash
 python scripts/gcn/train_gcn.py --config configs/gcn/load_saved_model.json
 python scripts/rl_ksp/test_rl_ksp.py --config configs/rl_ksp/rl_load_saved_model.json
 python scripts/seq_flow_rl/evaluate_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
+
+# KSP-ILP ベースラインの結果確認
+python scripts/common/evaluate_ksp_ilp.py --config configs/gcn/default2.json --mode test --K 10
 ```
 
 ## プロジェクト構造
 
 ```
 src/
-├── common/          # 共有モジュール（config, data, graph, types, utils, visualization）
+├── common/          # 共有モジュール
+│   ├── config/      # 設定管理（ConfigManager, paths）
+│   ├── data_management/  # データ I/O（DatasetReader, データ生成）
+│   ├── graph/       # グラフ構造・パス探索（KSP, グラフ生成）
+│   └── solvers/     # 最適化ソルバー（exact_ilp, ksp_ilp）
 ├── gcn/             # GCN実装（models, algorithms, train, training, tuning）
 ├── rl_ksp/          # RL-KSP実装（models, environment, train, tuning）
 └── seq_flow_rl/     # SeqFlowRL実装（models, training, algorithms）
 scripts/             # エントリーポイントスクリプト
-configs/             # JSON設定ファイル（gcn/, rl_ksp/, seqflowrl/）
+configs/             # JSON設定ファイル（gcn/, rl_ksp/, seqflowrl/, pilp/）
 ```
 
 ## コーディング規約

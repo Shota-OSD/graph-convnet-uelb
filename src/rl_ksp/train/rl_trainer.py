@@ -20,7 +20,7 @@ from src.rl_ksp.environment.rl_environment import MinMaxLoadKSPsEnv
 from src.rl_ksp.models.dqn_model import DQNModel
 from src.common.data_management.dataset_reader import DatasetReader
 from src.gcn.train.metrics import MetricsLogger
-from src.common.data_management.exact_solution import SolveExactSolution
+from src.common.solvers.exact_ilp import SolveExactSolution
 from src.common.config.paths import (
     get_model_root,
     get_graph_file,

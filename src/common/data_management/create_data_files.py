@@ -2,8 +2,9 @@ import os
 import csv
 import networkx as nx
 from .data_maker import DataMaker
-from .exact_solution import SolveExactSolution
-from src.common.config.paths import get_mode_dir, get_graph_file, get_commodity_file, get_node_flow_file, BUCKET_SIZE
+from src.common.solvers.exact_ilp import SolveExactSolution
+from src.common.solvers.ksp_ilp import KspIlpSolver
+from src.common.config.paths import get_mode_dir, get_graph_file, get_commodity_file, get_node_flow_file, get_ksp_ilp_solution_file, BUCKET_SIZE
 import torch
 
 
@@ -195,5 +196,53 @@ def create_data_files(config, data_mode="test"):
     print(f"Data generation completed: {num_data} data created.")
     print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}, Non-optimal (discarded): {non_optimal_count} (time_limit={solver_time_limit}s)")
 
-    #exact_edges_matrix = exact_edges_matrix.unsqueeze(0) 
-    #return exact_edges_matrix
+    # KSP-ILP 事前計算
+    K = getattr(config, 'K', None)
+    if K is not None:
+        compute_ksp_ilp_solutions(config, data_mode, num_data, K, solver_time_limit)
+
+
+def compute_ksp_ilp_solutions(config, data_mode, num_data, K, time_limit=30):
+    """既存データに対して KSP-ILP を事前計算し CSV に保存する.
+
+    exact_solution.csv と同じ形式 [load_factor, elapsed_time] で
+    ksp_ilp_K{K}_solution.csv に書き出す。
+    既に完了済みの行はスキップする。
+
+    Args:
+        config: 設定オブジェクト
+        data_mode: 'train', 'val', 'test'
+        num_data: データ数
+        K: KSP 候補パス数
+        time_limit: ILP ソルバーの制限時間 [秒]
+    """
+    ksp_ilp_file = get_ksp_ilp_solution_file(data_mode, config, K)
+
+    # 完了済み行数を確認（再開サポート）
+    start_index = 0
+    if ksp_ilp_file.exists():
+        try:
+            with open(ksp_ilp_file, 'r') as f:
+                start_index = sum(1 for _ in csv.reader(f))
+        except Exception:
+            start_index = 0
+
+    if start_index >= num_data:
+        print(f"KSP-ILP (K={K}) for {data_mode}: all {num_data} already computed. Skipping.")
+        return
+
+    if start_index > 0:
+        print(f"KSP-ILP (K={K}) for {data_mode}: resuming from index {start_index}/{num_data}")
+
+    print(f"Computing KSP-ILP solutions (K={K}) for {data_mode} data...")
+    solver = KspIlpSolver(solver_name='HiGHS', time_limit=time_limit)
+
+    for i in range(start_index, num_data):
+        result = solver.solve_from_files(i, data_mode, config, K)
+        with open(ksp_ilp_file, 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([result.alpha, result.elapsed_time])
+        if i % BUCKET_SIZE == 0:
+            print(f"  KSP-ILP: {i}/{num_data} computed (MLU={result.alpha:.6f})")
+
+    print(f"KSP-ILP (K={K}) computation completed: {num_data} solutions saved to {ksp_ilp_file}")
