@@ -73,17 +73,24 @@ def _cleanup_incomplete(mode_dir, completed, num_data):
                 path.unlink()
 
 
-def create_data_files(config, data_mode="test"):
+def create_data_files(config, data_mode="test", num_samples=None, skip_exact=False):
     """
     指定されたモードのデータファイル（グラフ、品種、厳密解など）を生成し保存する関数。
 
     Args:
         config: 設定オブジェクト（`num_{data_mode}_data` や `solver_type` を含む必要あり）。
         data_mode (str): データモード ("train", "val", "test")。デフォルトは "test"。
+        num_samples (int, optional): 生成するサンプル数を上書き（パイロットテスト用）。
+        skip_exact (bool): Trueの場合、厳密解の計算をスキップ。CLIフラグまたはconfigで制御。
     """
+    # CLI フラグ or config で skip_exact を決定
+    skip_exact = skip_exact or getattr(config, 'skip_exact', False)
     num_data = getattr(config, f'num_{data_mode}_data')
+    if num_samples is not None:
+        num_data = min(num_data, num_samples)
     solver_type = config.solver_type
     solver_time_limit = getattr(config, 'solver_time_limit', 30)
+    solver_ratio_gap = getattr(config, 'solver_ratio_gap', None)
     require_optimal = getattr(config, 'require_optimal', True)
     Maker = DataMaker(config)
 
@@ -91,6 +98,14 @@ def create_data_files(config, data_mode="test"):
     mode_dir.mkdir(parents=True, exist_ok=True)
 
     exact_file_name = str(mode_dir / "exact_solution.csv")
+    K = getattr(config, 'K', None)
+    ksp_ilp_time_limit = getattr(config, 'ksp_ilp_time_limit', 300)
+    ksp_ilp_ratio_gap = getattr(config, 'ksp_ilp_ratio_gap', None)
+    ksp_ilp_solver = None
+    ksp_ilp_file = None
+    if K is not None:
+        ksp_ilp_solver = KspIlpSolver(solver_name='CBC', time_limit=ksp_ilp_time_limit, ratio_gap=ksp_ilp_ratio_gap)
+        ksp_ilp_file = get_ksp_ilp_solution_file(data_mode, config, K)
     infinit_loop_count = 0
     incorrect_value_count = 0
     non_optimal_count = 0
@@ -130,33 +145,44 @@ def create_data_files(config, data_mode="test"):
         #edge_file_name = str(mode_dir / "edge_file" / str(file_number) / f"edge_numbering_{data}.csv")
         #edge_flow_file_name = str(mode_dir / "edge_flow_file" / str(file_number) / f"edge_flow_{data}.csv")
 
+        # グラフ作成
+        G = Maker.create_graph()
+
+        # 品種作成
+        commodity_list = Maker.generate_commodity()
+
+        # グラフ保存
+        nx.write_gml(G, graph_file_name)
+
+        # 品種保存
+        with open(commodity_file_name, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(commodity_list)
+
+        if skip_exact:
+            # KSP-ILP 逐次計算
+            if ksp_ilp_solver is not None:
+                result = ksp_ilp_solver.solve_from_files(data, data_mode, config, K)
+                with open(ksp_ilp_file, 'a', newline='') as f:
+                    csv.writer(f).writerow([result.alpha, result.elapsed_time, result.mip_gap])
+                if data % BUCKET_SIZE == 0:
+                    gap_str = f", Gap={result.mip_gap:.4f}" if result.mip_gap is not None else ""
+                    print(f"  KSP-ILP: {data}/{num_data} (MLU={result.alpha:.6f}{gap_str})")
+            continue
+
         # 作成したデータが適切でない場合のやり直し
         while True:
-            # グラフ作成
-            G = Maker.create_graph()
-            
-            # 品種作成
-            commodity_list = Maker.generate_commodity()
-            
-            # グラフ保存
-            nx.write_gml(G, graph_file_name)
-
-            # 品種保存
-            with open(commodity_file_name, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerows(commodity_list)
-
             # 厳密解の計算
             try:
                 E = SolveExactSolution(solver_type, commodity_file_name, graph_file_name)
-                flow_var_kakai, edge_list, objective_value, elapsed_time, is_optimal = E.solve_exact_solution_to_env(time_limit=solver_time_limit)
+                flow_var_kakai, edge_list, objective_value, elapsed_time, is_optimal, exact_mip_gap = E.solve_exact_solution_to_env(time_limit=solver_time_limit, ratio_gap=solver_ratio_gap)
                 node_flow_matrix, edge_flow_matrix, infinit_loop = E.generate_flow_matrices(flow_var_kakai)
             except Exception as e:
                 print(f"Error in exact solution calculation for data {data}: {e}")
                 infinit_loop = True
                 is_optimal = False
                 objective_value = 1.0  # エラーの場合は1.0として扱う
-            #exact_edges_matrix = E.generate_edges_target()
+                exact_mip_gap = None
 
             # 厳密解が1以上、最適性未証明、またはフローが正しく導けなかった場合のやり直し
             if infinit_loop:
@@ -167,18 +193,35 @@ def create_data_files(config, data_mode="test"):
                 non_optimal_count += 1
             else:
                 break
-        
+
+            # やり直し: グラフと品種を再生成
+            G = Maker.create_graph()
+            commodity_list = Maker.generate_commodity()
+            nx.write_gml(G, graph_file_name)
+            with open(commodity_file_name, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerows(commodity_list)
+
         # 厳密解保存
         with open(exact_file_name, 'a', newline='') as f:
             out = csv.writer(f)
-            out.writerow([objective_value, elapsed_time]) 
+            out.writerow([objective_value, elapsed_time, exact_mip_gap])
 
         # 厳密解ノードフロー保存
         with open(node_flow_file_name, 'w', newline='') as file:
             writer = csv.writer(file)
             for row in node_flow_matrix:
                 writer.writerow(row)
-        
+
+        # KSP-ILP 逐次計算
+        if ksp_ilp_solver is not None:
+            result = ksp_ilp_solver.solve_from_files(data, data_mode, config, K)
+            with open(ksp_ilp_file, 'a', newline='') as f:
+                csv.writer(f).writerow([result.alpha, result.elapsed_time, result.mip_gap])
+            if data % BUCKET_SIZE == 0:
+                gap_str = f", Gap={result.mip_gap:.4f}" if result.mip_gap is not None else ""
+                print(f"  KSP-ILP: {data}/{num_data} (MLU={result.alpha:.6f}{gap_str})")
+
         """必要ないので一旦スキップ
         # 厳密解エッジフロー保存
         with open(edge_flow_file_name, 'w', newline='') as file:
@@ -194,13 +237,8 @@ def create_data_files(config, data_mode="test"):
         """
     
     print(f"Data generation completed: {num_data} data created.")
-    print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}, Non-optimal (discarded): {non_optimal_count} (time_limit={solver_time_limit}s)")
-
-    # KSP-ILP 事前計算
-    K = getattr(config, 'K', None)
-    if K is not None:
-        ksp_ilp_time_limit = getattr(config, 'ksp_ilp_time_limit', 300)
-        compute_ksp_ilp_solutions(config, data_mode, num_data, K, ksp_ilp_time_limit)
+    if not skip_exact:
+        print(f"Infinit loops: {infinit_loop_count}, Incorrect values: {incorrect_value_count}, Non-optimal (discarded): {non_optimal_count} (time_limit={solver_time_limit}s)")
 
 
 def compute_ksp_ilp_solutions(config, data_mode, num_data, K, time_limit=30):
@@ -236,14 +274,15 @@ def compute_ksp_ilp_solutions(config, data_mode, num_data, K, time_limit=30):
         print(f"KSP-ILP (K={K}) for {data_mode}: resuming from index {start_index}/{num_data}")
 
     print(f"Computing KSP-ILP solutions (K={K}) for {data_mode} data...")
-    solver = KspIlpSolver(solver_name='HiGHS', time_limit=time_limit)
+    solver = KspIlpSolver(solver_name='CBC', time_limit=time_limit)
 
     for i in range(start_index, num_data):
         result = solver.solve_from_files(i, data_mode, config, K)
         with open(ksp_ilp_file, 'a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([result.alpha, result.elapsed_time])
+            writer.writerow([result.alpha, result.elapsed_time, result.mip_gap])
         if i % BUCKET_SIZE == 0:
-            print(f"  KSP-ILP: {i}/{num_data} computed (MLU={result.alpha:.6f})")
+            gap_str = f", Gap={result.mip_gap:.4f}" if result.mip_gap is not None else ""
+            print(f"  KSP-ILP: {i}/{num_data} computed (MLU={result.alpha:.6f}{gap_str})")
 
     print(f"KSP-ILP (K={K}) computation completed: {num_data} solutions saved to {ksp_ilp_file}")

@@ -12,15 +12,32 @@ KSP 候補パス内で ILP を厳密に解く。既存の KSP-Iterative が gree
 """
 
 import csv
+import os
+import re
+import tempfile
 import time
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Optional
 
 import networkx as nx
 import pulp
 
 from src.common.config.paths import get_graph_file, get_commodity_file
 from src.common.graph.k_shortest_path import KShortestPathFinder
+
+
+def parse_cbc_log_for_bound(log_path: str) -> Optional[float]:
+    """CBC ログファイルから best bound (Best possible) をパースする."""
+    try:
+        with open(log_path) as f:
+            log = f.read()
+        # "Best possible: 0.43000000" のパターン
+        m = re.search(r'Best possible:\s+([-\d.eE+]+)', log)
+        if m:
+            return float(m.group(1))
+    except Exception:
+        pass
+    return None
 
 
 @dataclass
@@ -31,27 +48,30 @@ class KspIlpResult:
     grouping: List[List[int]]  # 選択されたパス (コモディティ毎のノードリスト)
     elapsed_time: float
     is_optimal: bool
+    mip_gap: Optional[float] = None  # MIP Gap (0.0 = 最適解証明済み)
 
 
 class KspIlpSolver:
     """KSP 候補パス内で ILP を解いて最適パス割当を求めるソルバー."""
 
-    def __init__(self, solver_name: str = 'HiGHS', time_limit: int = 300):
+    def __init__(self, solver_name: str = 'CBC', time_limit: int = 300, ratio_gap: Optional[float] = None):
         self.solver_name = solver_name
         self.time_limit = time_limit
-        self._solver = self._resolve_solver()
+        self.ratio_gap = ratio_gap  # 例: 0.05 = 5% Gap で停止
 
-    def _resolve_solver(self):
+    def _resolve_solver(self, log_path: Optional[str] = None):
         """PuLP ソルバーインスタンスを返す (HiGHS → CBC フォールバック)."""
+        # CBC は ratioGap を options リストで渡す
+        cbc_options = [f'ratioGap {self.ratio_gap}'] if self.ratio_gap is not None else []
         if self.solver_name == 'HiGHS':
             try:
-                solver = pulp.HiGHS_CMD(msg=False, timeLimit=self.time_limit)
+                solver = pulp.HiGHS_CMD(msg=False, timeLimit=self.time_limit, logPath=log_path)
                 if solver.available():
                     return solver
             except Exception:
                 pass
             print("Warning: HiGHS not available, falling back to CBC")
-        return pulp.PULP_CBC_CMD(msg=False, timeLimit=self.time_limit)
+        return pulp.PULP_CBC_CMD(msg=False, timeLimit=self.time_limit, logPath=log_path, options=cbc_options)
 
     def solve(
         self,
@@ -123,7 +143,8 @@ class KspIlpSolver:
                 )
 
         # --- ソルバー実行 ---
-        solver = self._solver
+        log_path = tempfile.mktemp(suffix='.log')
+        solver = self._resolve_solver(log_path=log_path)
         start = time.time()
         status = prob.solve(solver)
         elapsed_time = time.time() - start
@@ -131,8 +152,19 @@ class KspIlpSolver:
         status_str = pulp.LpStatus[status]
         is_optimal = (status_str == 'Optimal') and (elapsed_time < self.time_limit - 1.0)
 
-        # --- 解抽出 ---
+        # --- MIP Gap 計算 ---
         alpha_val = pulp.value(alpha) if status_str == 'Optimal' else float('inf')
+        mip_gap = None
+        if is_optimal:
+            mip_gap = 0.0
+        elif alpha_val != float('inf') and alpha_val > 0:
+            best_bound = parse_cbc_log_for_bound(log_path)
+            if best_bound is not None:
+                mip_gap = (alpha_val - best_bound) / alpha_val
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
         grouping = []
         for k in range(num_commodities):
             selected = False
@@ -152,6 +184,7 @@ class KspIlpSolver:
             grouping=grouping,
             elapsed_time=elapsed_time,
             is_optimal=is_optimal,
+            mip_gap=mip_gap,
         )
 
     def solve_from_files(

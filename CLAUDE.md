@@ -17,6 +17,12 @@ conda activate gcn-uelb-env
 ### データ生成
 ```bash
 python scripts/common/generate_data.py --config configs/gcn/default2.json
+
+# 厳密解をスキップしてグラフ+品種のみ生成（大規模コモディティ向け）
+python scripts/common/generate_data.py --config configs/rl_ksp/nsfnet_c180_rho04.json --skip-exact --force
+
+# パイロットテスト用: 少数サンプルだけ生成
+python scripts/common/generate_data.py --config configs/rl_ksp/nsfnet_c180_rho04.json --num-samples 5 --skip-exact --force
 ```
 
 ### 学習
@@ -41,6 +47,9 @@ python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 
 
 # 強制再計算
 python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10 --recompute
+
+# パイロットテスト用: 少数サンプルだけ計算して時間見積もり
+python scripts/common/compute_ksp_ilp.py --config configs/rl_ksp/nsfnet_c180_rho04.json --K 10 --num-samples 5
 ```
 
 ### 評価

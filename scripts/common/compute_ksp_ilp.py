@@ -26,6 +26,8 @@ def main():
                         help='ILP ソルバーの制限時間 [秒] (default: 30)')
     parser.add_argument('--recompute', action='store_true',
                         help='既存の CSV を削除して再計算する')
+    parser.add_argument('--num-samples', type=int, default=None,
+                        help='パイロットテスト用: 指定数だけ計算して時間を見積もる')
     args = parser.parse_args()
 
     print("\n" + "=" * 60)
@@ -40,6 +42,8 @@ def main():
     print(f"  Config: {args.config}")
     print(f"  K: {K}")
     print(f"  Time limit: {args.time_limit}s")
+    if args.num_samples:
+        print(f"  Pilot test: {args.num_samples} samples only")
 
     modes = ['train', 'val', 'test']
 
@@ -61,8 +65,9 @@ def main():
                 csv_path.unlink()
                 print(f"\n[{mode}] 既存 CSV を削除: {csv_path}")
 
-        print(f"\n[{mode}] {num_data} 件")
-        compute_ksp_ilp_solutions(config, mode, num_data, K, args.time_limit)
+        effective_num = min(num_data, args.num_samples) if args.num_samples else num_data
+        print(f"\n[{mode}] {effective_num}/{num_data} 件")
+        compute_ksp_ilp_solutions(config, mode, effective_num, K, args.time_limit)
 
     print("\n" + "=" * 60)
     print("DONE")
