@@ -5,12 +5,16 @@
 """
 
 from mip import Model, minimize, xsum, BINARY
+import os
+import tempfile
 import time
 import csv
 import networkx as nx
 import numpy as np
 import pulp
 import torch
+
+from src.common.solvers.ksp_ilp import parse_cbc_log_for_bound
 
 from src.common.graph.flow import Flow
 
@@ -41,11 +45,12 @@ class SolveExactSolution:
             self.G.all_flows.append(f)
             self.commodity_count += 1
 
-    def solve_exact_solution_to_env(self, time_limit=30):
+    def solve_exact_solution_to_env(self, time_limit=30, ratio_gap=None):
+        """厳密解を求める。戻り値: (flow_vars, edge_list, obj_value, elapsed_time, is_optimal, mip_gap)"""
         if self.solver_type == 'mip':
             return self._solve_mip(time_limit)
         if self.solver_type == 'pulp':
-            return self._solve_pulp(time_limit)
+            return self._solve_pulp(time_limit, ratio_gap=ratio_gap)
         raise ValueError(f"Unknown solver_type: {self.solver_type}")
 
     def _solve_mip(self, time_limit):
@@ -82,7 +87,7 @@ class SolveExactSolution:
 
         return UELB_kakai.objective_value, elapsed_time
 
-    def _solve_pulp(self, time_limit):
+    def _solve_pulp(self, time_limit, ratio_gap=None):
         """PuLP+CBC ソルバー."""
         UELB_problem = pulp.LpProblem('UELB', pulp.LpMinimize)
 
@@ -110,13 +115,30 @@ class SolveExactSolution:
                     UELB_problem += sum([(flow_var_kakai[l.get_id()][e]) * (l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][0] == v]) \
                         == sum([(flow_var_kakai[l.get_id()][e]) * (l.get_demand()) for e in range(len(self.G.edges())) if self.r_kakai[e][1][1] == v])
 
+        cbc_options = [f'ratioGap {ratio_gap}'] if ratio_gap is not None else []
+        log_path = tempfile.mktemp(suffix='.log')
         start = time.time()
-        status = UELB_problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit))
+        status = UELB_problem.solve(pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit, logPath=log_path, options=cbc_options))
         elapsed_time = time.time() - start
 
         is_optimal = (pulp.LpStatus[status] == 'Optimal') and (elapsed_time < time_limit - 1.0)
+
+        # MIP Gap 計算
+        obj_val = L.value()
+        mip_gap = None
+        if is_optimal:
+            mip_gap = 0.0
+        elif obj_val is not None and obj_val > 0:
+            best_bound = parse_cbc_log_for_bound(log_path)
+            if best_bound is not None:
+                mip_gap = (obj_val - best_bound) / obj_val
+        try:
+            os.unlink(log_path)
+        except OSError:
+            pass
+
         self.flow_var_kakai = flow_var_kakai
-        return flow_var_kakai, self.r_kakai, L.value(), elapsed_time, is_optimal
+        return flow_var_kakai, self.r_kakai, obj_val, elapsed_time, is_optimal, mip_gap
 
     def generate_edges_target(self):
         num_flows = len(self.G.all_flows)

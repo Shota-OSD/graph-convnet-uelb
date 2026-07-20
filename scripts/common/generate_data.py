@@ -31,6 +31,10 @@ def main():
                        help='既存データを保持し、途中から再開')
     parser.add_argument('--clean-only', action='store_true',
                        help='データを削除するのみ（再生成しない）')
+    parser.add_argument('--num-samples', type=int, default=None,
+                       help='パイロットテスト用: 指定数だけデータを生成')
+    parser.add_argument('--skip-exact', action='store_true',
+                       help='厳密解の計算をスキップし、グラフと品種のみ生成')
     args = parser.parse_args()
 
     if args.force and args.resume:
@@ -93,7 +97,7 @@ def main():
     for mode in args.modes:
         print(f"\n{mode.upper()} データを生成中...")
         try:
-            create_data_files(config, data_mode=mode)
+            create_data_files(config, data_mode=mode, num_samples=args.num_samples, skip_exact=args.skip_exact)
             print(f"✓ {mode} データの生成が完了しました")
         except Exception as e:
             print(f"✗ {mode} データの生成に失敗しました: {e}")
