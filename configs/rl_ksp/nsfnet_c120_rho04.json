@@ -67,5 +67,6 @@
     "save_every_n_episodes": 1000000,
     "load_saved_model": false,
     "load_model_epoch": null,
-    "cleanup_old_models": true
+    "cleanup_old_models": true,
+    "action_mode": "greedy_index0"
 }
