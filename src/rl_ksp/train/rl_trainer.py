@@ -26,6 +26,7 @@ from src.common.config.paths import (
     get_graph_file,
     get_commodity_file,
     get_exact_solution_file,
+    get_ksp_ilp_solution_file,
 )
 
 
@@ -429,8 +430,29 @@ class RLTrainer:
         for i, batch in enumerate(dataset_for_cache):
             gt_load_factor_cache[i] = float(np.mean(batch.load_factor))
 
+        # KSP-ILP ベースラインをキャッシュ（config に K が設定されていれば）
+        ksp_ilp_cache: Dict[int, float] = {}
+        K = self.config.get('K', None)
+        if K is not None:
+            ksp_ilp_file = get_ksp_ilp_solution_file('test', self.config, K)
+            if ksp_ilp_file.exists():
+                with open(ksp_ilp_file, 'r') as f:
+                    for idx, line in enumerate(f):
+                        line = line.strip()
+                        if line:
+                            parts = line.split(',')
+                            try:
+                                ksp_ilp_cache[idx] = float(parts[0])
+                            except (ValueError, IndexError):
+                                pass
+            else:
+                print(f"[Warning] KSP-ILP solution file not found: {ksp_ilp_file}")
+
         test_results = []
         episode_approx_rates: List[float] = []
+        episode_gt_loads: List[float] = []
+        episode_ksp_ilp_loads: List[float] = []
+        episode_ksp_ilp_approx_rates: List[float] = []  # 同一サンプルの gt/ksp_ilp 比
         total_test_time = 0.0
         # フェーズ別累積時間
         phase_totals = {
@@ -498,6 +520,12 @@ class RLTrainer:
                 exit(1)
 
             episode_approx_rates.append(approximation_rate)
+            episode_gt_loads.append(gt_load_factor)
+            if current_data_idx in ksp_ilp_cache:
+                ksp_ilp_lf = ksp_ilp_cache[current_data_idx]
+                episode_ksp_ilp_loads.append(ksp_ilp_lf)
+                if ksp_ilp_lf > 0:
+                    episode_ksp_ilp_approx_rates.append(gt_load_factor / ksp_ilp_lf * 100)
 
             test_results.append({
                 'episode': episode + 1,
@@ -520,7 +548,19 @@ class RLTrainer:
 
         # 全エピソードの平均 approximation rate を1回だけ記録（GCN と同じ粒度）
         mean_approx_rate = float(np.mean(episode_approx_rates)) if episode_approx_rates else 0.0
-        self.metrics_logger.log_test_metrics(mean_approx_rate, total_test_time)
+
+        # ベースライン比較メトリクスの計算
+        avg_exact_load = float(np.mean(episode_gt_loads)) if episode_gt_loads else None
+        avg_ksp_ilp_load = float(np.mean(episode_ksp_ilp_loads)) if episode_ksp_ilp_loads else None
+        # ksp_ilp_approx_rate はエピソード毎の比の平均（同一サンプルで計算）
+        ksp_ilp_approx_rate = float(np.mean(episode_ksp_ilp_approx_rates)) if episode_ksp_ilp_approx_rates else None
+
+        self.metrics_logger.log_test_metrics(
+            mean_approx_rate, total_test_time,
+            avg_exact_load=avg_exact_load,
+            avg_ksp_ilp_load=avg_ksp_ilp_load,
+            ksp_ilp_approx_rate=ksp_ilp_approx_rate,
+        )
 
         # 統計の表示（GCNと同じスタイル）
         avg_reward = np.mean([r['total_reward'] for r in test_results])
@@ -534,6 +574,12 @@ class RLTrainer:
         print(f"Average Total Reward: {avg_reward:.6f}")
         print(f"Average Max Load Factor: {avg_max_load:.6f}")
         print(f"Average Approximation Rate: {mean_approx_rate:.2f}%")
+        if avg_exact_load is not None:
+            print(f"Avg Exact Solution Load Factor: {avg_exact_load:.6f}")
+        if avg_ksp_ilp_load is not None:
+            print(f"Avg KSP-ILP Baseline Load Factor: {avg_ksp_ilp_load:.6f}")
+        if ksp_ilp_approx_rate is not None:
+            print(f"KSP-ILP Approx Rate (Exact/KSP-ILP): {ksp_ilp_approx_rate:.2f}%")
         print(f"Average Steps per Episode: {avg_steps:.2f}")
         print(f"Average Time per Episode: {avg_time:.4f}s")
         print(f"Total Test Time: {total_test_time:.2f}s")
