@@ -32,10 +32,11 @@ class MetricsLogger:
         self.test_comp_sample_rate_list = []
 
         # Baseline comparison metrics (test only)
-        self.test_avg_rl_load_list = []         # テスト時の平均RL load factor
-        self.test_avg_exact_load_list = []      # テスト時の平均厳密解 load factor
-        self.test_avg_ksp_ilp_load_list = []    # テスト時の平均KSP-ILPベースライン load factor
-        self.test_ksp_ilp_approx_rate_list = [] # KSP-ILPとの近似率 (exact/ksp_ilp*100)
+        self.test_avg_rl_load_list = []          # テスト時の平均RL load factor
+        self.test_avg_exact_load_list = []       # テスト時の平均厳密解 load factor
+        self.test_avg_ksp_ilp_load_list = []     # テスト時の平均KSP-ILPベースライン load factor
+        self.test_ksp_ilp_approx_rate_list = []  # KSP-ILPとの近似率 (exact/ksp_ilp*100)
+        self.test_exact_approx_rate_list = []    # 厳密解ベースの近似率 (exact/rl*100)
 
         # RL-specific metrics (existing)
         self.rl_reward_list = []
@@ -82,7 +83,8 @@ class MetricsLogger:
     def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None,
                          comp_rate: float = None, comp_sample_rate: float = None,
                          avg_rl_load: float = None, avg_exact_load: float = None,
-                         avg_ksp_ilp_load: float = None, ksp_ilp_approx_rate: float = None):
+                         avg_ksp_ilp_load: float = None, ksp_ilp_approx_rate: float = None,
+                         exact_approx_rate: float = None):
         """テストメトリクスを記録"""
         self.test_approximation_rate_list.append(approximation_rate)
         if test_time is not None:
@@ -102,6 +104,8 @@ class MetricsLogger:
             self.test_avg_ksp_ilp_load_list.append(avg_ksp_ilp_load)
         if ksp_ilp_approx_rate is not None:
             self.test_ksp_ilp_approx_rate_list.append(ksp_ilp_approx_rate)
+        if exact_approx_rate is not None:
+            self.test_exact_approx_rate_list.append(exact_approx_rate)
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
@@ -188,6 +192,7 @@ class MetricsLogger:
             'test_avg_exact_load_list': self.test_avg_exact_load_list,
             'test_avg_ksp_ilp_load_list': self.test_avg_ksp_ilp_load_list,
             'test_ksp_ilp_approx_rate_list': self.test_ksp_ilp_approx_rate_list,
+            'test_exact_approx_rate_list': self.test_exact_approx_rate_list,
             'final_metrics': self.get_final_metrics(),
             'time_per_data': time_per_data,
             'config_info': config_info or {}
@@ -247,12 +252,21 @@ class MetricsLogger:
                     f.write(f"  Final Test CompSample Rate: {self.test_comp_sample_rate_list[-1]:.2f}%\n")
                 if self.test_avg_rl_load_list:
                     f.write(f"  Avg RL Load Factor: {self.test_avg_rl_load_list[-1]:.6f}\n")
+                if self.test_avg_ksp_ilp_load_list:
+                    f.write(f"  Avg KSP-ILP Load Factor: {self.test_avg_ksp_ilp_load_list[-1]:.6f}\n")
+                f.write(f"  Approx Rate (KSP-ILP base): {metrics['final_test_approximation_rate']:.2f}%\n")
+                if self.test_exact_approx_rate_list:
+                    f.write(f"  Approx Rate (Exact base): {self.test_exact_approx_rate_list[-1]:.2f}%\n")
+                else:
+                    f.write(f"  Approx Rate (Exact base): N/A\n")
                 if self.test_avg_exact_load_list:
                     f.write(f"  Avg Exact Solution Load Factor: {self.test_avg_exact_load_list[-1]:.6f}\n")
-                if self.test_avg_ksp_ilp_load_list:
-                    f.write(f"  Avg KSP-ILP Baseline Load Factor: {self.test_avg_ksp_ilp_load_list[-1]:.6f}\n")
+                else:
+                    f.write(f"  Avg Exact Solution Load Factor: N/A\n")
                 if self.test_ksp_ilp_approx_rate_list:
                     f.write(f"  KSP-ILP Approx Rate (Exact/KSP-ILP): {self.test_ksp_ilp_approx_rate_list[-1]:.2f}%\n")
+                else:
+                    f.write(f"  KSP-ILP Approx Rate (Exact/KSP-ILP): N/A\n")
             
             # 時間関連のメトリクス
             f.write("\nTIME METRICS:\n")
