@@ -123,6 +123,49 @@ python scripts/common/generate_data.py --clean-only
 
 ---
 
+#### 厳密解をスキップして生成（大規模コモディティ向け）
+
+```bash
+# --skip-exact: 厳密解の計算をスキップしてグラフと品種のみ生成
+python scripts/common/generate_data.py --config configs/rl_ksp/nsfnet_c30_rho04.json --skip-exact --force
+
+# パイロットテスト用: 少数サンプルだけ生成
+python scripts/common/generate_data.py --config configs/rl_ksp/nsfnet_c30_rho04.json --num-samples 5 --skip-exact --force
+```
+
+#### 厳密解を後付け計算（--skip-exact で生成したデータ向け）
+
+```bash
+# config の solver_ratio_gap / solver_time_limit を適用して後付け計算
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json
+
+# パイロットテスト用: 5件だけ計算して時間見積もり
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --num-samples 5
+
+# 強制再計算
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --recompute
+
+# time_limit を上書き（config の solver_time_limit より優先）
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --time-limit 60
+```
+
+> **注意**: `--skip-exact` 時は通常の再生成ループ（`objective_value >= 1.0` の場合にグラフを作り直す処理）をスキップしているため、後付け計算で一部サンプルが `objective_value >= 1.0` になる可能性があります。その場合はワーニングを表示してそのまま記録します。
+
+#### KSP-ILP ベースラインの事前計算
+
+```bash
+# 既存データに対して KSP-ILP を一括計算（train/val/test 全モード）
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10
+
+# パイロットテスト用: 少数サンプルだけ計算
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10 --num-samples 5
+
+# 強制再計算
+python scripts/common/compute_ksp_ilp.py --config configs/gcn/default2.json --K 10 --recompute
+```
+
+---
+
 ### 2. GCN実験
 
 #### 基本的な学習+テスト（一括実行）

@@ -37,6 +37,21 @@ python scripts/rl_ksp/train_rl_ksp.py --config configs/rl_ksp/rl_config.json
 python scripts/seq_flow_rl/train_seqflowrl.py --config configs/seqflowrl/seqflowrl_base.json
 ```
 
+### 厳密解後付け計算（--skip-exact で生成したデータ向け）
+```bash
+# skip-exact で生成したデータに厳密解を後付け計算（config の solver_ratio_gap が適用される）
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json
+
+# パイロットテスト用: 5件だけ計算して時間見積もり
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --num-samples 5
+
+# 強制再計算
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --recompute
+
+# time_limit を上書き（config の solver_time_limit より優先）
+python scripts/common/compute_exact_solution.py --config configs/rl_ksp/nsfnet_c30_rho04.json --time-limit 60
+```
+
 ### KSP-ILP ベースライン事前計算
 ```bash
 # 既存データに対して KSP-ILP を一括計算（train/val/test 全モード）
