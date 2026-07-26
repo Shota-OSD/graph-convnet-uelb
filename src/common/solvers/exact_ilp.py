@@ -126,12 +126,17 @@ class SolveExactSolution:
         # MIP Gap 計算
         obj_val = L.value()
         mip_gap = None
-        if is_optimal:
+        if is_optimal and ratio_gap is None:
+            # ratioGap なし: CBC が Optimal を返した = 真の最適解
             mip_gap = 0.0
         elif obj_val is not None and obj_val > 0:
+            # ratioGap あり (is_optimal=True の場合を含む) または時間切れの場合
             best_bound = parse_cbc_log_for_bound(log_path)
             if best_bound is not None:
                 mip_gap = (obj_val - best_bound) / obj_val
+            elif is_optimal:
+                # ログからの取得失敗: ratio_gap を上限値として記録
+                mip_gap = ratio_gap
         try:
             os.unlink(log_path)
         except OSError:
