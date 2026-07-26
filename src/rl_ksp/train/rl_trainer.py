@@ -550,16 +550,17 @@ class RLTrainer:
         # ksp_ilp_approx_rate はエピソード毎の比の平均（同一サンプルで計算）
         ksp_ilp_approx_rate = float(np.mean(episode_ksp_ilp_approx_rates)) if episode_ksp_ilp_approx_rates else None
 
+        # 統計の表示（GCNと同じスタイル）
+        avg_reward = np.mean([r['total_reward'] for r in test_results])
+        avg_max_load = float(np.mean([r['max_load'] for r in test_results]))
+
         self.metrics_logger.log_test_metrics(
             mean_approx_rate, total_test_time,
+            avg_rl_load=avg_max_load,
             avg_exact_load=avg_exact_load,
             avg_ksp_ilp_load=avg_ksp_ilp_load,
             ksp_ilp_approx_rate=ksp_ilp_approx_rate,
         )
-
-        # 統計の表示（GCNと同じスタイル）
-        avg_reward = np.mean([r['total_reward'] for r in test_results])
-        avg_max_load = np.mean([r['max_load'] for r in test_results])
         avg_steps = np.mean([r['steps'] for r in test_results])
         avg_time = total_test_time / test_episodes
 
