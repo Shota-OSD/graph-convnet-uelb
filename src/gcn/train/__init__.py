@@ -1,5 +1,5 @@
 from .trainer import Trainer
 from .evaluator import Evaluator
-from .metrics import MetricsLogger
+from .metrics import GCNMetricsLogger, MetricsLogger
 
-__all__ = ['Trainer', 'Evaluator', 'MetricsLogger'] 
+__all__ = ['Trainer', 'Evaluator', 'GCNMetricsLogger', 'MetricsLogger'] 

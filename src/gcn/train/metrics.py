@@ -2,28 +2,19 @@ import numpy as np
 import pickle
 import os
 import torch
-from datetime import datetime
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Optional
 
-class MetricsLogger:
-    """メトリクスの記録と出力を管理するクラス"""
-    
+from src.common.train.base_metrics import BaseMetricsLogger
+
+
+class GCNMetricsLogger(BaseMetricsLogger):
+    """GCN 用メトリクス記録クラス"""
+
     def __init__(self, save_dir: str = "logs"):
+        super().__init__(save_dir)
+
         self.train_loss_list = []
         self.train_err_edges_list = []
-        self.val_approximation_rate_list = []
-        self.test_approximation_rate_list = []
-
-        # 時間関連のメトリクスを追加
-        self.train_time_list = []
-        self.val_time_list = []
-        self.test_time_list = []
-        self.total_train_time = 0.0
-        self.total_test_time = 0.0
-
-        # エポック番号の記録を追加
-        self.val_epochs = []  # バリデーションを実行したエポック番号
-        self.test_epochs = []  # テストを実行したエポック番号
 
         # Comp% / CompSample% lists
         self.val_comp_rate_list = []
@@ -31,34 +22,22 @@ class MetricsLogger:
         self.test_comp_rate_list = []
         self.test_comp_sample_rate_list = []
 
-        # Baseline comparison metrics (test only)
-        self.test_avg_rl_load_list = []         # テスト時の平均RL load factor
-        self.test_avg_exact_load_list = []      # テスト時の平均厳密解 load factor
-        self.test_avg_ksp_ilp_load_list = []    # テスト時の平均KSP-ILPベースライン load factor
-        self.test_ksp_ilp_approx_rate_list = [] # KSP-ILPとの近似率 (exact/ksp_ilp*100)
-
-        # RL-specific metrics (existing)
+        # RL-specific metrics (GCN の RL 学習戦略向け)
         self.rl_reward_list = []
         self.rl_advantage_list = []
         self.rl_entropy_list = []
         self.rl_load_factor_list = []
         self.rl_baseline_list = []
 
-        # RL-specific metrics (new - path quality)
-        self.rl_complete_paths_rate_list = []  # パス完成率
-        self.rl_finite_solution_rate_list = []  # 有限解の割合
-        self.rl_avg_finite_load_factor_list = []  # 有限解の平均負荷率
-        self.rl_avg_path_length_list = []  # 平均パス長
-        self.rl_commodity_success_rate_list = []  # コモディティ成功率
-        self.rl_capacity_violation_rate_list = []  # 容量違反率
-
-        self.save_dir = save_dir
-        self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # 保存ディレクトリの作成
-        os.makedirs(self.save_dir, exist_ok=True)
+        # RL-specific metrics (path quality)
+        self.rl_complete_paths_rate_list = []
+        self.rl_finite_solution_rate_list = []
+        self.rl_avg_finite_load_factor_list = []
+        self.rl_avg_path_length_list = []
+        self.rl_commodity_success_rate_list = []
+        self.rl_capacity_violation_rate_list = []
     
-    def log_train_metrics(self, loss: float, edge_error: float, train_time: float = None):
+    def log_train_metrics(self, loss: float, edge_error: float, train_time: Optional[float] = None):
         """トレーニングメトリクスを記録"""
         self.train_loss_list.append(loss)
         self.train_err_edges_list.append(edge_error)
@@ -66,42 +45,25 @@ class MetricsLogger:
             self.train_time_list.append(train_time)
             self.total_train_time += train_time
     
-    def log_val_metrics(self, approximation_rate: float, val_time: float = None, epoch: int = None,
-                        comp_rate: float = None, comp_sample_rate: float = None):
+    def log_val_metrics(self, approximation_rate: float, val_time: Optional[float] = None,
+                        epoch: Optional[int] = None, comp_rate: Optional[float] = None,
+                        comp_sample_rate: Optional[float] = None):
         """検証メトリクスを記録"""
-        self.val_approximation_rate_list.append(approximation_rate)
-        if val_time is not None:
-            self.val_time_list.append(val_time)
-        if epoch is not None:
-            self.val_epochs.append(epoch)
+        super().log_val_metrics(approximation_rate, val_time, epoch)
         if comp_rate is not None:
             self.val_comp_rate_list.append(comp_rate)
         if comp_sample_rate is not None:
             self.val_comp_sample_rate_list.append(comp_sample_rate)
 
-    def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None,
-                         comp_rate: float = None, comp_sample_rate: float = None,
-                         avg_rl_load: float = None, avg_exact_load: float = None,
-                         avg_ksp_ilp_load: float = None, ksp_ilp_approx_rate: float = None):
+    def log_test_metrics(self, approximation_rate: float, test_time: Optional[float] = None,
+                         epoch: Optional[int] = None, comp_rate: Optional[float] = None,
+                         comp_sample_rate: Optional[float] = None):
         """テストメトリクスを記録"""
-        self.test_approximation_rate_list.append(approximation_rate)
-        if test_time is not None:
-            self.test_time_list.append(test_time)
-            self.total_test_time += test_time
-        if epoch is not None:
-            self.test_epochs.append(epoch)
+        super().log_test_metrics(approximation_rate, test_time, epoch)
         if comp_rate is not None:
             self.test_comp_rate_list.append(comp_rate)
         if comp_sample_rate is not None:
             self.test_comp_sample_rate_list.append(comp_sample_rate)
-        if avg_rl_load is not None:
-            self.test_avg_rl_load_list.append(avg_rl_load)
-        if avg_exact_load is not None:
-            self.test_avg_exact_load_list.append(avg_exact_load)
-        if avg_ksp_ilp_load is not None:
-            self.test_avg_ksp_ilp_load_list.append(avg_ksp_ilp_load)
-        if ksp_ilp_approx_rate is not None:
-            self.test_ksp_ilp_approx_rate_list.append(ksp_ilp_approx_rate)
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
@@ -154,19 +116,6 @@ class MetricsLogger:
             'avg_test_time_per_epoch': np.mean(self.test_time_list) if self.test_time_list else 0.0
         }
     
-    def calculate_time_per_data(self, num_train_data: int, num_test_data: int) -> dict:
-        """一つのデータあたりの経過時間を計算"""
-        total_train_samples = num_train_data * len(self.train_time_list) if self.train_time_list else 0
-        total_test_samples = num_test_data * len(self.test_time_list) if self.test_time_list else 0
-        
-        time_per_data = {
-            'train_time_per_data': self.total_train_time / total_train_samples if total_train_samples > 0 else 0.0,
-            'test_time_per_data': self.total_test_time / total_test_samples if total_test_samples > 0 else 0.0,
-            'total_train_samples': total_train_samples,
-            'total_test_samples': total_test_samples
-        }
-        return time_per_data
-    
     def save_results(self, config_info: dict = None):
         """結果をファイルに保存"""
         # 時間関連の計算
@@ -184,10 +133,6 @@ class MetricsLogger:
             'train_time_list': self.train_time_list,
             'val_time_list': self.val_time_list,
             'test_time_list': self.test_time_list,
-            'test_avg_rl_load_list': self.test_avg_rl_load_list,
-            'test_avg_exact_load_list': self.test_avg_exact_load_list,
-            'test_avg_ksp_ilp_load_list': self.test_avg_ksp_ilp_load_list,
-            'test_ksp_ilp_approx_rate_list': self.test_ksp_ilp_approx_rate_list,
             'final_metrics': self.get_final_metrics(),
             'time_per_data': time_per_data,
             'config_info': config_info or {}
@@ -239,20 +184,12 @@ class MetricsLogger:
                 if self.val_comp_sample_rate_list:
                     f.write(f"  Final Val CompSample Rate: {self.val_comp_sample_rate_list[-1]:.2f}%\n")
             if self.test_approximation_rate_list:
-                f.write(f"  Final Test Approximation Rate: {metrics['final_test_approximation_rate']:.2f}%\n")
-                f.write(f"  Best Test Approximation Rate: {metrics['best_test_approximation_rate']:.2f}%\n")
+                f.write(f"  Avg Test Approx Rate (Exact base): {metrics['final_test_approximation_rate']:.2f}%\n")
+                f.write(f"  Best Test Approx Rate (Exact base): {metrics['best_test_approximation_rate']:.2f}%\n")
                 if self.test_comp_rate_list:
                     f.write(f"  Final Test Comp Rate: {self.test_comp_rate_list[-1]:.2f}%\n")
                 if self.test_comp_sample_rate_list:
                     f.write(f"  Final Test CompSample Rate: {self.test_comp_sample_rate_list[-1]:.2f}%\n")
-                if self.test_avg_rl_load_list:
-                    f.write(f"  Avg RL Load Factor: {self.test_avg_rl_load_list[-1]:.6f}\n")
-                if self.test_avg_exact_load_list:
-                    f.write(f"  Avg Exact Solution Load Factor: {self.test_avg_exact_load_list[-1]:.6f}\n")
-                if self.test_avg_ksp_ilp_load_list:
-                    f.write(f"  Avg KSP-ILP Baseline Load Factor: {self.test_avg_ksp_ilp_load_list[-1]:.6f}\n")
-                if self.test_ksp_ilp_approx_rate_list:
-                    f.write(f"  KSP-ILP Approx Rate (Exact/KSP-ILP): {self.test_ksp_ilp_approx_rate_list[-1]:.2f}%\n")
             
             # 時間関連のメトリクス
             f.write("\nTIME METRICS:\n")
@@ -483,6 +420,10 @@ def print_training_summary(results: dict):
         print(f"\nConfig File: {config_info.get('config_file', 'Unknown')}")
         print(f"Max Epochs: {config_info.get('max_epochs', 'Unknown')}")
         print(f"Learning Rate: {config_info.get('initial_learning_rate', 'Unknown')}")
+
+
+# 後方互換エイリアス
+MetricsLogger = GCNMetricsLogger
 
 # 使用例:
 # results = load_training_results("logs/training_results_20241201_143022.pkl")

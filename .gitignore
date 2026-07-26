@@ -10,6 +10,9 @@ repomix-output.xml
 saved_models/*.pt
 saved_models/*.pth
 
+# Claude Code のローカル状態（コミット不要）
+.claude/
+
 # macOS 特有のメタファイルを無視
 __MACOSX/
 *.DS_Store

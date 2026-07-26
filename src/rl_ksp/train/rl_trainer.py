@@ -19,7 +19,7 @@ from pathlib import Path
 from src.rl_ksp.environment.rl_environment import MinMaxLoadKSPsEnv
 from src.rl_ksp.models.dqn_model import DQNModel
 from src.common.data_management.dataset_reader import DatasetReader
-from src.gcn.train.metrics import MetricsLogger
+from src.rl_ksp.train.metrics import RLKSPMetricsLogger
 from src.common.solvers.exact_ilp import SolveExactSolution
 from src.common.config.paths import (
     get_model_root,
@@ -82,7 +82,7 @@ class RLTrainer:
         # 結果保存とメトリクス
         self.results_dir = Path('./results')
         self.results_dir.mkdir(exist_ok=True)
-        self.metrics_logger = MetricsLogger(save_dir="logs")
+        self.metrics_logger = RLKSPMetricsLogger(save_dir="logs")
         
         # 厳密解計算用の設定
         self.solver_type = config.get('solver_type', 'pulp')
@@ -423,12 +423,18 @@ class RLTrainer:
         self.env.enable_step_profiling = True
         self.env.reset_step_phase_times()
 
-        # gt_load_factor をテスト開始前に一括キャッシュ（エピソード毎の O(N) 走査を排除）
+        # 厳密解の存在確認
         num_test_data = self.config.get('num_test_data', 20)
+        has_exact = get_exact_solution_file('test', self.config).exists()
+
+        # gt_load_factor をテスト開始前に一括キャッシュ（exact_solution.csv がある場合のみ）
         gt_load_factor_cache: Dict[int, float] = {}
-        dataset_for_cache = DatasetReader(num_test_data, 1, 'test', self.config, shuffle=False)
-        for i, batch in enumerate(dataset_for_cache):
-            gt_load_factor_cache[i] = float(np.mean(batch.load_factor))
+        if has_exact:
+            dataset_for_cache = DatasetReader(num_test_data, 1, 'test', self.config, shuffle=False)
+            for i, batch in enumerate(dataset_for_cache):
+                gt_load_factor_cache[i] = float(np.mean(batch.load_factor))
+        else:
+            print("[Info] exact_solution.csv が存在しません。厳密解ベースのメトリクスは N/A になります。")
 
         # KSP-ILP ベースラインをキャッシュ（config に K が設定されていれば）
         ksp_ilp_cache: Dict[int, float] = {}
@@ -449,10 +455,11 @@ class RLTrainer:
                 print(f"[Warning] KSP-ILP solution file not found: {ksp_ilp_file}")
 
         test_results = []
-        episode_approx_rates: List[float] = []
+        episode_approx_rates: List[float] = []        # KSP-ILP ベース (ksp_ilp / rl) × 100 — 主要メトリクス
+        episode_exact_approx_rates: List[float] = []  # 厳密解ベース (exact / rl) × 100 — exact がある場合のみ
         episode_gt_loads: List[float] = []
         episode_ksp_ilp_loads: List[float] = []
-        episode_ksp_ilp_approx_rates: List[float] = []  # 同一サンプルの gt/ksp_ilp 比
+        episode_ksp_ilp_approx_rates: List[float] = []  # 同一サンプルの gt/ksp_ilp 比（exact がある場合のみ）
         total_test_time = 0.0
         # フェーズ別累積時間
         phase_totals = {
@@ -496,31 +503,42 @@ class RLTrainer:
 
             # 実際にRLが使用したデータのインデックスを取得
             current_data_idx = getattr(self.env, 'current_used_data_idx', self.env.data_idx - 1)
-            gt_load_factor = gt_load_factor_cache.get(current_data_idx, 0.0)
 
-            # GCNと同じ計算方法: gt_load_factor / predicted_load_factor * 100
-            if max_load > 0:
-                approximation_rate = gt_load_factor / max_load * 100
-            else:
-                approximation_rate = 0.0
-
-            # デバッグ情報
-            print(f"  Debug: data_idx={current_data_idx}, gt_load={gt_load_factor:.6f}, rl_load={max_load:.6f}, approx_rate={approximation_rate:.2f}%")
-
-            # Approximation Rateが100%を超えた場合: 厳密解がratioGapによる準最適解の可能性があるためワーニングのみ
-            if approximation_rate > 100.01:
-                print(f"\n⚠️  WARNING: Approximation Rate exceeded 100% ({approximation_rate:.2f}%)")
-                print(f"   GT load ({gt_load_factor:.6f}) may be a sub-optimal solution due to solver ratioGap setting.")
-                print(f"   Episode: {episode + 1}/{test_episodes}, Data Index: {current_data_idx}")
-                print(f"   Continuing experiment...")
-
-            episode_approx_rates.append(approximation_rate)
-            episode_gt_loads.append(gt_load_factor)
+            # KSP-ILP ベースの近似率（主要メトリクス）
             if current_data_idx in ksp_ilp_cache:
                 ksp_ilp_lf = ksp_ilp_cache[current_data_idx]
                 episode_ksp_ilp_loads.append(ksp_ilp_lf)
-                if ksp_ilp_lf > 0:
+                if ksp_ilp_lf > 0 and max_load > 0:
+                    ksp_ilp_approx = ksp_ilp_lf / max_load * 100
+                    episode_approx_rates.append(ksp_ilp_approx)
+                else:
+                    ksp_ilp_approx = None
+            else:
+                ksp_ilp_lf = None
+                ksp_ilp_approx = None
+
+            # 厳密解ベースの近似率（exact_solution.csv がある場合のみ）
+            gt_load_factor = gt_load_factor_cache.get(current_data_idx, None) if has_exact else None
+            if gt_load_factor is not None and gt_load_factor > 0 and max_load > 0:
+                exact_approx = gt_load_factor / max_load * 100
+                episode_exact_approx_rates.append(exact_approx)
+                episode_gt_loads.append(gt_load_factor)
+                # KSP-ILP vs 厳密解
+                if ksp_ilp_lf is not None and ksp_ilp_lf > 0:
                     episode_ksp_ilp_approx_rates.append(gt_load_factor / ksp_ilp_lf * 100)
+            else:
+                exact_approx = None
+
+            # デバッグ情報
+            ksp_str = f"{ksp_ilp_approx:.2f}%" if ksp_ilp_approx is not None else "N/A"
+            exact_str = f"{exact_approx:.2f}%" if exact_approx is not None else "N/A"
+            print(f"  Debug: data_idx={current_data_idx}, rl_load={max_load:.6f},"
+                  f" ksp_ilp_approx={ksp_str}, exact_approx={exact_str}")
+
+            # KSP-ILP ベース近似率が 100% を超えた場合（RL が KSP-ILP より良い）はワーニングのみ
+            if ksp_ilp_approx is not None and ksp_ilp_approx > 100.01:
+                print(f"\n⚠️  WARNING: RL outperformed KSP-ILP ({ksp_ilp_approx:.2f}%)"
+                      f" at episode {episode + 1}, data_idx={current_data_idx}. Continuing...")
 
             test_results.append({
                 'episode': episode + 1,
@@ -541,13 +559,20 @@ class RLTrainer:
         # テスト結果の保存
         self._save_test_results(test_results)
 
-        # 全エピソードの平均 approximation rate を1回だけ記録（GCN と同じ粒度）
-        mean_approx_rate = float(np.mean(episode_approx_rates)) if episode_approx_rates else 0.0
+        # KSP-ILP ベースの近似率（主要メトリクス）。KSP-ILP がない場合は厳密解ベースへフォールバック
+        mean_exact_approx_rate = float(np.mean(episode_exact_approx_rates)) if episode_exact_approx_rates else None
+        if episode_approx_rates:
+            mean_approx_rate = float(np.mean(episode_approx_rates))
+        elif mean_exact_approx_rate is not None:
+            print("[Info] KSP-ILP baseline unavailable. Falling back to exact-based approx rate for primary metric.")
+            mean_approx_rate = mean_exact_approx_rate
+        else:
+            mean_approx_rate = 0.0
 
         # ベースライン比較メトリクスの計算
         avg_exact_load = float(np.mean(episode_gt_loads)) if episode_gt_loads else None
         avg_ksp_ilp_load = float(np.mean(episode_ksp_ilp_loads)) if episode_ksp_ilp_loads else None
-        # ksp_ilp_approx_rate はエピソード毎の比の平均（同一サンプルで計算）
+        # ksp_ilp_approx_rate はエピソード毎の gt/ksp_ilp 比（exact がある場合のみ）
         ksp_ilp_approx_rate = float(np.mean(episode_ksp_ilp_approx_rates)) if episode_ksp_ilp_approx_rates else None
 
         # 統計の表示（GCNと同じスタイル）
@@ -560,6 +585,7 @@ class RLTrainer:
             avg_exact_load=avg_exact_load,
             avg_ksp_ilp_load=avg_ksp_ilp_load,
             ksp_ilp_approx_rate=ksp_ilp_approx_rate,
+            exact_approx_rate=mean_exact_approx_rate,
         )
         avg_steps = np.mean([r['steps'] for r in test_results])
         avg_time = total_test_time / test_episodes
@@ -568,14 +594,21 @@ class RLTrainer:
         print(f"RL TEST RESULTS SUMMARY")
         print(f"="*50)
         print(f"Average Total Reward: {avg_reward:.6f}")
-        print(f"Average Max Load Factor: {avg_max_load:.6f}")
-        print(f"Average Approximation Rate: {mean_approx_rate:.2f}%")
+        print(f"Average RL Load Factor: {avg_max_load:.6f}")
+        print(f"Average Approx Rate (KSP-ILP base): {mean_approx_rate:.2f}%")
+        print(f"Average Approx Rate (Exact base):    "
+              f"{mean_exact_approx_rate:.2f}%" if mean_exact_approx_rate is not None else
+              f"Average Approx Rate (Exact base):    N/A")
+        if avg_ksp_ilp_load is not None:
+            print(f"Avg KSP-ILP Load Factor: {avg_ksp_ilp_load:.6f}")
         if avg_exact_load is not None:
             print(f"Avg Exact Solution Load Factor: {avg_exact_load:.6f}")
-        if avg_ksp_ilp_load is not None:
-            print(f"Avg KSP-ILP Baseline Load Factor: {avg_ksp_ilp_load:.6f}")
+        else:
+            print(f"Avg Exact Solution Load Factor: N/A")
         if ksp_ilp_approx_rate is not None:
             print(f"KSP-ILP Approx Rate (Exact/KSP-ILP): {ksp_ilp_approx_rate:.2f}%")
+        else:
+            print(f"KSP-ILP Approx Rate (Exact/KSP-ILP): N/A")
         print(f"Average Steps per Episode: {avg_steps:.2f}")
         print(f"Average Time per Episode: {avg_time:.4f}s")
         print(f"Total Test Time: {total_test_time:.2f}s")
