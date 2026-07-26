@@ -19,7 +19,7 @@ from pathlib import Path
 from src.rl_ksp.environment.rl_environment import MinMaxLoadKSPsEnv
 from src.rl_ksp.models.dqn_model import DQNModel
 from src.common.data_management.dataset_reader import DatasetReader
-from src.gcn.train.metrics import MetricsLogger
+from src.rl_ksp.train.metrics import RLKSPMetricsLogger
 from src.common.solvers.exact_ilp import SolveExactSolution
 from src.common.config.paths import (
     get_model_root,
@@ -82,7 +82,7 @@ class RLTrainer:
         # 結果保存とメトリクス
         self.results_dir = Path('./results')
         self.results_dir.mkdir(exist_ok=True)
-        self.metrics_logger = MetricsLogger(save_dir="logs")
+        self.metrics_logger = RLKSPMetricsLogger(save_dir="logs")
         
         # 厳密解計算用の設定
         self.solver_type = config.get('solver_type', 'pulp')
