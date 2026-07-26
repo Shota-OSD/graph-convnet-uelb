@@ -31,6 +31,11 @@ class MetricsLogger:
         self.test_comp_rate_list = []
         self.test_comp_sample_rate_list = []
 
+        # Baseline comparison metrics (test only)
+        self.test_avg_exact_load_list = []      # テスト時の平均厳密解 load factor
+        self.test_avg_ksp_ilp_load_list = []    # テスト時の平均KSP-ILPベースライン load factor
+        self.test_ksp_ilp_approx_rate_list = [] # KSP-ILPとの近似率 (exact/ksp_ilp*100)
+
         # RL-specific metrics (existing)
         self.rl_reward_list = []
         self.rl_advantage_list = []
@@ -74,7 +79,9 @@ class MetricsLogger:
             self.val_comp_sample_rate_list.append(comp_sample_rate)
 
     def log_test_metrics(self, approximation_rate: float, test_time: float = None, epoch: int = None,
-                         comp_rate: float = None, comp_sample_rate: float = None):
+                         comp_rate: float = None, comp_sample_rate: float = None,
+                         avg_exact_load: float = None, avg_ksp_ilp_load: float = None,
+                         ksp_ilp_approx_rate: float = None):
         """テストメトリクスを記録"""
         self.test_approximation_rate_list.append(approximation_rate)
         if test_time is not None:
@@ -86,6 +93,12 @@ class MetricsLogger:
             self.test_comp_rate_list.append(comp_rate)
         if comp_sample_rate is not None:
             self.test_comp_sample_rate_list.append(comp_sample_rate)
+        if avg_exact_load is not None:
+            self.test_avg_exact_load_list.append(avg_exact_load)
+        if avg_ksp_ilp_load is not None:
+            self.test_avg_ksp_ilp_load_list.append(avg_ksp_ilp_load)
+        if ksp_ilp_approx_rate is not None:
+            self.test_ksp_ilp_approx_rate_list.append(ksp_ilp_approx_rate)
 
     def log_rl_metrics(self, epoch: int, rl_metrics: dict):
         """RL特有のメトリクスを記録"""
@@ -225,6 +238,12 @@ class MetricsLogger:
                     f.write(f"  Final Test Comp Rate: {self.test_comp_rate_list[-1]:.2f}%\n")
                 if self.test_comp_sample_rate_list:
                     f.write(f"  Final Test CompSample Rate: {self.test_comp_sample_rate_list[-1]:.2f}%\n")
+                if self.test_avg_exact_load_list:
+                    f.write(f"  Avg Exact Solution Load Factor: {self.test_avg_exact_load_list[-1]:.6f}\n")
+                if self.test_avg_ksp_ilp_load_list:
+                    f.write(f"  Avg KSP-ILP Baseline Load Factor: {self.test_avg_ksp_ilp_load_list[-1]:.6f}\n")
+                if self.test_ksp_ilp_approx_rate_list:
+                    f.write(f"  KSP-ILP Approx Rate (Exact/KSP-ILP): {self.test_ksp_ilp_approx_rate_list[-1]:.2f}%\n")
             
             # 時間関連のメトリクス
             f.write("\nTIME METRICS:\n")
