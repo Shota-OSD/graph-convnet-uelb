@@ -44,10 +44,12 @@ class DatasetReader(object):
         self._load_factors = self._load_exact_solutions()
 
     def _load_exact_solutions(self):
-        """exact_solution.csv を全行読み込んでリストで返す。"""
-        exact_solution_file = str(self.data_dir / 'exact_solution.csv')
+        """exact_solution.csv を全行読み込んでリストで返す。ファイルが存在しない場合は None を返す。"""
+        exact_solution_file = self.data_dir / 'exact_solution.csv'
+        if not exact_solution_file.exists():
+            return None
         load_factors = []
-        with open(exact_solution_file, 'r') as f:
+        with open(str(exact_solution_file), 'r') as f:
             reader = csv.reader(f)
             for row in reader:
                 load_factors.append(float(row[0]))
@@ -150,7 +152,10 @@ class DatasetReader(object):
             batch_commodities.append(commodity_list)
         
         # From list to tensors as a DotDict
-        batch_load_factor = [self._load_factors[i] for i in batch_indices]
+        if self._load_factors is not None:
+            batch_load_factor = [self._load_factors[i] for i in batch_indices]
+        else:
+            batch_load_factor = [float('nan')] * len(batch_indices)
 
         batch = DotDict()
         batch.edges = np.stack(batch_edges, axis=0)                 # 隣接行列 (batch_size, num_nodes, num_nodes)
